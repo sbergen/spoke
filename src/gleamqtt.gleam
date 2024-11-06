@@ -1,5 +1,5 @@
-import gleam/io
-
-pub fn main() {
-  io.println("Hello from gleamqtt!")
+pub type QoS {
+  QoS0
+  QoS1
+  QoS2
 }
