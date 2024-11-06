@@ -1,6 +1,9 @@
 ## Packet types:
 
 - [ ] CONNECT
+  - [x] basics
+  - [ ] configurable connect flags
+  - [ ] configurable keep alive
 - [ ] CONNACK
 - [ ] PINGREQ
 - [ ] PINGRESP

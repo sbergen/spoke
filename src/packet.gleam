@@ -1,5 +1,10 @@
 import encode
-import gleam/bytes_builder
+import gleam/bit_array
+import gleam/bytes_builder.{type BytesBuilder}
+
+const protocol_level: Int = 4
+
+const keep_alive_seconds: Int = 60
 
 pub type PacketType {
   Connect
@@ -18,17 +23,28 @@ pub type PacketType {
   Disconnect
 }
 
-pub fn connect() -> BitArray {
+pub fn connect(client_id: String) -> BytesBuilder {
+  // Only set clean session for now
+  let connect_bits = <<1:4, 0:4>>
+  let connect_flags = 0b10
+
   let variable_header =
     bytes_builder.new()
     |> bytes_builder.append(encode.string("MQTT"))
-  let var_header_len = bytes_builder.byte_size(variable_header)
+    |> bytes_builder.append(<<
+      protocol_level:8,
+      connect_flags:8,
+      keep_alive_seconds:big-size(16),
+    >>)
 
+  let variable_content =
+    variable_header
+    |> bytes_builder.append(encode.string(client_id))
+  // More strings to be added here
+
+  let remaining_len = bytes_builder.byte_size(variable_content)
   let fixed_header =
-    bytes_builder.new()
-    |> bytes_builder.append(<<1:4, 0:4>>)
-    |> bytes_builder.append(encode.varint(var_header_len))
+    bit_array.append(connect_bits, encode.varint(remaining_len))
 
-  bytes_builder.concat([fixed_header, variable_header])
-  |> bytes_builder.to_bit_array()
+  bytes_builder.prepend(variable_content, fixed_header)
 }
