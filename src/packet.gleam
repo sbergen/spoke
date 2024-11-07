@@ -40,6 +40,9 @@ pub type DecodeError {
   DataTooShort
   InvalidConnAckData
   InvalidConnAckReturnCode
+  InvalidUTF8
+  InvalidStringLength
+  InvalidVarint
 }
 
 pub fn encode_packet(packet: Packet) -> Result(BytesBuilder, EncodeError) {
