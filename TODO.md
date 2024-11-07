@@ -4,8 +4,8 @@
   - [x] basics
   - [ ] configurable connect flags
   - [x] configurable keep alive
-- [ ] CONNACK
-- [ ] PINGREQ
+- [x] CONNACK
+- [x] PINGREQ
 - [ ] PINGRESP
 - [ ] PUBLISH
 - [ ] PUBACK
@@ -13,7 +13,7 @@
 - [ ] SUBACK
 - [ ] UNSUBSCRIBE
 - [ ] UNSUBACK
-- [ ] DISCONNECT
+- [x] DISCONNECT
 
 ### QoS
 - [ ] PUBREC

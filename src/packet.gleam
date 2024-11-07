@@ -49,6 +49,7 @@ pub fn encode_packet(packet: Packet) -> Result(BytesBuilder, EncodeError) {
   case packet {
     Connect(client_id, keep_alive) -> Ok(encode_connect(client_id, keep_alive))
     Disconnect -> Ok(encode_disconnect())
+    PintReq -> Ok(encode_ping_req())
     _ -> Error(EncodeNotImplemented)
   }
 }
@@ -98,6 +99,10 @@ fn encode_connect(client_id: String, keep_alive: Int) -> BytesBuilder {
 
 fn encode_disconnect() -> BytesBuilder {
   encode_parts(14, flags: <<0:4>>, header: <<>>, payload: bytes_builder.new())
+}
+
+fn encode_ping_req() -> BytesBuilder {
+  encode_parts(12, flags: <<0:4>>, header: <<>>, payload: bytes_builder.new())
 }
 
 fn encode_parts(

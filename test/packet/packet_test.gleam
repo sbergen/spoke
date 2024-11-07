@@ -1,11 +1,12 @@
 import gleam/bit_array
 import gleam/bytes_builder
 import gleeunit/should
-import packet.{ConnAck, Connect, Disconnect}
+import packet
 import packet/decode
 
 pub fn encode_connect_test() {
-  let assert Ok(builder) = packet.encode_packet(Connect("test-client-id", 15))
+  let assert Ok(builder) =
+    packet.encode_packet(packet.Connect("test-client-id", 15))
 
   let assert <<1:4, 0:4, rest:bits>> = bytes_builder.to_bit_array(builder)
 
@@ -29,8 +30,13 @@ pub fn encode_connect_test() {
 }
 
 pub fn encode_disconnect_test() {
-  let assert Ok(builder) = packet.encode_packet(Disconnect)
+  let assert Ok(builder) = packet.encode_packet(packet.Disconnect)
   let assert <<14:4, 0:4, 0:8>> = bytes_builder.to_bit_array(builder)
+}
+
+pub fn encode_ping_req_test() {
+  let assert Ok(builder) = packet.encode_packet(packet.PintReq)
+  let assert <<12:4, 0:4, 0:8>> = bytes_builder.to_bit_array(builder)
 }
 
 pub fn decode_too_short_test() {
@@ -61,17 +67,17 @@ pub fn connack_decode_invalid_return_code_test() {
 pub fn connack_decode_test() {
   let assert Ok(#(packet, rest)) = packet.decode_packet(<<2:4, 0:4, 2:8, 0:16>>)
   rest |> should.equal(<<>>)
-  packet |> should.equal(ConnAck(False, packet.ConnectionAccepted))
+  packet |> should.equal(packet.ConnAck(False, packet.ConnectionAccepted))
 }
 
 pub fn connack_session_should_be_present_test() {
   let assert Ok(#(packet, _)) =
     packet.decode_packet(<<2:4, 0:4, 2:8, 1:8, 0:8>>)
-  packet |> should.equal(ConnAck(True, packet.ConnectionAccepted))
+  packet |> should.equal(packet.ConnAck(True, packet.ConnectionAccepted))
 }
 
 pub fn connack_return_code_should_be_id_refused_test() {
   let assert Ok(#(packet, _)) =
     packet.decode_packet(<<2:4, 0:4, 2:8, 0:8, 2:8>>)
-  packet |> should.equal(ConnAck(False, packet.IdentifierRefused))
+  packet |> should.equal(packet.ConnAck(False, packet.IdentifierRefused))
 }
