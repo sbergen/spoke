@@ -1,5 +1,6 @@
 import gleam/bit_array
 import gleam/bytes_builder
+import gleamqtt
 import gleeunit/should
 import packet
 import packet/decode
@@ -9,12 +10,7 @@ pub fn encode_connect_test() {
     packet.encode_packet(packet.Connect("test-client-id", 15))
 
   let assert <<1:4, 0:4, rest:bits>> = bytes_builder.to_bit_array(builder)
-
-  // TODO assumes len < 128 for now...
-  let assert <<remaining_len:8, rest:bits>> = rest
-  let actual_len = bit_array.byte_size(rest)
-  remaining_len |> should.equal(actual_len)
-
+  let rest = validate_remaining_len(rest)
   let assert Ok(#("MQTT", rest)) = decode.string(rest)
 
   // Protocol level
@@ -27,6 +23,32 @@ pub fn encode_connect_test() {
   let assert <<15:big-size(16), rest:bits>> = rest
 
   let assert Ok(#("test-client-id", <<>>)) = decode.string(rest)
+}
+
+pub fn encode_subscribe_test() {
+  let assert Ok(builder) =
+    packet.encode_packet(
+      packet.Subscribe(42, [
+        gleamqtt.SubscribeTopic("topic0", gleamqtt.QoS0),
+        gleamqtt.SubscribeTopic("topic1", gleamqtt.QoS1),
+        gleamqtt.SubscribeTopic("topic2", gleamqtt.QoS2),
+      ]),
+    )
+
+  // flags are reserved
+  let assert <<8:4, 2:4, rest:bits>> = bytes_builder.to_bit_array(builder)
+  let rest = validate_remaining_len(rest)
+
+  let assert <<42:big-size(16), rest:bits>> = rest
+
+  let assert Ok(#("topic0", rest)) = decode.string(rest)
+  let assert <<0:8, rest:bits>> = rest
+
+  let assert Ok(#("topic1", rest)) = decode.string(rest)
+  let assert <<1:8, rest:bits>> = rest
+
+  let assert Ok(#("topic2", rest)) = decode.string(rest)
+  let assert <<2:8>> = rest
 }
 
 pub fn encode_disconnect_test() {
@@ -92,4 +114,12 @@ pub fn ping_resp_decode_test() {
 pub fn ping_resp_invalid_length_test() {
   let assert Error(packet.InvalidPingRespData) =
     packet.decode_packet(<<13:4, 0:4, 1:8, 1:8>>)
+}
+
+fn validate_remaining_len(bytes: BitArray) -> BitArray {
+  let assert Ok(#(remaining_len, rest)) = decode.varint(bytes)
+  let actual_len = bit_array.byte_size(rest)
+  remaining_len |> should.equal(actual_len)
+
+  rest
 }

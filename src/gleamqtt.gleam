@@ -3,3 +3,7 @@ pub type QoS {
   QoS1
   QoS2
 }
+
+pub type SubscribeTopic {
+  SubscribeTopic(filter: String, qos: QoS)
+}

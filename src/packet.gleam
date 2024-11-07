@@ -1,5 +1,7 @@
 import gleam/bytes_builder.{type BytesBuilder}
+import gleam/list
 import gleam/result
+import gleamqtt.{type QoS, type SubscribeTopic}
 import packet/encode
 
 const protocol_level: Int = 4
@@ -23,7 +25,7 @@ pub type Packet {
   PubRec
   PubRel
   PubComp
-  Subscribe
+  Subscribe(packet_id: Int, topics: List(SubscribeTopic))
   SubAck
   Unsubscribe
   UsubAck
@@ -32,6 +34,7 @@ pub type Packet {
 
 pub type EncodeError {
   EncodeNotImplemented
+  EmptySubscribeList
 }
 
 pub type DecodeError {
@@ -50,6 +53,7 @@ pub fn encode_packet(packet: Packet) -> Result(BytesBuilder, EncodeError) {
   case packet {
     Connect(client_id, keep_alive) -> Ok(encode_connect(client_id, keep_alive))
     Disconnect -> Ok(encode_disconnect())
+    Subscribe(id, topics) -> encode_subscribe(id, topics)
     PintReq -> Ok(encode_ping_req())
     _ -> Error(EncodeNotImplemented)
   }
@@ -97,6 +101,26 @@ fn encode_connect(client_id: String, keep_alive: Int) -> BytesBuilder {
   // More strings to be added here
 
   encode_parts(1, <<0:4>>, header, payload)
+}
+
+fn encode_subscribe(
+  packet_id: Int,
+  topics: List(SubscribeTopic),
+) -> Result(BytesBuilder, EncodeError) {
+  case topics {
+    [] -> Error(EmptySubscribeList)
+    _ -> {
+      let header = <<packet_id:big-size(16)>>
+      let payload = {
+        use builder, topic <- list.fold(topics, bytes_builder.new())
+        builder
+        |> bytes_builder.append(encode.string(topic.filter))
+        |> bytes_builder.append(encode_qos(topic.qos))
+      }
+
+      Ok(encode_parts(8, <<2:4>>, header, payload))
+    }
+  }
 }
 
 fn encode_disconnect() -> BytesBuilder {
@@ -155,4 +179,14 @@ fn decode_connack_code(code: Int) -> Result(ConnectReturnCode, DecodeError) {
     5 -> Ok(NotAuthorized)
     _ -> Error(InvalidConnAckReturnCode)
   }
+}
+
+fn encode_qos(qos: QoS) -> BitArray {
+  <<
+    case qos {
+      gleamqtt.QoS0 -> 0
+      gleamqtt.QoS1 -> 1
+      gleamqtt.QoS2 -> 2
+    },
+  >>
 }
