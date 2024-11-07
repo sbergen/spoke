@@ -1,13 +1,13 @@
 import gleam/bit_array
 import gleam/bytes_builder
 import gleeunit/should
-import packet.{ConnAck, Connect}
+import packet.{ConnAck, Connect, Disconnect}
 import packet/decode
 
-pub fn connect_encode_test() {
+pub fn encode_connect_test() {
   let assert Ok(builder) = packet.encode_packet(Connect("test-client-id"))
 
-  let assert <<0b00010000, rest:bits>> = bytes_builder.to_bit_array(builder)
+  let assert <<1:4, 0:4, rest:bits>> = bytes_builder.to_bit_array(builder)
 
   // TODO assumes len < 128 for now...
   let assert <<remaining_len:8, rest:bits>> = rest
@@ -26,6 +26,11 @@ pub fn connect_encode_test() {
   let assert <<60:big-size(16), rest:bits>> = rest
 
   let assert Ok(#("test-client-id", <<>>)) = decode.string(rest)
+}
+
+pub fn encode_disconnect_test() {
+  let assert Ok(builder) = packet.encode_packet(Disconnect)
+  let assert <<14:4, 0:4, 0:8>> = bytes_builder.to_bit_array(builder)
 }
 
 pub fn decode_too_short_test() {
