@@ -6,13 +6,13 @@ import gleeunit/should
 // but that should be good enough to ensure they keep functioning correctly.
 
 pub fn encode_string_empty_test() {
-  let assert #("", <<>>) =
+  let assert Ok(#("", <<>>)) =
     encode.string("")
     |> decode.string
 }
 
 pub fn encode_string_non_empty_test() {
-  let assert #("🌟 non-empty 🌟", <<>>) =
+  let assert Ok(#("🌟 non-empty 🌟", <<>>)) =
     encode.string("🌟 non-empty 🌟")
     |> decode.string
 }

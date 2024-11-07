@@ -14,7 +14,7 @@ pub fn connect_test() {
   let actual_len = bit_array.byte_size(rest)
   remaining_len |> should.equal(actual_len)
 
-  let assert #("MQTT", rest) = decode.string(rest)
+  let assert Ok(#("MQTT", rest)) = decode.string(rest)
 
   // Protocol level
   let assert <<4:8, rest:bits>> = rest
@@ -25,5 +25,5 @@ pub fn connect_test() {
   // Keep alive is hard-coded to one minute for now
   let assert <<60:big-size(16), rest:bits>> = rest
 
-  let assert #("test-client-id", <<>>) = decode.string(rest)
+  let assert Ok(#("test-client-id", <<>>)) = decode.string(rest)
 }
