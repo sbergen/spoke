@@ -3,7 +3,7 @@
 - [ ] CONNECT
   - [x] basics
   - [ ] configurable connect flags
-  - [ ] configurable keep alive
+  - [x] configurable keep alive
 - [ ] CONNACK
 - [ ] PINGREQ
 - [ ] PINGRESP

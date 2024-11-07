@@ -4,8 +4,6 @@ import packet/encode
 
 const protocol_level: Int = 4
 
-const keep_alive_seconds: Int = 60
-
 pub type ConnectReturnCode {
   ConnectionAccepted
   UnacceptableProtocolVersion
@@ -16,7 +14,7 @@ pub type ConnectReturnCode {
 }
 
 pub type Packet {
-  Connect(client_id: String)
+  Connect(client_id: String, keep_alive: Int)
   ConnAck(session_preset: Bool, code: ConnectReturnCode)
   PintReq
   PintResp
@@ -46,7 +44,7 @@ pub type DecodeError {
 
 pub fn encode_packet(packet: Packet) -> Result(BytesBuilder, EncodeError) {
   case packet {
-    Connect(client_id) -> Ok(encode_connect(client_id))
+    Connect(client_id, keep_alive) -> Ok(encode_connect(client_id, keep_alive))
     Disconnect -> Ok(encode_disconnect())
     _ -> Error(EncodeNotImplemented)
   }
@@ -66,7 +64,7 @@ pub fn decode_packet(
   }
 }
 
-fn encode_connect(client_id: String) -> BytesBuilder {
+fn encode_connect(client_id: String, keep_alive: Int) -> BytesBuilder {
   let user_name = 0
   let password = 0
   let will_retain = 0
@@ -84,7 +82,7 @@ fn encode_connect(client_id: String) -> BytesBuilder {
     will_flag:1,
     clean_session:1,
     0:1,
-    keep_alive_seconds:big-size(16),
+    keep_alive:big-size(16),
   >>
 
   let payload =

@@ -5,7 +5,7 @@ import packet.{ConnAck, Connect, Disconnect}
 import packet/decode
 
 pub fn encode_connect_test() {
-  let assert Ok(builder) = packet.encode_packet(Connect("test-client-id"))
+  let assert Ok(builder) = packet.encode_packet(Connect("test-client-id", 15))
 
   let assert <<1:4, 0:4, rest:bits>> = bytes_builder.to_bit_array(builder)
 
@@ -22,8 +22,8 @@ pub fn encode_connect_test() {
   // Connect flags, we always just set clean session for now
   let assert <<0b10:8, rest:bits>> = rest
 
-  // Keep alive is hard-coded to one minute for now
-  let assert <<60:big-size(16), rest:bits>> = rest
+  // Keep-alive
+  let assert <<15:big-size(16), rest:bits>> = rest
 
   let assert Ok(#("test-client-id", <<>>)) = decode.string(rest)
 }
