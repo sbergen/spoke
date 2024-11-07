@@ -1,13 +1,13 @@
 import gleeunit/should
-import packet
 import packet/decode
+import packet/errors
 
 pub fn decode_string_invalid_length_test() {
-  let assert Error(packet.InvalidStringLength) = decode.string(<<8:16, 0>>)
+  let assert Error(errors.InvalidStringLength) = decode.string(<<8:16, 0>>)
 }
 
 pub fn decode_string_invalid_data_test() {
-  let assert Error(packet.InvalidUTF8) = decode.string(<<2:16, 0xc3, 0x28>>)
+  let assert Error(errors.InvalidUTF8) = decode.string(<<2:16, 0xc3, 0x28>>)
 }
 
 pub fn decode_varint_small_test() {
@@ -25,10 +25,10 @@ pub fn decode_varint_large_test() {
 }
 
 pub fn decode_varint_too_short_data_test() {
-  decode.varint(<<1:1, 0:7>>) |> should.equal(Error(packet.InvalidVarint))
+  decode.varint(<<1:1, 0:7>>) |> should.equal(Error(errors.InvalidVarint))
 }
 
 pub fn decode_varint_too_large_test() {
   decode.varint(<<0xFF, 0xFF, 0xFF, 0xFF, 1>>)
-  |> should.equal(Error(packet.InvalidVarint))
+  |> should.equal(Error(errors.InvalidVarint))
 }

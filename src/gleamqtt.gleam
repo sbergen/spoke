@@ -4,6 +4,11 @@ pub type QoS {
   QoS2
 }
 
+pub type SubAckReturnCode {
+  SubscribeSuccess(qos: QoS)
+  SubscribeFailure
+}
+
 pub type SubscribeTopic {
   SubscribeTopic(filter: String, qos: QoS)
 }

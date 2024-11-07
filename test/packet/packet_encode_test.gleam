@@ -57,63 +57,8 @@ pub fn encode_disconnect_test() {
 }
 
 pub fn encode_ping_req_test() {
-  let assert Ok(builder) = packet.encode_packet(packet.PintReq)
+  let assert Ok(builder) = packet.encode_packet(packet.PingReq)
   let assert <<12:4, 0:4, 0:8>> = bytes_builder.to_bit_array(builder)
-}
-
-pub fn decode_too_short_test() {
-  packet.decode_packet(<<0:7>>)
-  |> should.equal(Error(packet.DataTooShort))
-}
-
-pub fn decode_invalid_id_test() {
-  packet.decode_packet(<<0:8>>)
-  |> should.equal(Error(packet.InvalidPacketIdentifier))
-}
-
-pub fn connack_decode_invalid_length_test() {
-  packet.decode_packet(<<2:4, 0:4, 3:8, 0:32>>)
-  |> should.equal(Error(packet.InvalidConnAckData))
-}
-
-pub fn connack_decode_invalid_flags_test() {
-  packet.decode_packet(<<2:4, 1:4, 2:8, 0:16>>)
-  |> should.equal(Error(packet.InvalidConnAckData))
-}
-
-pub fn connack_decode_invalid_return_code_test() {
-  packet.decode_packet(<<2:4, 0:4, 2:8, 0:8, 6:8>>)
-  |> should.equal(Error(packet.InvalidConnAckReturnCode))
-}
-
-pub fn connack_decode_test() {
-  let assert Ok(#(packet, rest)) =
-    packet.decode_packet(<<2:4, 0:4, 2:8, 0:16, 1:8>>)
-  rest |> should.equal(<<1:8>>)
-  packet |> should.equal(packet.ConnAck(False, packet.ConnectionAccepted))
-}
-
-pub fn connack_session_should_be_present_test() {
-  let assert Ok(#(packet, _)) =
-    packet.decode_packet(<<2:4, 0:4, 2:8, 1:8, 0:8>>)
-  packet |> should.equal(packet.ConnAck(True, packet.ConnectionAccepted))
-}
-
-pub fn connack_return_code_should_be_id_refused_test() {
-  let assert Ok(#(packet, _)) =
-    packet.decode_packet(<<2:4, 0:4, 2:8, 0:8, 2:8>>)
-  packet |> should.equal(packet.ConnAck(False, packet.IdentifierRefused))
-}
-
-pub fn ping_resp_decode_test() {
-  let assert Ok(#(packet, rest)) = packet.decode_packet(<<13:4, 0:4, 0:8, 1:8>>)
-  rest |> should.equal(<<1:8>>)
-  packet |> should.equal(packet.PingResp)
-}
-
-pub fn ping_resp_invalid_length_test() {
-  let assert Error(packet.InvalidPingRespData) =
-    packet.decode_packet(<<13:4, 0:4, 1:8, 1:8>>)
 }
 
 fn validate_remaining_len(bytes: BitArray) -> BitArray {

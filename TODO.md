@@ -1,9 +1,12 @@
 ## High level
 
-[ ] QoS 0
-[ ] QoS 1
-[ ] QoS 2
-[ ] Auth
+- [ ] TCP
+- [ ] WebSocket
+
+- [ ] QoS 0
+- [ ] QoS 1
+- [ ] QoS 2
+- [ ] Auth
 
 ## Packet types:
 
@@ -14,8 +17,8 @@
 - [x] CONNACK
 - [x] PINGREQ
 - [x] PINGRESP
-- [ ] SUBSCRIBE
-- [ ] SUBACK
+- [x] SUBSCRIBE
+- [x] SUBACK
 - [ ] UNSUBSCRIBE
 - [ ] UNSUBACK
 - [ ] PUBLISH
