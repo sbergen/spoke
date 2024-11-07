@@ -65,8 +65,9 @@ pub fn connack_decode_invalid_return_code_test() {
 }
 
 pub fn connack_decode_test() {
-  let assert Ok(#(packet, rest)) = packet.decode_packet(<<2:4, 0:4, 2:8, 0:16>>)
-  rest |> should.equal(<<>>)
+  let assert Ok(#(packet, rest)) =
+    packet.decode_packet(<<2:4, 0:4, 2:8, 0:16, 1:8>>)
+  rest |> should.equal(<<1:8>>)
   packet |> should.equal(packet.ConnAck(False, packet.ConnectionAccepted))
 }
 
@@ -80,4 +81,15 @@ pub fn connack_return_code_should_be_id_refused_test() {
   let assert Ok(#(packet, _)) =
     packet.decode_packet(<<2:4, 0:4, 2:8, 0:8, 2:8>>)
   packet |> should.equal(packet.ConnAck(False, packet.IdentifierRefused))
+}
+
+pub fn ping_resp_decode_test() {
+  let assert Ok(#(packet, rest)) = packet.decode_packet(<<13:4, 0:4, 0:8, 1:8>>)
+  rest |> should.equal(<<1:8>>)
+  packet |> should.equal(packet.PingResp)
+}
+
+pub fn ping_resp_invalid_length_test() {
+  let assert Error(packet.InvalidPingRespData) =
+    packet.decode_packet(<<13:4, 0:4, 1:8, 1:8>>)
 }

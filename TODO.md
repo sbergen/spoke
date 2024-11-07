@@ -6,7 +6,7 @@
   - [x] configurable keep alive
 - [x] CONNACK
 - [x] PINGREQ
-- [ ] PINGRESP
+- [x] PINGRESP
 - [ ] PUBLISH
 - [ ] PUBACK
 - [ ] SUBSCRIBE

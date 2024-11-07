@@ -17,7 +17,7 @@ pub type Packet {
   Connect(client_id: String, keep_alive: Int)
   ConnAck(session_preset: Bool, code: ConnectReturnCode)
   PintReq
-  PintResp
+  PingResp
   Publish
   PubAck
   PubRec
@@ -40,6 +40,7 @@ pub type DecodeError {
   DataTooShort
   InvalidConnAckData
   InvalidConnAckReturnCode
+  InvalidPingRespData
   InvalidUTF8
   InvalidStringLength
   InvalidVarint
@@ -62,6 +63,7 @@ pub fn decode_packet(
       case id {
         0 -> Error(InvalidPacketIdentifier)
         2 -> decode_connack(flags, rest)
+        13 -> decode_ping_resp(flags, rest)
         _ -> Error(DecodeNotImplemented)
       }
     _ -> Error(DataTooShort)
@@ -130,6 +132,16 @@ fn decode_connack(
       Ok(#(result, rest))
     }
     _, _ -> Error(InvalidConnAckData)
+  }
+}
+
+fn decode_ping_resp(
+  flags: BitArray,
+  data: BitArray,
+) -> Result(#(Packet, BitArray), DecodeError) {
+  case flags, data {
+    <<0:4>>, <<0:8, rest:bytes>> -> Ok(#(PingResp, rest))
+    _, _ -> Error(InvalidPingRespData)
   }
 }
 
