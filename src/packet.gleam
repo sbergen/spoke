@@ -6,8 +6,8 @@ const protocol_level: Int = 4
 
 const keep_alive_seconds: Int = 60
 
-pub type PacketType {
-  Connect
+pub type Packet {
+  Connect(client_id: String)
   ConnAck
   PintReq
   PintResp
@@ -23,7 +23,14 @@ pub type PacketType {
   Disconnect
 }
 
-pub fn connect(client_id: String) -> BytesBuilder {
+pub fn encode_packet(packet: Packet) -> BytesBuilder {
+  case packet {
+    Connect(client_id) -> connect(client_id)
+    _ -> panic as "Not done, but I don't wan't a warning"
+  }
+}
+
+fn connect(client_id: String) -> BytesBuilder {
   // Only set clean session for now
   let connect_bits = <<1:4, 0:4>>
   let connect_flags = 0b10
