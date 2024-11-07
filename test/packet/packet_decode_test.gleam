@@ -1,3 +1,4 @@
+import gleam/option.{None}
 import gleamqtt.{QoS0, QoS1, QoS2, SubscribeFailure, SubscribeSuccess}
 import gleeunit/should
 import packet
@@ -59,7 +60,8 @@ pub fn ping_resp_invalid_length_test() {
     packet.decode_packet(<<13:4, 0:4, 1:8, 1:8>>)
 }
 
-pub fn sub_ack_decode_test() {
+pub fn suback_decode_test() {
+  // id + 4 status codes
   let data_len = 2 + 4
   let data = <<
     9:4,
@@ -85,4 +87,33 @@ pub fn sub_ack_decode_test() {
       SubscribeFailure,
     ]),
   )
+}
+
+pub fn publish_decode_qos0_test() {
+  // topic length + topic + payload (raw)
+  let len = 2 + 5 + 3
+  let data = <<
+    3:4,
+    0:4,
+    encode.varint(len):bits,
+    5:big-size(16),
+    "topic",
+    "foo",
+    42:8,
+  >>
+
+  let assert Ok(#(packet, rest)) = packet.decode_packet(data)
+  rest |> should.equal(<<42:8>>)
+
+  packet
+  |> should.equal(packet.Publish("topic", <<"foo">>, False, QoS0, False, None))
+}
+
+pub fn publish_decode_should_be_retained_test() {
+  let data = <<3:4, 1:4, encode.varint(2):bits, 0:big-size(16)>>
+
+  let assert Ok(#(packet, <<>>)) = packet.decode_packet(data)
+
+  packet
+  |> should.equal(packet.Publish("", <<>>, False, QoS0, True, None))
 }

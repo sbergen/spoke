@@ -3,29 +3,36 @@
 - [ ] TCP
 - [ ] WebSocket
 
+- [ ] Connect
+- [ ] Pings
+- [ ] Receive messages
+- [ ] Send messages
+- [ ] Retry failed sub/unsub
+
 - [ ] QoS 0
 - [ ] QoS 1
 - [ ] QoS 2
 - [ ] Auth
+- [ ] Session management (clean flag)
+- [ ] Will
 
-## Packet types:
+## Packet type encoding/decoding
 
-- [ ] CONNECT
-  - [x] basics
-  - [ ] configurable connect flags
-  - [x] configurable keep alive
+Only covered for client's needs (e.g. only encode CONNECT).
+
+- [/] CONNECT
 - [x] CONNACK
 - [x] PINGREQ
 - [x] PINGRESP
 - [x] SUBSCRIBE
 - [x] SUBACK
+- [/] PUBLISH
 - [ ] UNSUBSCRIBE
 - [ ] UNSUBACK
-- [ ] PUBLISH
 - [ ] PUBACK
 - [x] DISCONNECT
 
-### QoS
+### QoS 1 and 2
 - [ ] PUBREC
 - [ ] PUBREL
 - [ ] PUBCOMP

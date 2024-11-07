@@ -9,9 +9,11 @@ pub type DecodeError {
   DataTooShort
   InvalidConnAckData
   InvalidConnAckReturnCode
+  InvalidPublishData
   InvalidPingRespData
   InvalidSubAckData
   InvalidUTF8
   InvalidStringLength
   InvalidVarint
+  InvalidQoS
 }

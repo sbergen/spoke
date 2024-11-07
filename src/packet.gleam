@@ -1,5 +1,6 @@
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/list
+import gleam/option.{type Option, None}
 import gleam/result
 import gleamqtt.{
   type QoS, type SubAckReturnCode, type SubscribeTopic, QoS0, QoS1, QoS2,
@@ -24,7 +25,14 @@ pub type Packet {
   ConnAck(session_preset: Bool, code: ConnectReturnCode)
   PingReq
   PingResp
-  Publish
+  Publish(
+    topic: String,
+    payload: BitArray,
+    dup: Bool,
+    qos: QoS,
+    retain: Bool,
+    packet_id: Option(Int),
+  )
   PubAck
   PubRec
   PubRel
@@ -54,6 +62,7 @@ pub fn decode_packet(
       case id {
         0 -> Error(errors.InvalidPacketIdentifier)
         2 -> decode_connack(flags, rest)
+        3 -> decode_publish(flags, rest)
         9 -> decode_suback(flags, rest)
         13 -> decode_pingresp(flags, rest)
         _ -> Error(errors.DecodeNotImplemented)
@@ -147,6 +156,23 @@ fn decode_connack(
   }
 }
 
+fn decode_publish(
+  flags: BitArray,
+  data: BitArray,
+) -> Result(#(Packet, BitArray), DecodeError) {
+  case flags {
+    <<dup:1, qos:2, retain:1>> -> {
+      use qos <- result.try(decode_qos(qos))
+      use #(data, remainder) <- result.try(split_var_data(data))
+      // TODO: Packet id for QoS > 0
+      use #(topic, rest) <- result.try(decode.string(data))
+
+      Ok(#(Publish(topic, rest, dup == 1, qos, retain == 1, None), remainder))
+    }
+    _ -> Error(errors.InvalidPublishData)
+  }
+}
+
 fn decode_pingresp(
   flags: BitArray,
   data: BitArray,
@@ -225,4 +251,13 @@ fn encode_qos(qos: QoS) -> BitArray {
       gleamqtt.QoS2 -> 2
     },
   >>
+}
+
+fn decode_qos(val: Int) -> Result(QoS, errors.DecodeError) {
+  case val {
+    0 -> Ok(gleamqtt.QoS0)
+    1 -> Ok(gleamqtt.QoS1)
+    2 -> Ok(gleamqtt.QoS2)
+    _ -> Error(errors.InvalidQoS)
+  }
 }
