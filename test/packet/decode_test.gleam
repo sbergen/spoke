@@ -1,4 +1,4 @@
-import decode
+import packet/decode
 
 pub fn decode_string_invalid_length_test() {
   let assert Error("Invalid string length") = decode.string(<<8:16, 0>>)

@@ -1,6 +1,6 @@
-import encode
 import gleam/bit_array
 import gleam/bytes_builder.{type BytesBuilder}
+import packet/encode
 
 const protocol_level: Int = 4
 

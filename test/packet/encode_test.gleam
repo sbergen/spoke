@@ -1,8 +1,8 @@
-import decode
-import encode
 import gleeunit/should
+import packet/decode
+import packet/encode
 
-// These tests use the decode module,
+// The string tests use the decode module,
 // but that should be good enough to ensure they keep functioning correctly.
 
 pub fn encode_string_empty_test() {

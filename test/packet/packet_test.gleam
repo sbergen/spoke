@@ -1,8 +1,8 @@
-import decode
 import gleam/bit_array
 import gleam/bytes_builder
 import gleeunit/should
 import packet
+import packet/decode
 
 pub fn connect_test() {
   let p = packet.connect("test-client-id") |> bytes_builder.to_bit_array()
