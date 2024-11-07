@@ -1,5 +1,5 @@
 import decode
-import gleam/bit_array.{slice}
+import gleam/bit_array
 import gleam/bytes_builder
 import gleeunit/should
 import packet
@@ -7,30 +7,23 @@ import packet
 pub fn connect_test() {
   let p = packet.connect("test-client-id") |> bytes_builder.to_bit_array()
 
-  let assert Ok(first_byte) = slice(p, 0, 1)
-  first_byte |> should.equal(<<0b00010000>>)
+  let assert <<0b00010000, rest:bits>> = p
 
   // assumes len < 128 for now...
-  let assert Ok(<<remaining_len>>) = slice(p, 1, 1)
-  let actual_len = bit_array.byte_size(p) - 2
+  let assert <<remaining_len:8, rest:bits>> = rest
+  let actual_len = bit_array.byte_size(rest)
   remaining_len |> should.equal(actual_len)
 
-  decode.string(remaining(p, 2)) |> should.equal("MQTT")
+  let assert #("MQTT", rest) = decode.string(rest)
 
   // Protocol level
-  slice(p, 8, 1) |> should.equal(Ok(<<4>>))
+  let assert <<4:8, rest:bits>> = rest
 
   // Connect flags, we always just set clean session for now
-  slice(p, 9, 1) |> should.equal(Ok(<<0b10:8>>))
+  let assert <<0b10:8, rest:bits>> = rest
 
   // Keep alive is hard-coded to one minute for now
-  slice(p, 10, 2) |> should.equal(Ok(<<60:big-size(16)>>))
+  let assert <<60:big-size(16), rest:bits>> = rest
 
-  decode.string(remaining(p, 12)) |> should.equal("test-client-id")
-}
-
-fn remaining(bits: BitArray, start: Int) -> BitArray {
-  let len = bit_array.byte_size(bits)
-  let assert Ok(result) = slice(bits, start, len - start)
-  result
+  let assert #("test-client-id", <<>>) = decode.string(rest)
 }

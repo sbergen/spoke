@@ -6,16 +6,15 @@ import gleeunit/should
 // but that should be good enough to ensure they keep functioning correctly.
 
 pub fn encode_string_empty_test() {
-  encode.string("")
-  |> decode.string
-  |> should.equal("")
+  let assert #("", <<>>) =
+    encode.string("")
+    |> decode.string
 }
 
 pub fn encode_string_non_empty_test() {
-  let expected = "🌟 non-empty 🌟"
-  encode.string(expected)
-  |> decode.string
-  |> should.equal(expected)
+  let assert #("🌟 non-empty 🌟", <<>>) =
+    encode.string("🌟 non-empty 🌟")
+    |> decode.string
 }
 
 pub fn encode_varint_small_test() {

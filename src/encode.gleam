@@ -11,13 +11,12 @@ pub fn varint(i: Int) -> BitArray {
   <<>> |> build_varint(i)
 }
 
-fn build_varint(builder: BitArray, i: Int) -> BitArray {
+fn build_varint(bits: BitArray, i: Int) -> BitArray {
   case i < 128 {
-    True -> bit_array.append(builder, <<i:8>>)
+    True -> <<bits:bits, i:8>>
     False -> {
       let remainder = i % 128
-      bit_array.append(builder, <<1:1, remainder:7>>)
-      |> build_varint(i / 128)
+      <<bits:bits, 1:1, remainder:7>> |> build_varint(i / 128)
     }
   }
 }
