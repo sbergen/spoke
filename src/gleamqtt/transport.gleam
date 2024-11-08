@@ -12,7 +12,7 @@ pub type Channel {
 }
 
 pub type ChannelOptions {
-  ChannelOptions(send_timeout: Int)
+  TcpOptions(host: String, port: Int, connect_timeout: Int, send_timeout: Int)
 }
 
 /// Generic error type for channels.

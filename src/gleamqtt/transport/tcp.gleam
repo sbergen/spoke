@@ -3,26 +3,16 @@ import gleam/erlang/process.{type Subject}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
-import gleamqtt/transport.{
-  type Channel, type ChannelError, type ChannelOptions, type IncomingData,
-}
+import gleamqtt/transport.{type Channel, type ChannelError, type IncomingData}
 import mug.{type Socket}
 
-/// Connection options for a TCP transport channel
-pub type ConnectionOptions {
-  ConnectionOptions(host: String, port: Int, timeout: Int)
-}
-
 pub fn connect(
-  connect_options: ConnectionOptions,
-  options: ChannelOptions,
+  host: String,
+  port port: Int,
+  connect_timeout connect_timeout: Int,
+  send_timeout send_timeout: Int,
 ) -> Result(Channel, actor.StartError) {
-  let mug_options =
-    mug.ConnectionOptions(
-      connect_options.host,
-      connect_options.port,
-      connect_options.timeout,
-    )
+  let mug_options = mug.ConnectionOptions(host, port, connect_timeout)
 
   let receive = process.new_subject()
 
@@ -33,9 +23,7 @@ pub fn connect(
   ))
   |> result.map(fn(subject) {
     transport.Channel(
-      send: fn(bytes) {
-        actor.call(subject, Send(bytes, _), options.send_timeout)
-      },
+      send: fn(bytes) { actor.call(subject, Send(bytes, _), send_timeout) },
       receive: receive,
     )
   })

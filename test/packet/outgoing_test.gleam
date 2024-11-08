@@ -29,9 +29,9 @@ pub fn encode_subscribe_test() {
   let assert Ok(builder) =
     outgoing.encode_packet(
       outgoing.Subscribe(42, [
-        gleamqtt.SubscribeTopic("topic0", gleamqtt.QoS0),
-        gleamqtt.SubscribeTopic("topic1", gleamqtt.QoS1),
-        gleamqtt.SubscribeTopic("topic2", gleamqtt.QoS2),
+        outgoing.SubscribeSpec("topic0", gleamqtt.QoS0),
+        outgoing.SubscribeSpec("topic1", gleamqtt.QoS1),
+        outgoing.SubscribeSpec("topic2", gleamqtt.QoS2),
       ]),
     )
 
