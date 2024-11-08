@@ -1,8 +1,8 @@
 import gleam/erlang/process.{type Subject}
 import gleam/otp/actor
 import gleamqtt.{type QoS}
+import gleamqtt/internal/transport/tcp
 import gleamqtt/transport.{type Channel, type ChannelOptions}
-import gleamqtt/transport/tcp
 
 pub type ReceivedMessage {
   ReceivedMessage(topic: String, payload: BitArray, retained: Bool)

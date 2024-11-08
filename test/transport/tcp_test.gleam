@@ -1,7 +1,7 @@
 import gleam/bytes_builder
 import gleam/erlang/process
+import gleamqtt/internal/transport/tcp
 import gleamqtt/transport
-import gleamqtt/transport/tcp
 import gleeunit/should
 import transport/echo_server
 

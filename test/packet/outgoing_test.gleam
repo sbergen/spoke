@@ -1,8 +1,8 @@
 import gleam/bit_array
 import gleam/bytes_builder
 import gleamqtt
-import gleamqtt/packet/decode
-import gleamqtt/packet/outgoing
+import gleamqtt/internal/packet/decode
+import gleamqtt/internal/packet/outgoing
 import gleeunit/should
 
 pub fn encode_connect_test() {

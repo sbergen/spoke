@@ -1,5 +1,5 @@
-import gleamqtt/packet/decode
-import gleamqtt/packet/errors
+import gleamqtt/internal/packet/decode
+import gleamqtt/internal/packet/errors
 import gleeunit/should
 
 pub fn decode_string_invalid_length_test() {

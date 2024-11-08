@@ -2,8 +2,8 @@ import gleam/bytes_builder.{type BytesBuilder}
 import gleam/list
 import gleam/option.{type Option}
 import gleamqtt.{type QoS, QoS0, QoS1, QoS2}
-import gleamqtt/packet/encode
-import gleamqtt/packet/errors.{type EncodeError}
+import gleamqtt/internal/packet/encode
+import gleamqtt/internal/packet/errors.{type EncodeError}
 
 const protocol_level: Int = 4
 

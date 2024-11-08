@@ -1,5 +1,5 @@
-import gleamqtt/packet/decode
-import gleamqtt/packet/encode
+import gleamqtt/internal/packet/decode
+import gleamqtt/internal/packet/encode
 import gleeunit/should
 
 // The string tests use the decode module,

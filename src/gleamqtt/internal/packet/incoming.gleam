@@ -2,8 +2,8 @@ import gleam/list
 import gleam/option.{type Option, None}
 import gleam/result
 import gleamqtt.{type QoS, QoS0, QoS1, QoS2}
-import gleamqtt/packet/decode
-import gleamqtt/packet/errors.{type DecodeError}
+import gleamqtt/internal/packet/decode
+import gleamqtt/internal/packet/errors.{type DecodeError}
 
 pub type Packet {
   ConnAck(session_preset: Bool, code: ConnectReturnCode)
