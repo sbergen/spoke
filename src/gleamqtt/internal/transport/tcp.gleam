@@ -1,5 +1,6 @@
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/erlang/process.{type Subject}
+import gleam/function
 import gleam/otp/actor
 import gleam/result
 import gleam/string
@@ -15,6 +16,8 @@ pub fn connect(
   let mug_options = mug.ConnectionOptions(host, port, connect_timeout)
 
   let receive = process.new_subject()
+  let receive_sel =
+    process.new_selector() |> process.selecting(receive, function.identity)
 
   actor.start_spec(actor.Spec(
     fn() { init(mug_options, receive) },
@@ -24,7 +27,7 @@ pub fn connect(
   |> result.map(fn(subject) {
     transport.Channel(
       send: fn(bytes) { actor.call(subject, Send(bytes, _), send_timeout) },
-      receive: receive,
+      receive: receive_sel,
     )
   })
 }

@@ -1,12 +1,13 @@
 import gleam/bytes_builder.{type BytesBuilder}
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process.{type Selector}
 
+// TODO, make this generic to keep EncodedChannel in sync?
 /// Abstraction over the transport channel
 /// (E.g. TCP, WebSocket, Quic)
 pub type Channel {
   Channel(
     send: fn(BytesBuilder) -> Result(Nil, ChannelError),
-    receive: Subject(IncomingData),
+    receive: Selector(IncomingData),
   )
 }
 

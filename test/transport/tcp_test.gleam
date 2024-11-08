@@ -17,11 +17,11 @@ pub fn send_and_receive_test() {
 
   let assert Ok(_) = channel.send(bytes_builder.from_string("let's go!"))
   let assert Ok(transport.IncomingData(bytes)) =
-    process.receive(channel.receive, 100)
+    process.select(channel.receive, 100)
   bytes |> should.equal(<<"let's go!">>)
 
   let assert Ok(_) = channel.send(bytes_builder.from_string("and again!"))
   let assert Ok(transport.IncomingData(bytes)) =
-    process.receive(channel.receive, 100)
+    process.select(channel.receive, 100)
   bytes |> should.equal(<<"and again!">>)
 }
