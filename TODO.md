@@ -29,10 +29,10 @@ Only covered for client's needs (e.g. only encode CONNECT).
 - [/] PUBLISH
 - [ ] UNSUBSCRIBE
 - [ ] UNSUBACK
-- [ ] PUBACK
 - [x] DISCONNECT
 
 ### QoS 1 and 2
+- [ ] PUBACK
 - [ ] PUBREC
 - [ ] PUBREL
 - [ ] PUBCOMP
