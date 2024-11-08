@@ -1,13 +1,9 @@
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/list
-import gleam/option.{type Option, None}
-import gleam/result
-import gleamqtt.{
-  type QoS, type SubAckReturnCode, type SubscribeTopic, QoS0, QoS1, QoS2,
-}
-import packet/decode
+import gleam/option.{type Option}
+import gleamqtt.{type QoS, type SubscribeTopic, QoS0, QoS1, QoS2}
 import packet/encode
-import packet/errors.{type DecodeError, type EncodeError}
+import packet/errors.{type EncodeError}
 
 const protocol_level: Int = 4
 
@@ -22,9 +18,7 @@ pub type ConnectReturnCode {
 
 pub type Packet {
   Connect(client_id: String, keep_alive: Int)
-  ConnAck(session_preset: Bool, code: ConnectReturnCode)
   PingReq
-  PingResp
   Publish(
     topic: String,
     payload: BitArray,
@@ -38,9 +32,7 @@ pub type Packet {
   PubRel
   PubComp
   Subscribe(packet_id: Int, topics: List(SubscribeTopic))
-  SubAck(packet_id: Int, return_codes: List(SubAckReturnCode))
   Unsubscribe
-  UsubAck
   Disconnect
 }
 

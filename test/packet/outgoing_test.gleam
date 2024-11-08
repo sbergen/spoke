@@ -2,12 +2,12 @@ import gleam/bit_array
 import gleam/bytes_builder
 import gleamqtt
 import gleeunit/should
-import packet
 import packet/decode
+import packet/outgoing
 
 pub fn encode_connect_test() {
   let assert Ok(builder) =
-    packet.encode_packet(packet.Connect("test-client-id", 15))
+    outgoing.encode_packet(outgoing.Connect("test-client-id", 15))
 
   let assert <<1:4, 0:4, rest:bits>> = bytes_builder.to_bit_array(builder)
   let rest = validate_remaining_len(rest)
@@ -27,8 +27,8 @@ pub fn encode_connect_test() {
 
 pub fn encode_subscribe_test() {
   let assert Ok(builder) =
-    packet.encode_packet(
-      packet.Subscribe(42, [
+    outgoing.encode_packet(
+      outgoing.Subscribe(42, [
         gleamqtt.SubscribeTopic("topic0", gleamqtt.QoS0),
         gleamqtt.SubscribeTopic("topic1", gleamqtt.QoS1),
         gleamqtt.SubscribeTopic("topic2", gleamqtt.QoS2),
@@ -52,12 +52,12 @@ pub fn encode_subscribe_test() {
 }
 
 pub fn encode_disconnect_test() {
-  let assert Ok(builder) = packet.encode_packet(packet.Disconnect)
+  let assert Ok(builder) = outgoing.encode_packet(outgoing.Disconnect)
   let assert <<14:4, 0:4, 0:8>> = bytes_builder.to_bit_array(builder)
 }
 
 pub fn encode_ping_req_test() {
-  let assert Ok(builder) = packet.encode_packet(packet.PingReq)
+  let assert Ok(builder) = outgoing.encode_packet(outgoing.PingReq)
   let assert <<12:4, 0:4, 0:8>> = bytes_builder.to_bit_array(builder)
 }
 
