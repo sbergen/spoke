@@ -7,7 +7,7 @@ import gleam/erlang/process.{type Selector}
 pub type Channel {
   Channel(
     send: fn(BytesBuilder) -> Result(Nil, ChannelError),
-    receive: Selector(IncomingData),
+    receive: Selector(Result(BitArray, ChannelError)),
   )
 }
 
@@ -18,13 +18,8 @@ pub type ChannelOptions {
 /// Generic error type for channels.
 /// Will need to refine the errors later...
 pub type ChannelError {
+  ChannelClosed
   ConnectFailed(String)
   TransportError(String)
   SendFailed(String)
-}
-
-pub type IncomingData {
-  IncomingData(BitArray)
-  ChannelClosed
-  ChannelError(ChannelError)
 }

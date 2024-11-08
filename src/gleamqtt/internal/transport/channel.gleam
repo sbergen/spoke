@@ -10,11 +10,14 @@ pub type SendError {
   EncodingFailed(EncodeError)
 }
 
+pub type ReceiveResult =
+  Result(List(incoming.Packet), decode.DecodeError)
+
 /// Abstraction for an encoded transport channel
 pub type EncodedChannel {
   EncodedChannel(
     send: fn(outgoing.Packet) -> Result(Nil, SendError),
-    receive: Selector(Result(List(incoming.Packet), decode.DecodeError)),
+    receive: Selector(ReceiveResult),
   )
 }
 
@@ -40,10 +43,8 @@ fn send(
 }
 
 // TODO: leftovers?
-fn decode(
-  data: transport.IncomingData,
-) -> Result(List(incoming.Packet), DecodeError) {
-  let assert transport.IncomingData(bits) = data
+fn decode(data: Result(BitArray, ChannelError)) -> ReceiveResult {
+  let assert Ok(bits) = data
   case incoming.decode_packet(bits) {
     Ok(#(packet, _rest)) -> Ok([packet])
     Error(e) -> Error(e)

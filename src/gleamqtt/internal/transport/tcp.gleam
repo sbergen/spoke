@@ -1,10 +1,10 @@
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/erlang/process.{type Subject}
-import gleam/function
 import gleam/otp/actor
 import gleam/result
 import gleam/string
-import gleamqtt/transport.{type Channel, type ChannelError, type IncomingData}
+import gleamqtt/internal/utils
+import gleamqtt/transport.{type Channel, type ChannelError}
 import mug.{type Socket}
 
 pub fn connect(
@@ -14,10 +14,7 @@ pub fn connect(
   send_timeout send_timeout: Int,
 ) -> Result(Channel, actor.StartError) {
   let mug_options = mug.ConnectionOptions(host, port, connect_timeout)
-
   let receive = process.new_subject()
-  let receive_sel =
-    process.new_selector() |> process.selecting(receive, function.identity)
 
   actor.start_spec(actor.Spec(
     fn() { init(mug_options, receive) },
@@ -27,23 +24,23 @@ pub fn connect(
   |> result.map(fn(subject) {
     transport.Channel(
       send: fn(bytes) { actor.call(subject, Send(bytes, _), send_timeout) },
-      receive: receive_sel,
+      receive: utils.as_selector(receive),
     )
   })
 }
 
 type State {
-  State(socket: Socket, receive: Subject(IncomingData))
+  State(socket: Socket, receive: Subject(Result(BitArray, ChannelError)))
 }
 
 type Message {
   Send(data: BytesBuilder, reply_with: Subject(Result(Nil, ChannelError)))
-  Received(IncomingData)
+  Received(Result(BitArray, ChannelError))
 }
 
 fn init(
   options: mug.ConnectionOptions,
-  receive: Subject(IncomingData),
+  receive: Subject(Result(BitArray, ChannelError)),
 ) -> actor.InitResult(State, Message) {
   case mug.connect(options) {
     Ok(socket) -> {
@@ -77,10 +74,9 @@ fn handle_message(message: Message, state: State) -> actor.Next(Message, State) 
 
 fn map_tcp_message(msg: mug.TcpMessage) -> Message {
   Received(case msg {
-    mug.Packet(_, data) -> transport.IncomingData(data)
-    mug.SocketClosed(_) -> transport.ChannelClosed
-    mug.TcpError(_, e) ->
-      transport.ChannelError(transport.TransportError(string.inspect(e)))
+    mug.Packet(_, data) -> Ok(data)
+    mug.SocketClosed(_) -> Error(transport.ChannelClosed)
+    mug.TcpError(_, e) -> Error(transport.TransportError(string.inspect(e)))
   })
 }
 

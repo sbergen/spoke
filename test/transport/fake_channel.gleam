@@ -9,6 +9,6 @@ pub fn success(send: Subject(BitArray), receive: Subject(BitArray)) -> Channel {
       Ok(process.send(send, bytes_builder.to_bit_array(bytes)))
     },
     receive: process.new_selector()
-      |> process.selecting(receive, fn(data) { transport.IncomingData(data) }),
+      |> process.selecting(receive, fn(data) { Ok(data) }),
   )
 }
