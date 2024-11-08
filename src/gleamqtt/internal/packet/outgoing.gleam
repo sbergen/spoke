@@ -2,8 +2,7 @@ import gleam/bytes_builder.{type BytesBuilder}
 import gleam/list
 import gleam/option.{type Option}
 import gleamqtt.{type QoS, QoS0, QoS1, QoS2}
-import gleamqtt/internal/packet/encode
-import gleamqtt/internal/packet/errors.{type EncodeError}
+import gleamqtt/internal/packet/encode.{type EncodeError}
 
 const protocol_level: Int = 4
 
@@ -46,7 +45,7 @@ pub fn encode_packet(packet: Packet) -> Result(BytesBuilder, EncodeError) {
     Disconnect -> Ok(encode_disconnect())
     Subscribe(id, topics) -> encode_subscribe(id, topics)
     PingReq -> Ok(encode_ping_req())
-    _ -> Error(errors.EncodeNotImplemented)
+    _ -> Error(encode.EncodeNotImplemented)
   }
 }
 
@@ -84,7 +83,7 @@ fn encode_subscribe(
   topics: List(SubscribeSpec),
 ) -> Result(BytesBuilder, EncodeError) {
   case topics {
-    [] -> Error(errors.EmptySubscribeList)
+    [] -> Error(encode.EmptySubscribeList)
     _ -> {
       let header = <<packet_id:big-size(16)>>
       let payload = {

@@ -2,8 +2,7 @@ import gleam/list
 import gleam/option.{type Option, None}
 import gleam/result
 import gleamqtt.{type QoS, QoS0, QoS1, QoS2}
-import gleamqtt/internal/packet/decode
-import gleamqtt/internal/packet/errors.{type DecodeError}
+import gleamqtt/internal/packet/decode.{type DecodeError}
 
 pub type Packet {
   ConnAck(session_preset: Bool, code: ConnectReturnCode)
@@ -44,14 +43,14 @@ pub fn decode_packet(
   case bytes {
     <<id:4, flags:bits-size(4), rest:bytes>> ->
       case id {
-        0 -> Error(errors.InvalidPacketIdentifier)
+        0 -> Error(decode.InvalidPacketIdentifier)
         2 -> decode_connack(flags, rest)
         3 -> decode_publish(flags, rest)
         9 -> decode_suback(flags, rest)
         13 -> decode_pingresp(flags, rest)
-        _ -> Error(errors.DecodeNotImplemented)
+        _ -> Error(decode.DecodeNotImplemented)
       }
-    _ -> Error(errors.DataTooShort)
+    _ -> Error(decode.DataTooShort)
   }
 }
 
@@ -65,7 +64,7 @@ fn decode_connack(
       let result = ConnAck(session_present == 1, return_code)
       Ok(#(result, rest))
     }
-    _, _ -> Error(errors.InvalidConnAckData)
+    _, _ -> Error(decode.InvalidConnAckData)
   }
 }
 
@@ -82,7 +81,7 @@ fn decode_publish(
 
       Ok(#(Publish(topic, rest, dup == 1, qos, retain == 1, None), remainder))
     }
-    _ -> Error(errors.InvalidPublishData)
+    _ -> Error(decode.InvalidPublishData)
   }
 }
 
@@ -92,7 +91,7 @@ fn decode_pingresp(
 ) -> Result(#(Packet, BitArray), DecodeError) {
   case flags, data {
     <<0:4>>, <<0:8, rest:bytes>> -> Ok(#(PingResp, rest))
-    _, _ -> Error(errors.InvalidPingRespData)
+    _, _ -> Error(decode.InvalidPingRespData)
   }
 }
 
@@ -107,7 +106,7 @@ fn decode_suback(
       use return_codes <- result.try(decode_suback_returns(rest, []))
       Ok(#(SubAck(packet_id, return_codes), remainder))
     }
-    _, _ -> Error(errors.InvalidSubAckData)
+    _, _ -> Error(decode.InvalidSubAckData)
   }
 }
 
@@ -116,7 +115,7 @@ fn split_var_data(bytes: BitArray) -> Result(#(BitArray, BitArray), DecodeError)
   use #(len, rest) <- result.try(decode.varint(bytes))
   case rest {
     <<data:bytes-size(len), rest:bytes>> -> Ok(#(data, rest))
-    _ -> Error(errors.DataTooShort)
+    _ -> Error(decode.DataTooShort)
   }
 }
 
@@ -128,7 +127,7 @@ fn decode_connack_code(code: Int) -> Result(ConnectReturnCode, DecodeError) {
     3 -> Ok(ServerUnavailable)
     4 -> Ok(BadUsernameOrPassword)
     5 -> Ok(NotAuthorized)
-    _ -> Error(errors.InvalidConnAckReturnCode)
+    _ -> Error(decode.InvalidConnAckReturnCode)
   }
 }
 
@@ -142,7 +141,7 @@ fn decode_suback_returns(
       use code <- result.try(decode_suback_return(val))
       rest |> decode_suback_returns([code, ..codes])
     }
-    _ -> Error(errors.InvalidSubAckData)
+    _ -> Error(decode.InvalidSubAckData)
   }
 }
 
@@ -152,15 +151,15 @@ fn decode_suback_return(val: Int) -> Result(SubscribeResult, DecodeError) {
     1 -> Ok(SubscribeSuccess(QoS1))
     2 -> Ok(SubscribeSuccess(QoS2))
     8 -> Ok(SubscribeFailure)
-    _ -> Error(errors.InvalidSubAckData)
+    _ -> Error(decode.InvalidSubAckData)
   }
 }
 
-fn decode_qos(val: Int) -> Result(QoS, errors.DecodeError) {
+fn decode_qos(val: Int) -> Result(QoS, DecodeError) {
   case val {
     0 -> Ok(gleamqtt.QoS0)
     1 -> Ok(gleamqtt.QoS1)
     2 -> Ok(gleamqtt.QoS2)
-    _ -> Error(errors.InvalidQoS)
+    _ -> Error(decode.InvalidQoS)
   }
 }

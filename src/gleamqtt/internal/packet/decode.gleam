@@ -1,17 +1,31 @@
 import gleam/bit_array
 import gleam/result
-import gleamqtt/internal/packet/errors.{type DecodeError}
+
+pub type DecodeError {
+  DecodeNotImplemented
+  InvalidPacketIdentifier
+  DataTooShort
+  InvalidConnAckData
+  InvalidConnAckReturnCode
+  InvalidPublishData
+  InvalidPingRespData
+  InvalidSubAckData
+  InvalidUTF8
+  InvalidStringLength
+  InvalidVarint
+  InvalidQoS
+}
 
 pub fn string(bits: BitArray) -> Result(#(String, BitArray), DecodeError) {
   case bits {
     <<len:big-size(16), bytes:bytes-size(len), rest:bits>> -> {
       use str <- result.try(
         bit_array.to_string(bytes)
-        |> result.map_error(fn(_) { errors.InvalidUTF8 }),
+        |> result.map_error(fn(_) { InvalidUTF8 }),
       )
       Ok(#(str, rest))
     }
-    _ -> Error(errors.InvalidStringLength)
+    _ -> Error(InvalidStringLength)
   }
 }
 
@@ -19,7 +33,7 @@ pub fn string(bits: BitArray) -> Result(#(String, BitArray), DecodeError) {
 pub fn integer(bits: BitArray) -> Result(#(Int, BitArray), DecodeError) {
   case bits {
     <<val:big-size(16), rest:bytes>> -> Ok(#(val, rest))
-    _ -> Error(errors.DataTooShort)
+    _ -> Error(DataTooShort)
   }
 }
 
@@ -33,7 +47,7 @@ fn accumulate_varint(
   bytes: BitArray,
 ) -> Result(#(Int, BitArray), DecodeError) {
   case multiplier, bytes {
-    268_435_456, _ -> Error(errors.InvalidVarint)
+    268_435_456, _ -> Error(InvalidVarint)
     _, <<continue:1, next:7, rest:bits>> -> {
       let value = value + multiplier * next
       case continue {
@@ -41,6 +55,6 @@ fn accumulate_varint(
         _ -> accumulate_varint(value, 128 * multiplier, rest)
       }
     }
-    _, _ -> Error(errors.InvalidVarint)
+    _, _ -> Error(InvalidVarint)
   }
 }

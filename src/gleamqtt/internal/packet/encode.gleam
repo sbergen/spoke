@@ -1,5 +1,10 @@
 import gleam/bit_array
 
+pub type EncodeError {
+  EncodeNotImplemented
+  EmptySubscribeList
+}
+
 pub fn string(str: String) -> BitArray {
   let data = bit_array.from_string(str)
   let len = <<bit_array.byte_size(data):big-size(16)>>

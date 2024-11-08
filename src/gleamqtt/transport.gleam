@@ -7,7 +7,6 @@ pub type Channel {
   Channel(
     send: fn(BytesBuilder) -> Result(Nil, ChannelError),
     receive: Subject(IncomingData),
-    // TODO: Add shutdown
   )
 }
 

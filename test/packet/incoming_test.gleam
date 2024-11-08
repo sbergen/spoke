@@ -1,33 +1,33 @@
 import gleam/option.{None}
 import gleamqtt.{QoS0, QoS1, QoS2}
+import gleamqtt/internal/packet/decode
 import gleamqtt/internal/packet/encode
-import gleamqtt/internal/packet/errors
 import gleamqtt/internal/packet/incoming.{SubscribeFailure, SubscribeSuccess}
 import gleeunit/should
 
 pub fn decode_too_short_test() {
   incoming.decode_packet(<<0:7>>)
-  |> should.equal(Error(errors.DataTooShort))
+  |> should.equal(Error(decode.DataTooShort))
 }
 
 pub fn decode_invalid_id_test() {
   incoming.decode_packet(<<0:8>>)
-  |> should.equal(Error(errors.InvalidPacketIdentifier))
+  |> should.equal(Error(decode.InvalidPacketIdentifier))
 }
 
 pub fn connack_decode_invalid_length_test() {
   incoming.decode_packet(<<2:4, 0:4, 3:8, 0:32>>)
-  |> should.equal(Error(errors.InvalidConnAckData))
+  |> should.equal(Error(decode.InvalidConnAckData))
 }
 
 pub fn connack_decode_invalid_flags_test() {
   incoming.decode_packet(<<2:4, 1:4, 2:8, 0:16>>)
-  |> should.equal(Error(errors.InvalidConnAckData))
+  |> should.equal(Error(decode.InvalidConnAckData))
 }
 
 pub fn connack_decode_invalid_return_code_test() {
   incoming.decode_packet(<<2:4, 0:4, 2:8, 0:8, 6:8>>)
-  |> should.equal(Error(errors.InvalidConnAckReturnCode))
+  |> should.equal(Error(decode.InvalidConnAckReturnCode))
 }
 
 pub fn connack_decode_test() {
@@ -57,7 +57,7 @@ pub fn ping_resp_decode_test() {
 }
 
 pub fn ping_resp_invalid_length_test() {
-  let assert Error(errors.InvalidPingRespData) =
+  let assert Error(decode.InvalidPingRespData) =
     incoming.decode_packet(<<13:4, 0:4, 1:8, 1:8>>)
 }
 

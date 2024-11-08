@@ -1,13 +1,12 @@
 import gleamqtt/internal/packet/decode
-import gleamqtt/internal/packet/errors
 import gleeunit/should
 
 pub fn decode_string_invalid_length_test() {
-  let assert Error(errors.InvalidStringLength) = decode.string(<<8:16, 0>>)
+  let assert Error(decode.InvalidStringLength) = decode.string(<<8:16, 0>>)
 }
 
 pub fn decode_string_invalid_data_test() {
-  let assert Error(errors.InvalidUTF8) = decode.string(<<2:16, 0xc3, 0x28>>)
+  let assert Error(decode.InvalidUTF8) = decode.string(<<2:16, 0xc3, 0x28>>)
 }
 
 pub fn decode_varint_small_test() {
@@ -25,10 +24,10 @@ pub fn decode_varint_large_test() {
 }
 
 pub fn decode_varint_too_short_data_test() {
-  decode.varint(<<1:1, 0:7>>) |> should.equal(Error(errors.InvalidVarint))
+  decode.varint(<<1:1, 0:7>>) |> should.equal(Error(decode.InvalidVarint))
 }
 
 pub fn decode_varint_too_large_test() {
   decode.varint(<<0xFF, 0xFF, 0xFF, 0xFF, 1>>)
-  |> should.equal(Error(errors.InvalidVarint))
+  |> should.equal(Error(decode.InvalidVarint))
 }
