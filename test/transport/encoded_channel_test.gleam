@@ -10,14 +10,14 @@ import transport/fake_channel
 
 pub fn send_contained_packet_test() {
   let #(raw_send, _, channel) = set_up(fake_channel.success)
-  let assert channel.SendOk = channel.send(outgoing.PingReq)
+  let assert Ok(_) = channel.send(outgoing.PingReq)
   process.receive(raw_send, 10) |> should.equal(Ok(encode(outgoing.PingReq)))
 }
 
 pub fn receive_contained_packet_test() {
   let #(_, raw_receive, channel) = set_up(fake_channel.success)
   process.send(raw_receive, <<13:4, 0:4, 0:8>>)
-  let assert Ok(Ok(incoming.PingResp)) = process.select(channel.receive, 10)
+  let assert Ok(Ok([incoming.PingResp])) = process.select(channel.receive, 10)
 }
 
 fn encode(packet: outgoing.Packet) -> BitArray {
