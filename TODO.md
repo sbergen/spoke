@@ -1,6 +1,6 @@
 ## High level
 
-- [ ] TCP
+- [x] TCP
 - [ ] WebSocket
 
 - [ ] Connect
@@ -8,6 +8,7 @@
 - [ ] Receive messages
 - [ ] Send messages
 - [ ] Retry failed sub/unsub
+- [ ] Graceful shutdown
 
 - [ ] QoS 0
 - [ ] QoS 1

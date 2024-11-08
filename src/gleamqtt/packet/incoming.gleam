@@ -1,7 +1,7 @@
 import gleam/list
 import gleam/option.{type Option, None}
 import gleam/result
-import gleamqtt.{type QoS, type SubAckReturnCode, QoS0, QoS1, QoS2}
+import gleamqtt.{type QoS, type SubscribeResult, QoS0, QoS1, QoS2}
 import gleamqtt/packet/decode
 import gleamqtt/packet/errors.{type DecodeError}
 
@@ -29,7 +29,7 @@ pub type Packet {
   PubRec
   PubRel
   PubComp
-  SubAck(packet_id: Int, return_codes: List(SubAckReturnCode))
+  SubAck(packet_id: Int, return_codes: List(SubscribeResult))
   UsubAck
 }
 
@@ -129,8 +129,8 @@ fn decode_connack_code(code: Int) -> Result(ConnectReturnCode, DecodeError) {
 
 fn decode_suback_returns(
   bytes: BitArray,
-  codes: List(SubAckReturnCode),
-) -> Result(List(SubAckReturnCode), DecodeError) {
+  codes: List(SubscribeResult),
+) -> Result(List(SubscribeResult), DecodeError) {
   case bytes {
     <<>> -> Ok(list.reverse(codes))
     <<val:8, rest:bytes>> -> {
@@ -141,7 +141,7 @@ fn decode_suback_returns(
   }
 }
 
-fn decode_suback_return(val: Int) -> Result(SubAckReturnCode, DecodeError) {
+fn decode_suback_return(val: Int) -> Result(SubscribeResult, DecodeError) {
   case val {
     0 -> Ok(gleamqtt.SubscribeSuccess(QoS0))
     1 -> Ok(gleamqtt.SubscribeSuccess(QoS1))

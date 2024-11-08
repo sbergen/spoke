@@ -4,7 +4,7 @@ pub type QoS {
   QoS2
 }
 
-pub type SubAckReturnCode {
+pub type SubscribeResult {
   SubscribeSuccess(qos: QoS)
   SubscribeFailure
 }
