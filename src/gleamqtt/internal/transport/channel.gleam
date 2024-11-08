@@ -1,4 +1,4 @@
-import gleam/erlang/process.{type Selector}
+import gleam/erlang/process.{type Subject}
 import gleamqtt/internal/packet/decode.{type DecodeError}
 import gleamqtt/internal/packet/encode.{type EncodeError}
 import gleamqtt/internal/packet/incoming
@@ -11,20 +11,19 @@ pub type SendError {
 }
 
 pub type ReceiveResult =
-  Result(List(incoming.Packet), decode.DecodeError)
+  Result(List(incoming.Packet), DecodeError)
 
 /// Abstraction for an encoded transport channel
+/// Note: only one receiver is supported at the moment
 pub type EncodedChannel {
   EncodedChannel(
     send: fn(outgoing.Packet) -> Result(Nil, SendError),
-    receive: Selector(ReceiveResult),
+    start_receive: fn(Subject(ReceiveResult)) -> Nil,
   )
 }
 
 pub fn as_encoded(channel: transport.Channel) -> EncodedChannel {
-  EncodedChannel(
-    send(channel, _),
-    receive: process.map_selector(channel.receive, decode),
+  EncodedChannel(send(channel, _), start_receive: fn(_) { todo }//process.map_selector(channel.receive, decode),
   )
 }
 

@@ -1,14 +1,19 @@
 import gleam/bytes_builder
 import gleam/erlang/process.{type Subject}
-import gleamqtt/transport.{type Channel}
+import gleamqtt/transport.{type Channel, type Receiver}
 
-/// Creates a channel that wraps the given subjects
-pub fn success(send: Subject(BitArray), receive: Subject(BitArray)) -> Channel {
-  transport.Channel(
-    send: fn(bytes) {
-      Ok(process.send(send, bytes_builder.to_bit_array(bytes)))
-    },
-    receive: process.new_selector()
-      |> process.selecting(receive, fn(data) { Ok(data) }),
-  )
+/// Creates a channel that will send to the given subject,
+/// and a subject that receives the receiver passed to start_receive when called.
+pub fn new(send: Subject(BitArray)) -> #(Channel, Subject(Receiver)) {
+  let receiver = process.new_subject()
+
+  let channel =
+    transport.Channel(
+      send: fn(bytes) {
+        Ok(process.send(send, bytes_builder.to_bit_array(bytes)))
+      },
+      start_receive: fn(subject) { process.send(receiver, subject) },
+    )
+
+  #(channel, receiver)
 }

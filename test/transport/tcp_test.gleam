@@ -14,11 +14,14 @@ pub fn send_and_receive_test() {
       send_timeout: 100,
     )
 
+  let receiver = process.new_subject()
+  channel.start_receive(receiver)
+
   let assert Ok(_) = channel.send(bytes_builder.from_string("let's go!"))
-  let assert Ok(Ok(bytes)) = process.select(channel.receive, 100)
+  let assert Ok(Ok(bytes)) = process.receive(receiver, 100)
   bytes |> should.equal(<<"let's go!">>)
 
   let assert Ok(_) = channel.send(bytes_builder.from_string("and again!"))
-  let assert Ok(Ok(bytes)) = process.select(channel.receive, 100)
+  let assert Ok(Ok(bytes)) = process.receive(receiver, 100)
   bytes |> should.equal(<<"and again!">>)
 }

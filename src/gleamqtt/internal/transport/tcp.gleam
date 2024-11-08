@@ -1,9 +1,9 @@
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/erlang/process.{type Subject}
+import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
-import gleamqtt/internal/utils
 import gleamqtt/transport.{type Channel, type ChannelError}
 import mug.{type Socket}
 
@@ -14,41 +14,40 @@ pub fn connect(
   send_timeout send_timeout: Int,
 ) -> Result(Channel, actor.StartError) {
   let mug_options = mug.ConnectionOptions(host, port, connect_timeout)
-  let receive = process.new_subject()
 
   actor.start_spec(actor.Spec(
-    fn() { init(mug_options, receive) },
+    fn() { init(mug_options) },
     mug_options.timeout + 10,
     handle_message,
   ))
   |> result.map(fn(subject) {
     transport.Channel(
       send: fn(bytes) { actor.call(subject, Send(bytes, _), send_timeout) },
-      receive: utils.as_selector(receive),
+      start_receive: fn(receiver) { actor.send(subject, SetReceiver(receiver)) },
     )
   })
 }
 
+type ReceiveSubject =
+  Subject(Result(BitArray, ChannelError))
+
 type State {
-  State(socket: Socket, receive: Subject(Result(BitArray, ChannelError)))
+  State(socket: Socket, receiver: Option(ReceiveSubject))
 }
 
 type Message {
+  SetReceiver(ReceiveSubject)
   Send(data: BytesBuilder, reply_with: Subject(Result(Nil, ChannelError)))
   Received(Result(BitArray, ChannelError))
 }
 
-fn init(
-  options: mug.ConnectionOptions,
-  receive: Subject(Result(BitArray, ChannelError)),
-) -> actor.InitResult(State, Message) {
+fn init(options: mug.ConnectionOptions) -> actor.InitResult(State, Message) {
   case mug.connect(options) {
     Ok(socket) -> {
       let selector =
         process.new_selector()
         |> mug.selecting_tcp_messages(map_tcp_message)
-      mug.receive_next_packet_as_message(socket)
-      actor.Ready(State(socket, receive), selector)
+      actor.Ready(State(socket, None), selector)
     }
     Error(e) -> actor.Failed(string.inspect(e))
   }
@@ -56,9 +55,17 @@ fn init(
 
 fn handle_message(message: Message, state: State) -> actor.Next(Message, State) {
   case message {
-    Received(msg) -> {
+    SetReceiver(receiver) -> {
       mug.receive_next_packet_as_message(state.socket)
-      process.send(state.receive, msg)
+      actor.continue(State(..state, receiver: Some(receiver)))
+    }
+
+    Received(msg) -> {
+      // We shouldn't be receiving any packets before the receiver is set
+      let assert Some(receiver) = state.receiver
+      mug.receive_next_packet_as_message(state.socket)
+      process.send(receiver, msg)
+      actor.continue(state)
     }
 
     Send(data, reply_to) -> {
@@ -66,10 +73,9 @@ fn handle_message(message: Message, state: State) -> actor.Next(Message, State) 
         mug.send_builder(state.socket, data)
         |> map_mug_error(transport.SendFailed)
       process.send(reply_to, reply)
+      actor.continue(state)
     }
   }
-
-  actor.continue(state)
 }
 
 fn map_tcp_message(msg: mug.TcpMessage) -> Message {
