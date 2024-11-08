@@ -1,6 +1,6 @@
+import gleamqtt/packet/decode
+import gleamqtt/packet/errors
 import gleeunit/should
-import packet/decode
-import packet/errors
 
 pub fn decode_string_invalid_length_test() {
   let assert Error(errors.InvalidStringLength) = decode.string(<<8:16, 0>>)

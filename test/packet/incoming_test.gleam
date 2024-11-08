@@ -1,9 +1,9 @@
 import gleam/option.{None}
 import gleamqtt.{QoS0, QoS1, QoS2, SubscribeFailure, SubscribeSuccess}
+import gleamqtt/packet/encode
+import gleamqtt/packet/errors
+import gleamqtt/packet/incoming
 import gleeunit/should
-import packet/encode
-import packet/errors
-import packet/incoming
 
 pub fn decode_too_short_test() {
   incoming.decode_packet(<<0:7>>)

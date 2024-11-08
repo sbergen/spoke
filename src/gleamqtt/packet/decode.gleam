@@ -1,6 +1,6 @@
 import gleam/bit_array
 import gleam/result
-import packet/errors.{type DecodeError}
+import gleamqtt/packet/errors.{type DecodeError}
 
 pub fn string(bits: BitArray) -> Result(#(String, BitArray), DecodeError) {
   case bits {

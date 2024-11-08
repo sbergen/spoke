@@ -2,8 +2,8 @@ import gleam/list
 import gleam/option.{type Option, None}
 import gleam/result
 import gleamqtt.{type QoS, type SubAckReturnCode, QoS0, QoS1, QoS2}
-import packet/decode
-import packet/errors.{type DecodeError}
+import gleamqtt/packet/decode
+import gleamqtt/packet/errors.{type DecodeError}
 
 pub type ConnectReturnCode {
   ConnectionAccepted

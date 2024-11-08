@@ -1,9 +1,9 @@
 import gleam/bit_array
 import gleam/bytes_builder
 import gleamqtt
+import gleamqtt/packet/decode
+import gleamqtt/packet/outgoing
 import gleeunit/should
-import packet/decode
-import packet/outgoing
 
 pub fn encode_connect_test() {
   let assert Ok(builder) =

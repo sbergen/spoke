@@ -1,6 +1,6 @@
+import gleamqtt/packet/decode
+import gleamqtt/packet/encode
 import gleeunit/should
-import packet/decode
-import packet/encode
 
 // The string tests use the decode module,
 // but that should be good enough to ensure they keep functioning correctly.
