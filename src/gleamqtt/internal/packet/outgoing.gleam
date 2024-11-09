@@ -1,7 +1,7 @@
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/list
 import gleam/option.{type Option}
-import gleamqtt.{type QoS, QoS0, QoS1, QoS2}
+import gleamqtt.{type QoS, type SubscribeRequest, QoS0, QoS1, QoS2}
 import gleamqtt/internal/packet/encode.{type EncodeError}
 
 const protocol_level: Int = 4
@@ -21,13 +21,9 @@ pub type Packet {
   PubRec
   PubRel
   PubComp
-  Subscribe(packet_id: Int, topics: List(SubscribeSpec))
+  Subscribe(packet_id: Int, topics: List(SubscribeRequest))
   Unsubscribe
   Disconnect
-}
-
-pub type SubscribeSpec {
-  SubscribeSpec(filter: String, qos: QoS)
 }
 
 pub type ConnectReturnCode {
@@ -80,7 +76,7 @@ fn encode_connect(client_id: String, keep_alive: Int) -> BytesBuilder {
 
 fn encode_subscribe(
   packet_id: Int,
-  topics: List(SubscribeSpec),
+  topics: List(SubscribeRequest),
 ) -> Result(BytesBuilder, EncodeError) {
   case topics {
     [] -> Error(encode.EmptySubscribeList)

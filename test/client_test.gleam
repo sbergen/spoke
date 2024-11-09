@@ -1,5 +1,7 @@
 import gleam/erlang/process.{type Subject}
 import gleam/function
+import gleam/list
+import gleam/otp/task
 import gleamqtt.{type Update}
 import gleamqtt/internal/client_impl.{type ClientImpl}
 import gleamqtt/internal/packet/incoming
@@ -15,8 +17,10 @@ const keep_alive = 60
 pub fn connect_success_test() {
   let #(_client, sent_packets, connections, updates) = set_up()
 
-  // Connect request
+  // Open channel
   let assert Ok(server_out) = process.receive(connections, 10)
+
+  // Connect request
   let assert Ok(request) = process.receive(sent_packets, 10)
   request |> should.equal(outgoing.Connect(id, keep_alive))
 
@@ -27,6 +31,44 @@ pub fn connect_success_test() {
   )
   let assert Ok(gleamqtt.ConnectFinished(gleamqtt.ConnectionAccepted, False)) =
     process.receive(updates, 10)
+}
+
+pub fn subscribe_test() {
+  let #(client, sent_packets, server_out, _updates) = set_up_connected()
+
+  let topics = [gleamqtt.SubscribeRequest("topic", gleamqtt.QoS0)]
+  let results = {
+    use topic <- list.map(topics)
+    incoming.SubscribeSuccess(topic.qos)
+  }
+  let expected_id = 0
+
+  let subscribe = task.async(fn() { client_impl.subscribe(client, topics) })
+
+  let assert Ok(result) = process.receive(sent_packets, 10)
+  result |> should.equal(outgoing.Subscribe(expected_id, topics))
+  process.send(server_out, Ok(incoming.SubAck(expected_id, results)))
+
+  task.await(subscribe, 10)
+}
+
+fn set_up_connected() -> #(
+  ClientImpl,
+  Subject(outgoing.Packet),
+  Receiver(incoming.Packet),
+  Subject(Update),
+) {
+  let #(client, sent_packets, connections, updates) = set_up()
+
+  // Open channel
+  let assert Ok(server_out) = process.receive(connections, 10)
+  let assert Ok(outgoing.Connect(_, _)) = process.receive(sent_packets, 10)
+  process.send(
+    server_out,
+    Ok(incoming.ConnAck(False, gleamqtt.ConnectionAccepted)),
+  )
+
+  #(client, sent_packets, server_out, updates)
 }
 
 fn set_up() -> #(

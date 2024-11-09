@@ -9,6 +9,8 @@ pub opaque type Client {
   Client(impl: ClientImpl)
 }
 
+/// Starts a new MQTT client with the given options.
+/// The connection will be automatically established.
 pub fn start(
   connect_opts: ConnectOptions,
   transport_opts: TransportOptions,
