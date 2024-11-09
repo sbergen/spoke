@@ -1,4 +1,7 @@
+import gleam/bit_array
 import gleam/erlang/process.{type Subject}
+import gleam/otp/actor
+import gleam/string
 import gleamqtt/internal/packet/decode.{type DecodeError}
 import gleamqtt/internal/packet/encode.{type EncodeError}
 import gleamqtt/internal/packet/incoming
@@ -10,21 +13,29 @@ pub type SendError {
   EncodingFailed(EncodeError)
 }
 
-pub type ReceiveResult =
-  Result(List(incoming.Packet), DecodeError)
+pub type EncodedChannelError {
+  EncodedChannelError(ChannelError)
+  ChannelDecodeError(DecodeError)
+}
+
+pub type EncodedReceiveResult =
+  Result(List(incoming.Packet), EncodedChannelError)
 
 /// Abstraction for an encoded transport channel
 /// Note: only one receiver is supported at the moment
 pub type EncodedChannel {
   EncodedChannel(
     send: fn(outgoing.Packet) -> Result(Nil, SendError),
-    start_receive: fn(Subject(ReceiveResult)) -> Nil,
+    start_receive: fn(Subject(EncodedReceiveResult)) -> Nil,
   )
 }
 
 pub fn as_encoded(channel: transport.Channel) -> EncodedChannel {
-  EncodedChannel(send(channel, _), start_receive: fn(_) { todo }//process.map_selector(channel.receive, decode),
-  )
+  EncodedChannel(send(channel, _), fn(receiver) {
+    let assert Ok(chunker) =
+      actor.start(ChunkerState(receiver, <<>>), run_chunker)
+    channel.start_receive(chunker)
+  })
 }
 
 fn send(
@@ -41,11 +52,31 @@ fn send(
   }
 }
 
-// TODO: leftovers?
-fn decode(data: Result(BitArray, ChannelError)) -> ReceiveResult {
-  let assert Ok(bits) = data
-  case incoming.decode_packet(bits) {
+type ChunkerState {
+  ChunkerState(receiver: Subject(EncodedReceiveResult), leftover: BitArray)
+}
+
+fn run_chunker(
+  data: Result(BitArray, ChannelError),
+  state: ChunkerState,
+) -> actor.Next(Result(BitArray, ChannelError), ChunkerState) {
+  case data {
+    Error(e) -> {
+      actor.Stop(process.Abnormal(string.inspect(e)))
+    }
+
+    Ok(data) -> {
+      let all_data = bit_array.concat([state.leftover, data])
+      let result = decode_all(all_data)
+      process.send(state.receiver, result)
+      actor.continue(state)
+    }
+  }
+}
+
+fn decode_all(data: BitArray) -> EncodedReceiveResult {
+  case incoming.decode_packet(data) {
     Ok(#(packet, _rest)) -> Ok([packet])
-    Error(e) -> Error(e)
+    Error(e) -> Error(ChannelDecodeError(e))
   }
 }

@@ -4,7 +4,7 @@ import gleam/result
 import gleamqtt/internal/packet/incoming
 import gleamqtt/internal/packet/outgoing
 import gleamqtt/internal/transport/channel.{
-  type EncodedChannel, type ReceiveResult,
+  type EncodedChannel, type EncodedReceiveResult,
 }
 import gleamqtt/transport
 import gleeunit/should
@@ -36,7 +36,7 @@ fn set_up_send() -> #(EncodedChannel, Subject(BitArray)) {
   #(channel, send)
 }
 
-fn set_up_receive() -> #(Subject(ReceiveResult), transport.Receiver) {
+fn set_up_receive() -> #(Subject(EncodedReceiveResult), transport.Receiver) {
   let #(channel, receiver_sub) = fake_channel.new(process.new_subject())
   let channel = channel.as_encoded(channel)
 
