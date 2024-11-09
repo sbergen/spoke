@@ -37,8 +37,6 @@ pub type SubscribeResult {
   SubscribeFailure
 }
 
-pub const largest_fixed_size_packet = 3
-
 pub fn decode_packet(
   bytes: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {
@@ -61,6 +59,7 @@ fn decode_connack(
   data: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {
   case flags, data {
+    _, <<>> | _, <<_>> | _, <<_, _>> -> Error(decode.DataTooShort)
     <<0:4>>, <<2:8, 0:7, session_present:1, return_code:8, rest:bytes>> -> {
       use return_code <- result.try(decode_connack_code(return_code))
       let result = ConnAck(session_present == 1, return_code)
@@ -92,6 +91,7 @@ fn decode_pingresp(
   data: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {
   case flags, data {
+    _, <<>> -> Error(decode.DataTooShort)
     <<0:4>>, <<0:8, rest:bytes>> -> Ok(#(PingResp, rest))
     _, _ -> Error(decode.InvalidPingRespData)
   }

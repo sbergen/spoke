@@ -1,8 +1,8 @@
 import gleamqtt/internal/packet/decode
 import gleeunit/should
 
-pub fn decode_string_invalid_length_test() {
-  let assert Error(decode.InvalidStringLength) = decode.string(<<8:16, 0>>)
+pub fn decode_string_too_short_test() {
+  let assert Error(decode.DataTooShort) = decode.string(<<8:16, 0>>)
 }
 
 pub fn decode_string_invalid_data_test() {
@@ -24,10 +24,10 @@ pub fn decode_varint_large_test() {
 }
 
 pub fn decode_varint_too_short_data_test() {
-  decode.varint(<<1:1, 0:7>>) |> should.equal(Error(decode.InvalidVarint))
+  decode.varint(<<1:1, 0:7>>) |> should.equal(Error(decode.DataTooShort))
 }
 
 pub fn decode_varint_too_large_test() {
   decode.varint(<<0xFF, 0xFF, 0xFF, 0xFF, 1>>)
-  |> should.equal(Error(decode.InvalidVarint))
+  |> should.equal(Error(decode.VarIntTooLarge))
 }

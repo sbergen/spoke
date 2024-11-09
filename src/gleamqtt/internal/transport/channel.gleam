@@ -80,14 +80,7 @@ fn run_chunker(
 fn decode_all(data: BitArray) -> #(EncodedReceiveResult, BitArray) {
   case incoming.decode_packet(data) {
     Ok(#(packet, rest)) -> #(Ok([packet]), rest)
-
     Error(decode.DataTooShort) -> #(Ok([]), data)
-
-    Error(e) -> {
-      case bit_array.byte_size(data) < incoming.largest_fixed_size_packet {
-        True -> #(Ok([]), data)
-        False -> #(Error(ChannelDecodeError(e)), <<>>)
-      }
-    }
+    Error(e) -> #(Error(ChannelDecodeError(e)), <<>>)
   }
 }

@@ -11,9 +11,8 @@ pub type DecodeError {
   InvalidPingRespData
   InvalidSubAckData
   InvalidUTF8
-  InvalidStringLength
-  InvalidVarint
   InvalidQoS
+  VarIntTooLarge
 }
 
 pub fn string(bits: BitArray) -> Result(#(String, BitArray), DecodeError) {
@@ -25,7 +24,7 @@ pub fn string(bits: BitArray) -> Result(#(String, BitArray), DecodeError) {
       )
       Ok(#(str, rest))
     }
-    _ -> Error(InvalidStringLength)
+    _ -> Error(DataTooShort)
   }
 }
 
@@ -47,7 +46,7 @@ fn accumulate_varint(
   bytes: BitArray,
 ) -> Result(#(Int, BitArray), DecodeError) {
   case multiplier, bytes {
-    268_435_456, _ -> Error(InvalidVarint)
+    268_435_456, _ -> Error(VarIntTooLarge)
     _, <<continue:1, next:7, rest:bits>> -> {
       let value = value + multiplier * next
       case continue {
@@ -55,6 +54,6 @@ fn accumulate_varint(
         _ -> accumulate_varint(value, 128 * multiplier, rest)
       }
     }
-    _, _ -> Error(InvalidVarint)
+    _, _ -> Error(DataTooShort)
   }
 }
