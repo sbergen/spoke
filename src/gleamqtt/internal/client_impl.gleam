@@ -90,7 +90,7 @@ fn new_state(
   connect: fn() -> EncodedChannel,
   updates: Subject(Update),
 ) -> ClientState {
-  ClientState(options, connect, updates, Disconnected, 0, dict.new())
+  ClientState(options, connect, updates, Disconnected, 1, dict.new())
 }
 
 fn run_client(

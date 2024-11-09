@@ -45,7 +45,7 @@ pub fn subscribe_success_test() {
     use topic <- list.map(topics)
     incoming.SubscribeSuccess(topic.qos)
   }
-  let expected_id = 0
+  let expected_id = 1
 
   let subscribe =
     task.async(fn() { client_impl.subscribe(client, topics, 100) })
