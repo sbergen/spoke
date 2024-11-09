@@ -10,8 +10,6 @@ import gleamqtt/transport.{type ChannelError}
 pub type EncodedReceiveResult =
   Result(incoming.Packet, ChannelError)
 
-/// Abstraction for an encoded transport channel
-/// Note: only one receiver is supported at the moment
 pub type EncodedChannel =
   transport.Channel(outgoing.Packet, incoming.Packet)
 
