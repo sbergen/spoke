@@ -1,10 +1,12 @@
 import gleam/bytes_builder.{type BytesBuilder}
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
-import gleamqtt/transport.{type ByteChannel, type ChannelError}
+import gleamqtt/transport.{
+  type ByteChannel, type ChannelError, type ChannelResult, type Receiver,
+}
 import mug.{type Socket}
 
 pub fn connect(
@@ -17,7 +19,7 @@ pub fn connect(
 
   actor.start_spec(actor.Spec(
     fn() { init(mug_options) },
-    mug_options.timeout + 10,
+    mug_options.timeout + 100,
     handle_message,
   ))
   |> result.map(fn(subject) {
@@ -28,17 +30,14 @@ pub fn connect(
   })
 }
 
-type ReceiveSubject =
-  Subject(Result(BitArray, ChannelError))
-
 type State {
-  State(socket: Socket, receiver: Option(ReceiveSubject))
+  State(socket: Socket, receiver: Option(Receiver(BitArray)))
 }
 
 type Message {
-  SetReceiver(ReceiveSubject)
-  Send(data: BytesBuilder, reply_with: Subject(Result(Nil, ChannelError)))
-  Received(Result(BitArray, ChannelError))
+  SetReceiver(Receiver(BitArray))
+  Send(data: BytesBuilder, reply_with: Receiver(Nil))
+  Received(ChannelResult(BitArray))
 }
 
 fn init(options: mug.ConnectionOptions) -> actor.InitResult(State, Message) {
@@ -89,6 +88,6 @@ fn map_tcp_message(msg: mug.TcpMessage) -> Message {
 fn map_mug_error(
   r: Result(a, mug.Error),
   ctor: fn(String) -> ChannelError,
-) -> Result(a, ChannelError) {
+) -> ChannelResult(a) {
   result.map_error(r, fn(e) { ctor(string.inspect(e)) })
 }

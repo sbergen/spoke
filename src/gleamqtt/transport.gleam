@@ -6,7 +6,7 @@ import gleam/erlang/process.{type Subject}
 /// Note: only one call to start_receive is supported at the moment!
 pub type Channel(s, r) {
   Channel(
-    send: fn(s) -> Result(Nil, ChannelError),
+    send: fn(s) -> ChannelResult(Nil),
     start_receive: fn(Receiver(r)) -> Nil,
   )
 }
@@ -16,8 +16,11 @@ pub type Channel(s, r) {
 pub type ByteChannel =
   Channel(BytesBuilder, BitArray)
 
-pub type Receiver(r) =
-  Subject(Result(r, ChannelError))
+pub type ChannelResult(a) =
+  Result(a, ChannelError)
+
+pub type Receiver(a) =
+  Subject(ChannelResult(a))
 
 pub type ChannelOptions {
   TcpOptions(host: String, port: Int, connect_timeout: Int, send_timeout: Int)

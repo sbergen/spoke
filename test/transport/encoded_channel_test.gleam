@@ -3,10 +3,8 @@ import gleam/erlang/process.{type Subject}
 import gleam/result
 import gleamqtt/internal/packet/incoming
 import gleamqtt/internal/packet/outgoing
-import gleamqtt/internal/transport/channel.{
-  type EncodedChannel, type EncodedReceiveResult,
-}
-import gleamqtt/transport
+import gleamqtt/internal/transport/channel.{type EncodedChannel}
+import gleamqtt/transport.{type Receiver}
 import gleeunit/should
 import transport/fake_channel
 
@@ -74,7 +72,7 @@ fn set_up_send() -> #(EncodedChannel, Subject(BitArray)) {
 }
 
 fn set_up_receive() -> #(
-  Subject(EncodedReceiveResult),
+  Receiver(incoming.Packet),
   transport.Receiver(BitArray),
 ) {
   let #(channel, receiver_sub) = fake_channel.new(process.new_subject())
