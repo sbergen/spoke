@@ -18,8 +18,22 @@ pub fn send_contained_packet_test() {
 
 pub fn receive_contained_packet_test() {
   let #(receive, raw_receive) = set_up_receive()
+
   process.send(raw_receive, Ok(<<13:4, 0:4, 0:8>>))
   let assert Ok(Ok([incoming.PingResp])) = process.receive(receive, 10)
+
+  process.send(raw_receive, Ok(<<13:4, 0:4, 0:8>>))
+  let assert Ok(Ok([incoming.PingResp])) = process.receive(receive, 10)
+}
+
+pub fn receive_split_packet_test() {
+  let #(receive, raw_receive) = set_up_receive()
+
+  process.send(raw_receive, Ok(<<13:4, 0:4>>))
+  process.send(raw_receive, Ok(<<0:8>>))
+
+  let assert Ok(Ok([incoming.PingResp])) = process.receive(receive, 10)
+  let assert Error(Nil) = process.receive(receive, 1)
 }
 
 fn encode(packet: outgoing.Packet) -> BitArray {

@@ -37,6 +37,8 @@ pub type SubscribeResult {
   SubscribeFailure
 }
 
+pub const largest_fixed_size_packet = 3
+
 pub fn decode_packet(
   bytes: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {

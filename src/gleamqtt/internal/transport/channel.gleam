@@ -67,16 +67,27 @@ fn run_chunker(
 
     Ok(data) -> {
       let all_data = bit_array.concat([state.leftover, data])
-      let result = decode_all(all_data)
-      process.send(state.receiver, result)
-      actor.continue(state)
+      let #(result, rest) = decode_all(all_data)
+      case result {
+        Ok([]) -> Nil
+        result -> process.send(state.receiver, result)
+      }
+      actor.continue(ChunkerState(..state, leftover: rest))
     }
   }
 }
 
-fn decode_all(data: BitArray) -> EncodedReceiveResult {
+fn decode_all(data: BitArray) -> #(EncodedReceiveResult, BitArray) {
   case incoming.decode_packet(data) {
-    Ok(#(packet, _rest)) -> Ok([packet])
-    Error(e) -> Error(ChannelDecodeError(e))
+    Ok(#(packet, rest)) -> #(Ok([packet]), rest)
+
+    Error(decode.DataTooShort) -> #(Ok([]), data)
+
+    Error(e) -> {
+      case bit_array.byte_size(data) < incoming.largest_fixed_size_packet {
+        True -> #(Ok([]), data)
+        False -> #(Error(ChannelDecodeError(e)), <<>>)
+      }
+    }
   }
 }
