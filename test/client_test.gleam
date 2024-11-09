@@ -2,7 +2,7 @@ import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/list
 import gleam/otp/task
-import gleamqtt.{type Update}
+import gleamqtt.{type Update, QoS0, QoS1}
 import gleamqtt/internal/client_impl.{type ClientImpl}
 import gleamqtt/internal/packet/incoming
 import gleamqtt/internal/packet/outgoing
@@ -29,13 +29,16 @@ pub fn connect_success_test() {
   // Connect response
   process.send(server_out, Ok(incoming.ConnAck(Ok(False))))
 
-  let assert Ok(_) = task.await(connect_task, 10)
+  let assert Ok(Ok(False)) = task.try_await(connect_task, 10)
 }
 
 pub fn subscribe_test() {
   let #(client, sent_packets, server_out, _updates) = set_up_connected()
 
-  let topics = [gleamqtt.SubscribeRequest("topic", gleamqtt.QoS0)]
+  let topics = [
+    gleamqtt.SubscribeRequest("topic0", QoS0),
+    gleamqtt.SubscribeRequest("topic1", QoS1),
+  ]
   let results = {
     use topic <- list.map(topics)
     incoming.SubscribeSuccess(topic.qos)
@@ -49,7 +52,12 @@ pub fn subscribe_test() {
   result |> should.equal(outgoing.Subscribe(expected_id, topics))
   process.send(server_out, Ok(incoming.SubAck(expected_id, results)))
 
-  task.await(subscribe, 10)
+  let assert Ok(Ok(results)) = task.try_await(subscribe, 10)
+  results
+  |> should.equal([
+    gleamqtt.SuccessfulSubscription("topic0", QoS0),
+    gleamqtt.SuccessfulSubscription("topic1", QoS1),
+  ])
 }
 
 fn set_up_connected() -> #(
@@ -65,7 +73,7 @@ fn set_up_connected() -> #(
   let assert Ok(outgoing.Connect(_, _)) = process.receive(sent_packets, 10)
   process.send(server_out, Ok(incoming.ConnAck(Ok(False))))
 
-  let assert Ok(_) = task.await(connect_task, 10)
+  let assert Ok(Ok(_)) = task.try_await(connect_task, 10)
   #(client, sent_packets, server_out, updates)
 }
 

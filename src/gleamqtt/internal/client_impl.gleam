@@ -1,8 +1,10 @@
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
+import gleam/list
 import gleam/otp/actor
 import gleamqtt.{
-  type ConnectError, type ConnectOptions, type SubscribeRequest, type Update,
+  type ConnectError, type ConnectOptions, type SubscribeError,
+  type SubscribeRequest, type Subscription, type Update,
 }
 import gleamqtt/internal/packet/incoming.{type SubscribeResult}
 import gleamqtt/internal/packet/outgoing
@@ -31,10 +33,10 @@ pub fn subscribe(
   client: ClientImpl,
   topics: List(SubscribeRequest),
   timeout: Int,
-) -> Nil {
+) -> Result(List(Subscription), SubscribeError) {
   case process.try_call(client.subject, Subscribe(topics, _), timeout) {
-    Ok(_) -> Nil
-    Error(_) -> todo as "Should shut down connection"
+    Ok(result) -> Ok(result)
+    Error(_) -> Error(gleamqtt.SubscribeError)
   }
 }
 
@@ -45,20 +47,27 @@ type ClientState {
     updates: Subject(Update),
     conn_state: ConnectionState,
     packet_id: Int,
-    pending_subs: Dict(Int, Subject(Nil)),
+    pending_subs: Dict(Int, PendingSubscription),
   )
 }
 
 type ClientMsg {
   Connect(Subject(Result(Bool, ConnectError)))
   Received(ChannelResult(incoming.Packet))
-  Subscribe(List(SubscribeRequest), Subject(Nil))
+  Subscribe(List(SubscribeRequest), Subject(List(Subscription)))
 }
 
 type ConnectionState {
   Disconnected
   ConnectingToServer(EncodedChannel, Subject(Result(Bool, ConnectError)))
   Connected(EncodedChannel)
+}
+
+type PendingSubscription {
+  PendingSubscription(
+    topics: List(SubscribeRequest),
+    reply_to: Subject(List(Subscription)),
+  )
 }
 
 fn new_state(
@@ -135,18 +144,30 @@ fn handle_suback(
   results: List(SubscribeResult),
 ) -> actor.Next(ClientMsg, ClientState) {
   let subs = state.pending_subs
-  let assert Ok(reply_to) = dict.get(subs, id)
-  process.send(reply_to, Nil)
+  let assert Ok(pending_sub) = dict.get(subs, id)
+  let result = {
+    // TODO: Validate result length?
+    let pairs = list.zip(pending_sub.topics, results)
+    use #(topic, result) <- list.map(pairs)
+    case result {
+      incoming.SubscribeSuccess(qos) ->
+        gleamqtt.SuccessfulSubscription(topic.filter, qos)
+      incoming.SubscribeFailure -> gleamqtt.FailedSubscription
+    }
+  }
+
+  process.send(pending_sub.reply_to, result)
   actor.continue(ClientState(..state, pending_subs: dict.delete(subs, id)))
 }
 
 fn handle_subscribe(
   state: ClientState,
   topics: List(SubscribeRequest),
-  reply_to: Subject(Nil),
+  reply_to: Subject(List(Subscription)),
 ) -> actor.Next(ClientMsg, ClientState) {
   let #(state, id) = reserve_packet_id(state)
-  let pendietsubs = state.pending_subs |> dict.insert(id, reply_to)
+  let pending_sub = PendingSubscription(topics, reply_to)
+  let pendietsubs = state.pending_subs |> dict.insert(id, pending_sub)
 
   let assert Ok(_) = get_channel(state).send(outgoing.Subscribe(id, topics))
 

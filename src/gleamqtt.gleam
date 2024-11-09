@@ -19,7 +19,6 @@ pub type ConnectOptions {
 }
 
 pub type ConnectError {
-  ConnectionAccepted
   UnacceptableProtocolVersion
   IdentifierRefused
   ServerUnavailable
@@ -32,7 +31,13 @@ pub type Update {
 }
 
 pub type Subscription {
-  Subscription(topic_filter: String, qos: QoS)
+  SuccessfulSubscription(topic_filter: String, qos: QoS)
+  FailedSubscription
+}
+
+pub type SubscribeError {
+  // TODO more details here
+  SubscribeError
 }
 
 pub type SubscribeRequest {
