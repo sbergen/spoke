@@ -1,7 +1,7 @@
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/list
-import gleam/option.{type Option}
 import gleamqtt.{type QoS, type SubscribeRequest, QoS0, QoS1, QoS2}
+import gleamqtt/internal/packet.{type PublishData}
 import gleamqtt/internal/packet/encode.{type EncodeError}
 
 const protocol_level: Int = 4
@@ -9,14 +9,7 @@ const protocol_level: Int = 4
 pub type Packet {
   Connect(client_id: String, keep_alive: Int)
   PingReq
-  Publish(
-    topic: String,
-    payload: BitArray,
-    dup: Bool,
-    qos: QoS,
-    retain: Bool,
-    packet_id: Option(Int),
-  )
+  Publish(PublishData)
   PubAck
   PubRec
   PubRel

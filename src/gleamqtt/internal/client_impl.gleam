@@ -6,6 +6,7 @@ import gleamqtt.{
   type ConnectError, type ConnectOptions, type SubscribeError,
   type SubscribeRequest, type Subscription, type Update,
 }
+import gleamqtt/internal/packet
 import gleamqtt/internal/packet/incoming.{type SubscribeResult}
 import gleamqtt/internal/packet/outgoing
 import gleamqtt/internal/transport/channel.{type EncodedChannel}
@@ -120,6 +121,7 @@ fn handle_receive(
   case packet {
     incoming.ConnAck(status) -> handle_connack(state, status)
     incoming.SubAck(id, results) -> handle_suback(state, id, results)
+    incoming.Publish(data) -> handle_publish(state, data)
     _ -> todo as "Packet type not handled"
   }
 }
@@ -172,6 +174,15 @@ fn handle_subscribe(
   let assert Ok(_) = get_channel(state).send(outgoing.Subscribe(id, topics))
 
   actor.continue(ClientState(..state, pending_subs: pendietsubs))
+}
+
+fn handle_publish(
+  state: ClientState,
+  data: packet.PublishData,
+) -> actor.Next(ClientMsg, ClientState) {
+  let update = gleamqtt.ReceivedMessage(data.topic, data.payload, data.retain)
+  process.send(state.updates, update)
+  actor.continue(state)
 }
 
 fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {

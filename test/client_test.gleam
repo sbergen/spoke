@@ -1,9 +1,11 @@
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/list
+import gleam/option.{None}
 import gleam/otp/task
 import gleamqtt.{type Update, QoS0, QoS1}
 import gleamqtt/internal/client_impl.{type ClientImpl}
+import gleamqtt/internal/packet
 import gleamqtt/internal/packet/incoming
 import gleamqtt/internal/packet/outgoing
 import gleamqtt/transport.{type Receiver}
@@ -32,7 +34,7 @@ pub fn connect_success_test() {
   let assert Ok(Ok(False)) = task.try_await(connect_task, 10)
 }
 
-pub fn subscribe_test() {
+pub fn subscribe_success_test() {
   let #(client, sent_packets, server_out, _updates) = set_up_connected()
 
   let topics = [
@@ -58,6 +60,24 @@ pub fn subscribe_test() {
     gleamqtt.SuccessfulSubscription("topic0", QoS0),
     gleamqtt.SuccessfulSubscription("topic1", QoS1),
   ])
+}
+
+pub fn receive_message_test() {
+  let #(_client, _sent_packets, server_out, updates) = set_up_connected()
+
+  let data =
+    packet.PublishData(
+      topic: "topic0",
+      payload: <<"payload">>,
+      dup: True,
+      qos: QoS0,
+      retain: False,
+      packet_id: None,
+    )
+  process.send(server_out, Ok(incoming.Publish(data)))
+
+  let assert Ok(gleamqtt.ReceivedMessage(_, _, _)) =
+    process.receive(updates, 10)
 }
 
 fn set_up_connected() -> #(

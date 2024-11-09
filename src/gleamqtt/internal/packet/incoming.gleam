@@ -1,20 +1,14 @@
 import gleam/list
-import gleam/option.{type Option, None}
+import gleam/option.{None}
 import gleam/result.{try}
 import gleamqtt.{type ConnectError, type QoS, QoS0, QoS1, QoS2}
+import gleamqtt/internal/packet.{type PublishData}
 import gleamqtt/internal/packet/decode.{type DecodeError}
 
 pub type Packet {
   ConnAck(Result(Bool, ConnectError))
   PingResp
-  Publish(
-    topic: String,
-    payload: BitArray,
-    dup: Bool,
-    qos: QoS,
-    retain: Bool,
-    packet_id: Option(Int),
-  )
+  Publish(PublishData)
   PubAck
   PubRec
   PubRel
@@ -70,8 +64,9 @@ fn decode_publish(
       use #(data, remainder) <- try(split_var_data(data))
       // TODO: Packet id for QoS > 0
       use #(topic, rest) <- try(decode.string(data))
-
-      Ok(#(Publish(topic, rest, dup == 1, qos, retain == 1, None), remainder))
+      let data =
+        packet.PublishData(topic, rest, dup == 1, qos, retain == 1, None)
+      Ok(#(Publish(data), remainder))
     }
     _ -> Error(decode.InvalidPublishData)
   }

@@ -1,5 +1,6 @@
 import gleam/option.{None}
 import gleamqtt.{QoS0, QoS1, QoS2}
+import gleamqtt/internal/packet
 import gleamqtt/internal/packet/decode
 import gleamqtt/internal/packet/encode
 import gleamqtt/internal/packet/incoming.{SubscribeFailure, SubscribeSuccess}
@@ -112,18 +113,25 @@ pub fn publish_decode_qos0_test() {
     42:8,
   >>
 
-  let assert Ok(#(packet, rest)) = incoming.decode_packet(data)
+  let assert Ok(#(incoming.Publish(data), rest)) = incoming.decode_packet(data)
   rest |> should.equal(<<42:8>>)
 
-  packet
-  |> should.equal(incoming.Publish("topic", <<"foo">>, False, QoS0, False, None))
+  data
+  |> should.equal(packet.PublishData(
+    "topic",
+    <<"foo">>,
+    False,
+    QoS0,
+    False,
+    None,
+  ))
 }
 
 pub fn publish_decode_should_be_retained_test() {
   let data = <<3:4, 1:4, encode.varint(2):bits, 0:big-size(16)>>
 
-  let assert Ok(#(packet, <<>>)) = incoming.decode_packet(data)
+  let assert Ok(#(incoming.Publish(data), <<>>)) = incoming.decode_packet(data)
 
-  packet
-  |> should.equal(incoming.Publish("", <<>>, False, QoS0, True, None))
+  data
+  |> should.equal(packet.PublishData("", <<>>, False, QoS0, True, None))
 }

@@ -1,5 +1,8 @@
 import gleam/erlang/process.{type Subject}
-import gleamqtt.{type ConnectOptions, type Update}
+import gleamqtt.{
+  type ConnectError, type ConnectOptions, type SubscribeError,
+  type SubscribeRequest, type Subscription, type Update,
+}
 import gleamqtt/internal/client_impl.{type ClientImpl}
 import gleamqtt/internal/transport/channel.{type EncodedChannel}
 import gleamqtt/internal/transport/tcp
@@ -21,6 +24,18 @@ pub fn start(
     fn() { create_channel(transport_opts) },
     updates,
   ))
+}
+
+pub fn connect(client: Client, timeout: Int) -> Result(Bool, ConnectError) {
+  client_impl.connect(client.impl, timeout)
+}
+
+pub fn subscribe(
+  client: Client,
+  requests: List(SubscribeRequest),
+  timeout: Int,
+) -> Result(List(Subscription), SubscribeError) {
+  client_impl.subscribe(client.impl, requests, timeout)
 }
 
 fn create_channel(options: TransportOptions) -> EncodedChannel {

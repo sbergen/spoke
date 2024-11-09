@@ -3,8 +3,10 @@
 - [x] TCP
 - [ ] WebSocket
 
-- [/] Connect
-  - [ ] Error handling
+- [ ] Better error handling in client
+
+- [x] Connect
+- [x] Subscribe
 - [ ] Pings
 - [ ] Receive messages
 - [ ] Send messages
