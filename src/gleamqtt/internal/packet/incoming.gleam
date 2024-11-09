@@ -58,9 +58,9 @@ fn decode_connack(
   flags: BitArray,
   data: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {
+  use #(data, rest) <- result.try(split_fixed_data(data, 3))
   case flags, data {
-    _, <<>> | _, <<_>> | _, <<_, _>> -> Error(decode.DataTooShort)
-    <<0:4>>, <<2:8, 0:7, session_present:1, return_code:8, rest:bytes>> -> {
+    <<0:4>>, <<2:8, 0:7, session_present:1, return_code:8>> -> {
       use return_code <- result.try(decode_connack_code(return_code))
       let result = ConnAck(session_present == 1, return_code)
       Ok(#(result, rest))
@@ -90,9 +90,9 @@ fn decode_pingresp(
   flags: BitArray,
   data: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {
+  use #(data, rest) <- result.try(split_fixed_data(data, 1))
   case flags, data {
-    _, <<>> -> Error(decode.DataTooShort)
-    <<0:4>>, <<0:8, rest:bytes>> -> Ok(#(PingResp, rest))
+    <<0:4>>, <<0:8>> -> Ok(#(PingResp, rest))
     _, _ -> Error(decode.InvalidPingRespData)
   }
 }
@@ -113,12 +113,20 @@ fn decode_suback(
 }
 
 /// Reads the variable size value and splits the data to that length + the rest
-fn split_var_data(bytes: BitArray) -> Result(#(BitArray, BitArray), DecodeError) {
-  use #(len, rest) <- result.try(decode.varint(bytes))
-  case rest {
+fn split_fixed_data(
+  bytes: BitArray,
+  len: Int,
+) -> Result(#(BitArray, BitArray), DecodeError) {
+  case bytes {
     <<data:bytes-size(len), rest:bytes>> -> Ok(#(data, rest))
     _ -> Error(decode.DataTooShort)
   }
+}
+
+/// Reads the variable size value and splits the data to that length + the rest
+fn split_var_data(bytes: BitArray) -> Result(#(BitArray, BitArray), DecodeError) {
+  use #(len, rest) <- result.try(decode.varint(bytes))
+  split_fixed_data(rest, len)
 }
 
 fn decode_connack_code(code: Int) -> Result(ConnectReturnCode, DecodeError) {
