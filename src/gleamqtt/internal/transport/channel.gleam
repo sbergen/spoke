@@ -1,6 +1,5 @@
 import gleam/bit_array
 import gleam/erlang/process.{type Subject}
-import gleam/list
 import gleam/otp/actor
 import gleam/string
 import gleamqtt/internal/packet/decode.{type DecodeError}
@@ -20,7 +19,7 @@ pub type EncodedChannelError {
 }
 
 pub type EncodedReceiveResult =
-  Result(List(incoming.Packet), EncodedChannelError)
+  Result(incoming.Packet, EncodedChannelError)
 
 /// Abstraction for an encoded transport channel
 /// Note: only one receiver is supported at the moment
@@ -68,24 +67,27 @@ fn run_chunker(
 
     Ok(data) -> {
       let all_data = bit_array.concat([state.leftover, data])
-      let #(result, rest) = decode_all([], all_data)
-      case result {
-        Ok([]) -> Nil
-        Ok(packets) -> process.send(state.receiver, Ok(list.reverse(packets)))
-        error -> process.send(state.receiver, error)
+      case decode_all(state.receiver, all_data) {
+        Ok(rest) -> actor.continue(ChunkerState(..state, leftover: rest))
+        Error(e) -> {
+          process.send(state.receiver, Error(e))
+          actor.Stop(process.Abnormal(string.inspect(e)))
+        }
       }
-      actor.continue(ChunkerState(..state, leftover: rest))
     }
   }
 }
 
 fn decode_all(
-  acc: List(incoming.Packet),
+  receiver: Subject(EncodedReceiveResult),
   data: BitArray,
-) -> #(EncodedReceiveResult, BitArray) {
+) -> Result(BitArray, EncodedChannelError) {
   case incoming.decode_packet(data) {
-    Error(decode.DataTooShort) -> #(Ok(acc), data)
-    Error(e) -> #(Error(ChannelDecodeError(e)), <<>>)
-    Ok(#(packet, rest)) -> decode_all([packet, ..acc], rest)
+    Error(decode.DataTooShort) -> Ok(data)
+    Error(e) -> Error(ChannelDecodeError(e))
+    Ok(#(packet, rest)) -> {
+      process.send(receiver, Ok(packet))
+      decode_all(receiver, rest)
+    }
   }
 }
