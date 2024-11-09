@@ -1,10 +1,12 @@
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/list
+import gleam/option.{None}
 import gleam/otp/actor
+import gleam/string
 import gleamqtt.{
-  type ConnectError, type ConnectOptions, type SubscribeError,
-  type SubscribeRequest, type Subscription, type Update,
+  type ConnectError, type ConnectOptions, type PublishData, type PublishError,
+  type SubscribeError, type SubscribeRequest, type Subscription, type Update,
 }
 import gleamqtt/internal/packet
 import gleamqtt/internal/packet/incoming.{type SubscribeResult}
@@ -28,6 +30,17 @@ pub fn run(
 
 pub fn connect(client: ClientImpl, timeout: Int) -> Result(Bool, ConnectError) {
   process.call(client.subject, Connect(_), timeout)
+}
+
+pub fn publish(
+  client: ClientImpl,
+  data: PublishData,
+  timeout: Int,
+) -> Result(Nil, PublishError) {
+  case process.try_call(client.subject, Publish(data, _), timeout) {
+    Ok(result) -> result
+    Error(e) -> Error(gleamqtt.PublishError(string.inspect(e)))
+  }
 }
 
 pub fn subscribe(
@@ -54,8 +67,9 @@ type ClientState {
 
 type ClientMsg {
   Connect(Subject(Result(Bool, ConnectError)))
-  Received(ChannelResult(incoming.Packet))
+  Publish(PublishData, Subject(Result(Nil, PublishError)))
   Subscribe(List(SubscribeRequest), Subject(List(Subscription)))
+  Received(ChannelResult(incoming.Packet))
 }
 
 type ConnectionState {
@@ -86,6 +100,7 @@ fn run_client(
   case msg {
     Connect(reply_to) -> handle_connect(state, reply_to)
     Received(r) -> handle_receive(state, r)
+    Publish(data, reply_to) -> handle_outgoing_publish(state, data, reply_to)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
   }
 }
@@ -112,6 +127,28 @@ fn handle_connect(
   actor.with_selector(actor.continue(new_state), new_selector)
 }
 
+fn handle_outgoing_publish(
+  state: ClientState,
+  data: PublishData,
+  reply_to: Subject(Result(Nil, PublishError)),
+) -> actor.Next(ClientMsg, ClientState) {
+  let packet =
+    outgoing.Publish(packet.PublishData(
+      topic: data.topic,
+      payload: data.payload,
+      dup: False,
+      qos: data.qos,
+      retain: data.retain,
+      packet_id: None,
+    ))
+  let result = case get_channel(state).send(packet) {
+    Ok(_) -> Ok(Nil)
+    Error(e) -> Error(gleamqtt.PublishError(string.inspect(e)))
+  }
+  process.send(reply_to, result)
+  actor.continue(state)
+}
+
 fn handle_receive(
   state: ClientState,
   data: ChannelResult(incoming.Packet),
@@ -121,7 +158,7 @@ fn handle_receive(
   case packet {
     incoming.ConnAck(status) -> handle_connack(state, status)
     incoming.SubAck(id, results) -> handle_suback(state, id, results)
-    incoming.Publish(data) -> handle_publish(state, data)
+    incoming.Publish(data) -> handle_incoming_publish(state, data)
     _ -> todo as "Packet type not handled"
   }
 }
@@ -176,7 +213,7 @@ fn handle_subscribe(
   actor.continue(ClientState(..state, pending_subs: pendietsubs))
 }
 
-fn handle_publish(
+fn handle_incoming_publish(
   state: ClientState,
   data: packet.PublishData,
 ) -> actor.Next(ClientMsg, ClientState) {

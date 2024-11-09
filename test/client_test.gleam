@@ -80,6 +80,24 @@ pub fn receive_message_test() {
     process.receive(updates, 10)
 }
 
+pub fn publish_message_test() {
+  let #(client, sent_packets, _server_out, _updates) = set_up_connected()
+
+  let data = gleamqtt.PublishData("topic", <<"payload">>, QoS0, False)
+  let assert Ok(_) = client_impl.publish(client, data, 10)
+
+  let assert Ok(outgoing.Publish(data)) = process.receive(sent_packets, 10)
+  data
+  |> should.equal(packet.PublishData(
+    "topic",
+    <<"payload">>,
+    False,
+    QoS0,
+    False,
+    None,
+  ))
+}
+
 fn set_up_connected() -> #(
   ClientImpl,
   Subject(outgoing.Packet),

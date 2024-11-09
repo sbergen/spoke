@@ -1,6 +1,8 @@
 import gleam/bit_array
 import gleam/bytes_builder
-import gleamqtt
+import gleam/option.{None}
+import gleamqtt.{QoS0, QoS1, QoS2}
+import gleamqtt/internal/packet
 import gleamqtt/internal/packet/decode
 import gleamqtt/internal/packet/outgoing
 import gleeunit/should
@@ -29,9 +31,9 @@ pub fn encode_subscribe_test() {
   let assert Ok(builder) =
     outgoing.encode_packet(
       outgoing.Subscribe(42, [
-        gleamqtt.SubscribeRequest("topic0", gleamqtt.QoS0),
-        gleamqtt.SubscribeRequest("topic1", gleamqtt.QoS1),
-        gleamqtt.SubscribeRequest("topic2", gleamqtt.QoS2),
+        gleamqtt.SubscribeRequest("topic0", QoS0),
+        gleamqtt.SubscribeRequest("topic1", QoS1),
+        gleamqtt.SubscribeRequest("topic2", QoS2),
       ]),
     )
 
@@ -59,6 +61,23 @@ pub fn encode_disconnect_test() {
 pub fn encode_ping_req_test() {
   let assert Ok(builder) = outgoing.encode_packet(outgoing.PingReq)
   let assert <<12:4, 0:4, 0:8>> = bytes_builder.to_bit_array(builder)
+}
+
+pub fn encode_publish_test() {
+  let data =
+    packet.PublishData(
+      "topic",
+      <<"payload">>,
+      dup: False,
+      qos: QoS0,
+      retain: False,
+      packet_id: None,
+    )
+  let assert Ok(builder) = outgoing.encode_packet(outgoing.Publish(data))
+  let assert <<3:4, 0:4, rest:bits>> = bytes_builder.to_bit_array(builder)
+  let rest = validate_remaining_len(rest)
+  let assert Ok(#("topic", rest)) = decode.string(rest)
+  let assert <<"payload">> = rest
 }
 
 fn validate_remaining_len(bytes: BitArray) -> BitArray {

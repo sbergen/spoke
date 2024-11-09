@@ -30,6 +30,14 @@ pub type Update {
   ReceivedMessage(topic: String, payload: BitArray, retained: Bool)
 }
 
+pub type PublishData {
+  PublishData(topic: String, payload: BitArray, qos: QoS, retain: Bool)
+}
+
+pub type PublishError {
+  PublishError(String)
+}
+
 pub type Subscription {
   SuccessfulSubscription(topic_filter: String, qos: QoS)
   FailedSubscription

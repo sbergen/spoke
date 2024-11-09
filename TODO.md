@@ -8,8 +8,8 @@
 - [x] Connect
 - [x] Subscribe
 - [ ] Pings
-- [ ] Receive messages
-- [ ] Send messages
+- [x] Receive messages
+- [x] Send messages
 - [ ] Retry failed sub/unsub
 - [ ] Graceful shutdown
 

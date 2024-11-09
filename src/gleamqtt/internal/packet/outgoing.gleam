@@ -1,3 +1,4 @@
+import gleam/bool
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/list
 import gleamqtt.{type QoS, type SubscribeRequest, QoS0, QoS1, QoS2}
@@ -34,6 +35,7 @@ pub fn encode_packet(packet: Packet) -> Result(BytesBuilder, EncodeError) {
     Disconnect -> Ok(encode_disconnect())
     Subscribe(id, topics) -> encode_subscribe(id, topics)
     PingReq -> Ok(encode_ping_req())
+    Publish(data) -> Ok(encode_publish(data))
     _ -> Error(encode.EncodeNotImplemented)
   }
 }
@@ -67,6 +69,16 @@ fn encode_connect(client_id: String, keep_alive: Int) -> BytesBuilder {
   encode_parts(1, <<0:4>>, header, payload)
 }
 
+fn encode_publish(data: packet.PublishData) -> BytesBuilder {
+  let dup = bool.to_int(data.dup)
+  let retain = bool.to_int(data.retain)
+  let flags = <<dup:1, encode_qos(data.qos):2, retain:1>>
+  // TODO packet id for QoS > 0
+  let header = encode.string(data.topic)
+  let payload = bytes_builder.from_bit_array(data.payload)
+  encode_parts(3, flags, header, payload)
+}
+
 fn encode_subscribe(
   packet_id: Int,
   topics: List(SubscribeRequest),
@@ -79,7 +91,7 @@ fn encode_subscribe(
         use builder, topic <- list.fold(topics, bytes_builder.new())
         builder
         |> bytes_builder.append(encode.string(topic.filter))
-        |> bytes_builder.append(encode_qos(topic.qos))
+        |> bytes_builder.append(<<encode_qos(topic.qos):8>>)
       }
 
       Ok(encode_parts(8, <<2:4>>, header, payload))
@@ -109,12 +121,10 @@ fn encode_parts(
   bytes_builder.prepend(variable_content, fixed_header)
 }
 
-fn encode_qos(qos: QoS) -> BitArray {
-  <<
-    case qos {
-      gleamqtt.QoS0 -> 0
-      gleamqtt.QoS1 -> 1
-      gleamqtt.QoS2 -> 2
-    },
-  >>
+fn encode_qos(qos: QoS) -> Int {
+  case qos {
+    gleamqtt.QoS0 -> 0
+    gleamqtt.QoS1 -> 1
+    gleamqtt.QoS2 -> 2
+  }
 }
