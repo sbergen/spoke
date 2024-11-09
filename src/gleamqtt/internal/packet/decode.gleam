@@ -1,5 +1,5 @@
 import gleam/bit_array
-import gleam/result
+import gleam/result.{try}
 
 pub type DecodeError {
   DecodeNotImplemented
@@ -18,7 +18,7 @@ pub type DecodeError {
 pub fn string(bits: BitArray) -> Result(#(String, BitArray), DecodeError) {
   case bits {
     <<len:big-size(16), bytes:bytes-size(len), rest:bits>> -> {
-      use str <- result.try(
+      use str <- try(
         bit_array.to_string(bytes)
         |> result.map_error(fn(_) { InvalidUTF8 }),
       )

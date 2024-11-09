@@ -1,6 +1,6 @@
 import gleam/list
 import gleam/option.{type Option, None}
-import gleam/result
+import gleam/result.{try}
 import gleamqtt.{type QoS, QoS0, QoS1, QoS2}
 import gleamqtt/internal/packet/decode.{type DecodeError}
 
@@ -58,10 +58,10 @@ fn decode_connack(
   flags: BitArray,
   data: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {
-  use #(data, rest) <- result.try(split_fixed_data(data, 3))
+  use #(data, rest) <- try(split_fixed_data(data, 3))
   case flags, data {
     <<0:4>>, <<2:8, 0:7, session_present:1, return_code:8>> -> {
-      use return_code <- result.try(decode_connack_code(return_code))
+      use return_code <- try(decode_connack_code(return_code))
       let result = ConnAck(session_present == 1, return_code)
       Ok(#(result, rest))
     }
@@ -75,10 +75,10 @@ fn decode_publish(
 ) -> Result(#(Packet, BitArray), DecodeError) {
   case flags {
     <<dup:1, qos:2, retain:1>> -> {
-      use qos <- result.try(decode_qos(qos))
-      use #(data, remainder) <- result.try(split_var_data(data))
+      use qos <- try(decode_qos(qos))
+      use #(data, remainder) <- try(split_var_data(data))
       // TODO: Packet id for QoS > 0
-      use #(topic, rest) <- result.try(decode.string(data))
+      use #(topic, rest) <- try(decode.string(data))
 
       Ok(#(Publish(topic, rest, dup == 1, qos, retain == 1, None), remainder))
     }
@@ -90,7 +90,7 @@ fn decode_pingresp(
   flags: BitArray,
   data: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {
-  use #(data, rest) <- result.try(split_fixed_data(data, 1))
+  use #(data, rest) <- try(split_fixed_data(data, 1))
   case flags, data {
     <<0:4>>, <<0:8>> -> Ok(#(PingResp, rest))
     _, _ -> Error(decode.InvalidPingRespData)
@@ -103,9 +103,9 @@ fn decode_suback(
 ) -> Result(#(Packet, BitArray), DecodeError) {
   case flags, data {
     <<0:4>>, _ -> {
-      use #(data, remainder) <- result.try(split_var_data(data))
-      use #(packet_id, rest) <- result.try(decode.integer(data))
-      use return_codes <- result.try(decode_suback_returns(rest, []))
+      use #(data, remainder) <- try(split_var_data(data))
+      use #(packet_id, rest) <- try(decode.integer(data))
+      use return_codes <- try(decode_suback_returns(rest, []))
       Ok(#(SubAck(packet_id, return_codes), remainder))
     }
     _, _ -> Error(decode.InvalidSubAckData)
@@ -125,7 +125,7 @@ fn split_fixed_data(
 
 /// Reads the variable size value and splits the data to that length + the rest
 fn split_var_data(bytes: BitArray) -> Result(#(BitArray, BitArray), DecodeError) {
-  use #(len, rest) <- result.try(decode.varint(bytes))
+  use #(len, rest) <- try(decode.varint(bytes))
   split_fixed_data(rest, len)
 }
 
@@ -148,7 +148,7 @@ fn decode_suback_returns(
   case bytes {
     <<>> -> Ok(list.reverse(codes))
     <<val:8, rest:bytes>> -> {
-      use code <- result.try(decode_suback_return(val))
+      use code <- try(decode_suback_return(val))
       rest |> decode_suback_returns([code, ..codes])
     }
     _ -> Error(decode.InvalidSubAckData)
