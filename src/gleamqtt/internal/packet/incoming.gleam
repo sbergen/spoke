@@ -112,7 +112,7 @@ fn decode_suback(
   }
 }
 
-/// Reads the variable size value and splits the data to that length + the rest
+/// Splits a fixed amount of data off the bit array, or returns DataTooShort
 fn split_fixed_data(
   bytes: BitArray,
   len: Int,
