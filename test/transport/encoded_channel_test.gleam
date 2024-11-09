@@ -66,7 +66,8 @@ fn encode(packet: outgoing.Packet) -> BitArray {
 
 fn set_up_send() -> #(EncodedChannel, Subject(BitArray)) {
   let send = process.new_subject()
-  let #(channel, _) = fake_channel.new(send, bytes_builder.to_bit_array)
+  let channel =
+    fake_channel.new(send, bytes_builder.to_bit_array, process.new_subject())
   let channel = channel.as_encoded(channel)
   #(channel, send)
 }
@@ -75,13 +76,18 @@ fn set_up_receive() -> #(
   Receiver(incoming.Packet),
   transport.Receiver(BitArray),
 ) {
-  let #(channel, receiver_sub) =
-    fake_channel.new(process.new_subject(), bytes_builder.to_bit_array)
+  let receivers = process.new_subject()
+  let channel =
+    fake_channel.new(
+      process.new_subject(),
+      bytes_builder.to_bit_array,
+      receivers,
+    )
   let channel = channel.as_encoded(channel)
 
   let receiver = process.new_subject()
   channel.start_receive(receiver)
-  let assert Ok(raw_eceiver) = process.receive(receiver_sub, 10)
+  let assert Ok(raw_eceiver) = process.receive(receivers, 10)
 
   #(receiver, raw_eceiver)
 }

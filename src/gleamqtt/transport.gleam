@@ -22,7 +22,7 @@ pub type ChannelResult(a) =
 pub type Receiver(a) =
   Subject(ChannelResult(a))
 
-pub type ChannelOptions {
+pub type TransportOptions {
   TcpOptions(host: String, port: Int, connect_timeout: Int, send_timeout: Int)
 }
 

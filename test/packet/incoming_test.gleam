@@ -19,7 +19,7 @@ pub fn connack_decode_test() {
   let assert Ok(#(packet, rest)) =
     incoming.decode_packet(<<2:4, 0:4, 2:8, 0:16, 1:8>>)
   rest |> should.equal(<<1:8>>)
-  packet |> should.equal(incoming.ConnAck(False, incoming.ConnectionAccepted))
+  packet |> should.equal(incoming.ConnAck(False, gleamqtt.ConnectionAccepted))
 }
 
 pub fn connack_decode_invalid_length_test() {
@@ -45,13 +45,13 @@ pub fn connack_decode_invalid_return_code_test() {
 pub fn connack_session_should_be_present_test() {
   let assert Ok(#(packet, _)) =
     incoming.decode_packet(<<2:4, 0:4, 2:8, 1:8, 0:8>>)
-  packet |> should.equal(incoming.ConnAck(True, incoming.ConnectionAccepted))
+  packet |> should.equal(incoming.ConnAck(True, gleamqtt.ConnectionAccepted))
 }
 
 pub fn connack_return_code_should_be_id_refused_test() {
   let assert Ok(#(packet, _)) =
     incoming.decode_packet(<<2:4, 0:4, 2:8, 0:8, 2:8>>)
-  packet |> should.equal(incoming.ConnAck(False, incoming.IdentifierRefused))
+  packet |> should.equal(incoming.ConnAck(False, gleamqtt.IdentifierRefused))
 }
 
 pub fn ping_resp_decode_test() {

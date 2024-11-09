@@ -1,7 +1,7 @@
 import gleam/list
 import gleam/option.{type Option, None}
 import gleam/result.{try}
-import gleamqtt.{type QoS, QoS0, QoS1, QoS2}
+import gleamqtt.{type ConnectReturnCode, type QoS, QoS0, QoS1, QoS2}
 import gleamqtt/internal/packet/decode.{type DecodeError}
 
 pub type Packet {
@@ -21,15 +21,6 @@ pub type Packet {
   PubComp
   SubAck(packet_id: Int, return_codes: List(SubscribeResult))
   UsubAck
-}
-
-pub type ConnectReturnCode {
-  ConnectionAccepted
-  UnacceptableProtocolVersion
-  IdentifierRefused
-  ServerUnavailable
-  BadUsernameOrPassword
-  NotAuthorized
 }
 
 pub type SubscribeResult {
@@ -131,12 +122,12 @@ fn split_var_data(bytes: BitArray) -> Result(#(BitArray, BitArray), DecodeError)
 
 fn decode_connack_code(code: Int) -> Result(ConnectReturnCode, DecodeError) {
   case code {
-    0 -> Ok(ConnectionAccepted)
-    1 -> Ok(UnacceptableProtocolVersion)
-    2 -> Ok(IdentifierRefused)
-    3 -> Ok(ServerUnavailable)
-    4 -> Ok(BadUsernameOrPassword)
-    5 -> Ok(NotAuthorized)
+    0 -> Ok(gleamqtt.ConnectionAccepted)
+    1 -> Ok(gleamqtt.UnacceptableProtocolVersion)
+    2 -> Ok(gleamqtt.IdentifierRefused)
+    3 -> Ok(gleamqtt.ServerUnavailable)
+    4 -> Ok(gleamqtt.BadUsernameOrPassword)
+    5 -> Ok(gleamqtt.NotAuthorized)
     _ -> Error(decode.InvalidConnAckReturnCode)
   }
 }

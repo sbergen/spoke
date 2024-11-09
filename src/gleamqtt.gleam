@@ -13,3 +13,29 @@ pub type QoS {
   /// There is an increased overhead associated with this quality of service.
   QoS2
 }
+
+pub type ConnectOptions {
+  ConnectOptions(client_id: String, keep_alive: Int)
+}
+
+pub type ConnectReturnCode {
+  ConnectionAccepted
+  UnacceptableProtocolVersion
+  IdentifierRefused
+  ServerUnavailable
+  BadUsernameOrPassword
+  NotAuthorized
+}
+
+pub type Update {
+  ReceivedMessage(topic: String, payload: BitArray, retained: Bool)
+  ConnectFinished(status: ConnectReturnCode, session_present: Bool)
+}
+
+pub type Subscription {
+  Subscription(topic_filter: String, qos: QoS)
+}
+
+pub type SubscribeRequest {
+  SubscribeRequest(filter: String, qos: QoS)
+}
