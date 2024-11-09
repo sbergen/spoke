@@ -73,7 +73,10 @@ fn set_up_send() -> #(EncodedChannel, Subject(BitArray)) {
   #(channel, send)
 }
 
-fn set_up_receive() -> #(Subject(EncodedReceiveResult), transport.Receiver) {
+fn set_up_receive() -> #(
+  Subject(EncodedReceiveResult),
+  transport.Receiver(BitArray),
+) {
   let #(channel, receiver_sub) = fake_channel.new(process.new_subject())
   let channel = channel.as_encoded(channel)
 

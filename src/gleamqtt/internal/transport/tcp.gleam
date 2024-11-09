@@ -4,7 +4,7 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
-import gleamqtt/transport.{type Channel, type ChannelError}
+import gleamqtt/transport.{type ByteChannel, type ChannelError}
 import mug.{type Socket}
 
 pub fn connect(
@@ -12,7 +12,7 @@ pub fn connect(
   port port: Int,
   connect_timeout connect_timeout: Int,
   send_timeout send_timeout: Int,
-) -> Result(Channel, actor.StartError) {
+) -> Result(ByteChannel, actor.StartError) {
   let mug_options = mug.ConnectionOptions(host, port, connect_timeout)
 
   actor.start_spec(actor.Spec(

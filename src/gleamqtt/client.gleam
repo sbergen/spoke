@@ -2,7 +2,7 @@ import gleam/erlang/process.{type Subject}
 import gleam/otp/actor
 import gleamqtt.{type QoS}
 import gleamqtt/internal/transport/tcp
-import gleamqtt/transport.{type Channel, type ChannelOptions}
+import gleamqtt/transport.{type ByteChannel, type ChannelOptions}
 
 pub type ReceivedMessage {
   ReceivedMessage(topic: String, payload: BitArray, retained: Bool)
@@ -18,7 +18,7 @@ pub type SubscribeRequest {
 
 pub opaque type Client
 
-pub fn connect(options: ChannelOptions) -> Result(Channel, actor.StartError) {
+pub fn connect(options: ChannelOptions) -> Result(ByteChannel, actor.StartError) {
   case options {
     transport.TcpOptions(host, port, connect_timeout, send_timeout) ->
       tcp.connect(host, port, connect_timeout, send_timeout)
@@ -26,7 +26,7 @@ pub fn connect(options: ChannelOptions) -> Result(Channel, actor.StartError) {
 }
 
 pub fn start(
-  channel: Channel,
+  channel: ByteChannel,
   receive: Subject(ReceivedMessage),
 ) -> Result(Client, actor.StartError) {
   todo

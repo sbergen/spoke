@@ -1,18 +1,22 @@
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/erlang/process.{type Subject}
 
-// TODO, make this generic to keep EncodedChannel in sync?
-/// Abstraction over the transport channel
-/// (E.g. TCP, WebSocket, Quic)
-pub type Channel {
+/// General abstraction over a data channel
+/// User internally for e.g. chunking and encoding/decoding
+pub type Channel(s, r) {
   Channel(
-    send: fn(BytesBuilder) -> Result(Nil, ChannelError),
-    start_receive: fn(Receiver) -> Nil,
+    send: fn(s) -> Result(Nil, ChannelError),
+    start_receive: fn(Receiver(r)) -> Nil,
   )
 }
 
-pub type Receiver =
-  Subject(Result(BitArray, ChannelError))
+/// Abstraction over the transport channel
+/// (E.g. TCP, WebSocket, Quic)
+pub type ByteChannel =
+  Channel(BytesBuilder, BitArray)
+
+pub type Receiver(r) =
+  Subject(Result(r, ChannelError))
 
 pub type ChannelOptions {
   TcpOptions(host: String, port: Int, connect_timeout: Int, send_timeout: Int)
@@ -25,4 +29,5 @@ pub type ChannelError {
   ConnectFailed(String)
   TransportError(String)
   SendFailed(String)
+  InvalidData(String)
 }

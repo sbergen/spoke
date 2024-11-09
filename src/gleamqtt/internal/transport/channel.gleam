@@ -2,36 +2,21 @@ import gleam/bit_array
 import gleam/erlang/process.{type Subject}
 import gleam/otp/actor
 import gleam/string
-import gleamqtt/internal/packet/decode.{type DecodeError}
-import gleamqtt/internal/packet/encode.{type EncodeError}
+import gleamqtt/internal/packet/decode
 import gleamqtt/internal/packet/incoming
 import gleamqtt/internal/packet/outgoing
 import gleamqtt/transport.{type ChannelError}
 
-pub type SendError {
-  ChannelFailed(ChannelError)
-  EncodingFailed(EncodeError)
-}
-
-pub type EncodedChannelError {
-  EncodedChannelError(ChannelError)
-  ChannelDecodeError(DecodeError)
-}
-
 pub type EncodedReceiveResult =
-  Result(incoming.Packet, EncodedChannelError)
+  Result(incoming.Packet, ChannelError)
 
 /// Abstraction for an encoded transport channel
 /// Note: only one receiver is supported at the moment
-pub type EncodedChannel {
-  EncodedChannel(
-    send: fn(outgoing.Packet) -> Result(Nil, SendError),
-    start_receive: fn(Subject(EncodedReceiveResult)) -> Nil,
-  )
-}
+pub type EncodedChannel =
+  transport.Channel(outgoing.Packet, incoming.Packet)
 
-pub fn as_encoded(channel: transport.Channel) -> EncodedChannel {
-  EncodedChannel(send(channel, _), fn(receiver) {
+pub fn as_encoded(channel: transport.ByteChannel) -> EncodedChannel {
+  transport.Channel(send(channel, _), fn(receiver) {
     let assert Ok(chunker) =
       actor.start(ChunkerState(receiver, <<>>), run_chunker)
     channel.start_receive(chunker)
@@ -39,16 +24,12 @@ pub fn as_encoded(channel: transport.Channel) -> EncodedChannel {
 }
 
 fn send(
-  channel: transport.Channel,
+  channel: transport.ByteChannel,
   packet: outgoing.Packet,
-) -> Result(Nil, SendError) {
+) -> Result(Nil, ChannelError) {
   case outgoing.encode_packet(packet) {
-    Ok(bytes) ->
-      case channel.send(bytes) {
-        Error(e) -> Error(ChannelFailed(e))
-        Ok(_) -> Ok(Nil)
-      }
-    Error(e) -> Error(EncodingFailed(e))
+    Ok(bytes) -> channel.send(bytes)
+    Error(e) -> Error(transport.SendFailed(string.inspect(e)))
   }
 }
 
@@ -81,10 +62,10 @@ fn run_chunker(
 fn decode_all(
   receiver: Subject(EncodedReceiveResult),
   data: BitArray,
-) -> Result(BitArray, EncodedChannelError) {
+) -> Result(BitArray, ChannelError) {
   case incoming.decode_packet(data) {
     Error(decode.DataTooShort) -> Ok(data)
-    Error(e) -> Error(ChannelDecodeError(e))
+    Error(e) -> Error(transport.InvalidData(string.inspect(e)))
     Ok(#(packet, rest)) -> {
       process.send(receiver, Ok(packet))
       decode_all(receiver, rest)
