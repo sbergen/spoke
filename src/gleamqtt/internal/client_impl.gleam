@@ -1,5 +1,4 @@
 import gleam/erlang/process.{type Subject}
-import gleam/io
 import gleam/otp/actor
 import gleamqtt.{type ConnectOptions, type Update}
 import gleamqtt/internal/packet/incoming
@@ -46,7 +45,7 @@ fn run_client(
   msg: ClientMsg,
   state: ClientState,
 ) -> actor.Next(ClientMsg, ClientState) {
-  case io.debug(msg) {
+  case msg {
     Connect -> connect(state)
     Received(r) -> handle_receive(state, r)
   }
@@ -77,14 +76,24 @@ fn handle_receive(
   let assert Ok(packet) = data
 
   case packet {
-    incoming.ConnAck(session_present, status) -> {
-      process.send(
-        state.updates,
-        gleamqtt.ConnectFinished(status, session_present),
-      )
-    }
-    _ -> todo
+    incoming.ConnAck(session_present, status) ->
+      handle_connack(state, session_present, status)
+    _ -> todo as "Packet type not handled"
   }
+}
 
-  actor.continue(state)
+fn handle_connack(
+  state: ClientState,
+  session_present: Bool,
+  status: gleamqtt.ConnectReturnCode,
+) -> actor.Next(ClientMsg, ClientState) {
+  let assert ConnectingToServer(connection) = state.conn_state
+
+  process.send(state.updates, gleamqtt.ConnectFinished(status, session_present))
+
+  case status {
+    gleamqtt.ConnectionAccepted ->
+      actor.continue(ClientState(..state, conn_state: Connected(connection)))
+    _ -> todo as "Should disconnect"
+  }
 }

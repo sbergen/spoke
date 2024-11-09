@@ -1,6 +1,5 @@
 import gleam/erlang/process.{type Subject}
 import gleam/function
-import gleam/io
 import gleamqtt.{type Update}
 import gleamqtt/internal/client_impl.{type ClientImpl}
 import gleamqtt/internal/packet/incoming
