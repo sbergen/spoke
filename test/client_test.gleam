@@ -15,7 +15,9 @@ const id = "client-id"
 const keep_alive = 60
 
 pub fn connect_success_test() {
-  let #(_client, sent_packets, connections, updates) = set_up()
+  let #(client, sent_packets, connections, _updates) = set_up()
+
+  let connect_task = task.async(fn() { client_impl.connect(client, 10) })
 
   // Open channel
   let assert Ok(server_out) = process.receive(connections, 10)
@@ -25,12 +27,9 @@ pub fn connect_success_test() {
   request |> should.equal(outgoing.Connect(id, keep_alive))
 
   // Connect response
-  process.send(
-    server_out,
-    Ok(incoming.ConnAck(False, gleamqtt.ConnectionAccepted)),
-  )
-  let assert Ok(gleamqtt.ConnectFinished(gleamqtt.ConnectionAccepted, False)) =
-    process.receive(updates, 10)
+  process.send(server_out, Ok(incoming.ConnAck(Ok(False))))
+
+  let assert Ok(_) = task.await(connect_task, 10)
 }
 
 pub fn subscribe_test() {
@@ -43,7 +42,8 @@ pub fn subscribe_test() {
   }
   let expected_id = 0
 
-  let subscribe = task.async(fn() { client_impl.subscribe(client, topics) })
+  let subscribe =
+    task.async(fn() { client_impl.subscribe(client, topics, 100) })
 
   let assert Ok(result) = process.receive(sent_packets, 10)
   result |> should.equal(outgoing.Subscribe(expected_id, topics))
@@ -59,15 +59,13 @@ fn set_up_connected() -> #(
   Subject(Update),
 ) {
   let #(client, sent_packets, connections, updates) = set_up()
+  let connect_task = task.async(fn() { client_impl.connect(client, 10) })
 
-  // Open channel
   let assert Ok(server_out) = process.receive(connections, 10)
   let assert Ok(outgoing.Connect(_, _)) = process.receive(sent_packets, 10)
-  process.send(
-    server_out,
-    Ok(incoming.ConnAck(False, gleamqtt.ConnectionAccepted)),
-  )
+  process.send(server_out, Ok(incoming.ConnAck(Ok(False))))
 
+  let assert Ok(_) = task.await(connect_task, 10)
   #(client, sent_packets, server_out, updates)
 }
 

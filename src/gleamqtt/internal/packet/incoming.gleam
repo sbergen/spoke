@@ -1,11 +1,11 @@
 import gleam/list
 import gleam/option.{type Option, None}
 import gleam/result.{try}
-import gleamqtt.{type ConnectReturnCode, type QoS, QoS0, QoS1, QoS2}
+import gleamqtt.{type ConnectError, type QoS, QoS0, QoS1, QoS2}
 import gleamqtt/internal/packet/decode.{type DecodeError}
 
 pub type Packet {
-  ConnAck(session_preset: Bool, code: ConnectReturnCode)
+  ConnAck(Result(Bool, ConnectError))
   PingResp
   Publish(
     topic: String,
@@ -52,8 +52,8 @@ fn decode_connack(
   use #(data, rest) <- try(split_fixed_data(data, 3))
   case flags, data {
     <<0:4>>, <<2:8, 0:7, session_present:1, return_code:8>> -> {
-      use return_code <- try(decode_connack_code(return_code))
-      let result = ConnAck(session_present == 1, return_code)
+      use status <- try(decode_connack_code(session_present, return_code))
+      let result = ConnAck(status)
       Ok(#(result, rest))
     }
     _, _ -> Error(decode.InvalidConnAckData)
@@ -120,14 +120,17 @@ fn split_var_data(bytes: BitArray) -> Result(#(BitArray, BitArray), DecodeError)
   split_fixed_data(rest, len)
 }
 
-fn decode_connack_code(code: Int) -> Result(ConnectReturnCode, DecodeError) {
+fn decode_connack_code(
+  session_present: Int,
+  code: Int,
+) -> Result(Result(Bool, ConnectError), DecodeError) {
   case code {
-    0 -> Ok(gleamqtt.ConnectionAccepted)
-    1 -> Ok(gleamqtt.UnacceptableProtocolVersion)
-    2 -> Ok(gleamqtt.IdentifierRefused)
-    3 -> Ok(gleamqtt.ServerUnavailable)
-    4 -> Ok(gleamqtt.BadUsernameOrPassword)
-    5 -> Ok(gleamqtt.NotAuthorized)
+    0 -> Ok(Ok(session_present == 1))
+    1 -> Ok(Error(gleamqtt.UnacceptableProtocolVersion))
+    2 -> Ok(Error(gleamqtt.IdentifierRefused))
+    3 -> Ok(Error(gleamqtt.ServerUnavailable))
+    4 -> Ok(Error(gleamqtt.BadUsernameOrPassword))
+    5 -> Ok(Error(gleamqtt.NotAuthorized))
     _ -> Error(decode.InvalidConnAckReturnCode)
   }
 }

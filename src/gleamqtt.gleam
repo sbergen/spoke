@@ -18,7 +18,7 @@ pub type ConnectOptions {
   ConnectOptions(client_id: String, keep_alive: Int)
 }
 
-pub type ConnectReturnCode {
+pub type ConnectError {
   ConnectionAccepted
   UnacceptableProtocolVersion
   IdentifierRefused
@@ -29,7 +29,6 @@ pub type ConnectReturnCode {
 
 pub type Update {
   ReceivedMessage(topic: String, payload: BitArray, retained: Bool)
-  ConnectFinished(status: ConnectReturnCode, session_present: Bool)
 }
 
 pub type Subscription {

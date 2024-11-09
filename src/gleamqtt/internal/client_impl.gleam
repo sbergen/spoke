@@ -1,7 +1,9 @@
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/otp/actor
-import gleamqtt.{type ConnectOptions, type SubscribeRequest, type Update}
+import gleamqtt.{
+  type ConnectError, type ConnectOptions, type SubscribeRequest, type Update,
+}
 import gleamqtt/internal/packet/incoming.{type SubscribeResult}
 import gleamqtt/internal/packet/outgoing
 import gleamqtt/internal/transport/channel.{type EncodedChannel}
@@ -18,13 +20,22 @@ pub fn run(
 ) -> ClientImpl {
   let state = new_state(options, connect, updates)
   let assert Ok(client) = actor.start(state, run_client)
-  process.send(client, Connect)
   ClientImpl(client)
 }
 
-pub fn subscribe(client: ClientImpl, topics: List(SubscribeRequest)) -> Nil {
-  // TODO: Configurable timeout
-  process.call(client.subject, Subscribe(topics, _), 100)
+pub fn connect(client: ClientImpl, timeout: Int) -> Result(Bool, ConnectError) {
+  process.call(client.subject, Connect(_), timeout)
+}
+
+pub fn subscribe(
+  client: ClientImpl,
+  topics: List(SubscribeRequest),
+  timeout: Int,
+) -> Nil {
+  case process.try_call(client.subject, Subscribe(topics, _), timeout) {
+    Ok(_) -> Nil
+    Error(_) -> todo as "Should shut down connection"
+  }
 }
 
 type ClientState {
@@ -39,14 +50,14 @@ type ClientState {
 }
 
 type ClientMsg {
-  Connect
+  Connect(Subject(Result(Bool, ConnectError)))
   Received(ChannelResult(incoming.Packet))
   Subscribe(List(SubscribeRequest), Subject(Nil))
 }
 
 type ConnectionState {
   Disconnected
-  ConnectingToServer(EncodedChannel)
+  ConnectingToServer(EncodedChannel, Subject(Result(Bool, ConnectError)))
   Connected(EncodedChannel)
 }
 
@@ -63,13 +74,16 @@ fn run_client(
   state: ClientState,
 ) -> actor.Next(ClientMsg, ClientState) {
   case msg {
-    Connect -> connect(state)
+    Connect(reply_to) -> handle_connect(state, reply_to)
     Received(r) -> handle_receive(state, r)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
   }
 }
 
-fn connect(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
+fn handle_connect(
+  state: ClientState,
+  reply_to: Subject(Result(Bool, ConnectError)),
+) -> actor.Next(ClientMsg, ClientState) {
   let assert Disconnected = state.conn_state
   let channel = state.connect()
 
@@ -83,7 +97,8 @@ fn connect(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
     outgoing.Connect(state.options.client_id, state.options.keep_alive)
   let assert Ok(_) = channel.send(connect_packet)
 
-  let new_state = ClientState(..state, conn_state: ConnectingToServer(channel))
+  let new_state =
+    ClientState(..state, conn_state: ConnectingToServer(channel, reply_to))
   actor.with_selector(actor.continue(new_state), new_selector)
 }
 
@@ -94,8 +109,7 @@ fn handle_receive(
   let assert Ok(packet) = data
 
   case packet {
-    incoming.ConnAck(session_present, status) ->
-      handle_connack(state, session_present, status)
+    incoming.ConnAck(status) -> handle_connack(state, status)
     incoming.SubAck(id, results) -> handle_suback(state, id, results)
     _ -> todo as "Packet type not handled"
   }
@@ -103,15 +117,13 @@ fn handle_receive(
 
 fn handle_connack(
   state: ClientState,
-  session_present: Bool,
-  status: gleamqtt.ConnectReturnCode,
+  status: Result(Bool, gleamqtt.ConnectError),
 ) -> actor.Next(ClientMsg, ClientState) {
-  let assert ConnectingToServer(connection) = state.conn_state
-
-  process.send(state.updates, gleamqtt.ConnectFinished(status, session_present))
+  let assert ConnectingToServer(connection, reply_to) = state.conn_state
+  process.send(reply_to, status)
 
   case status {
-    gleamqtt.ConnectionAccepted ->
+    Ok(_) ->
       actor.continue(ClientState(..state, conn_state: Connected(connection)))
     _ -> todo as "Should disconnect"
   }
@@ -133,14 +145,18 @@ fn handle_subscribe(
   topics: List(SubscribeRequest),
   reply_to: Subject(Nil),
 ) -> actor.Next(ClientMsg, ClientState) {
-  let id = state.packet_id
-  let pending_subs = state.pending_subs |> dict.insert(id, reply_to)
+  let #(state, id) = reserve_packet_id(state)
+  let pendietsubs = state.pending_subs |> dict.insert(id, reply_to)
 
   let assert Ok(_) = get_channel(state).send(outgoing.Subscribe(id, topics))
 
-  actor.continue(
-    ClientState(..state, packet_id: id + 1, pending_subs: pending_subs),
-  )
+  actor.continue(ClientState(..state, pending_subs: pendietsubs))
+}
+
+fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {
+  let id = state.packet_id
+  let state = ClientState(..state, packet_id: id + 1)
+  #(state, id)
 }
 
 // TODO: This should do some kind of error handling
@@ -158,7 +174,6 @@ fn handle_subscribe(
 fn get_channel(state: ClientState) {
   case state.conn_state {
     Connected(channel) -> channel
-    ConnectingToServer(channel) -> channel
-    Disconnected -> todo as "Not connected, handle better"
+    _ -> todo as "Not fully connected, handle better"
   }
 }
