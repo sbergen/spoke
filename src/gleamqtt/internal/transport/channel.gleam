@@ -1,5 +1,6 @@
 import gleam/bit_array
 import gleam/erlang/process.{type Subject}
+import gleam/list
 import gleam/otp/actor
 import gleam/string
 import gleamqtt/internal/packet/decode.{type DecodeError}
@@ -67,20 +68,24 @@ fn run_chunker(
 
     Ok(data) -> {
       let all_data = bit_array.concat([state.leftover, data])
-      let #(result, rest) = decode_all(all_data)
+      let #(result, rest) = decode_all([], all_data)
       case result {
         Ok([]) -> Nil
-        result -> process.send(state.receiver, result)
+        Ok(packets) -> process.send(state.receiver, Ok(list.reverse(packets)))
+        error -> process.send(state.receiver, error)
       }
       actor.continue(ChunkerState(..state, leftover: rest))
     }
   }
 }
 
-fn decode_all(data: BitArray) -> #(EncodedReceiveResult, BitArray) {
+fn decode_all(
+  acc: List(incoming.Packet),
+  data: BitArray,
+) -> #(EncodedReceiveResult, BitArray) {
   case incoming.decode_packet(data) {
-    Ok(#(packet, rest)) -> #(Ok([packet]), rest)
-    Error(decode.DataTooShort) -> #(Ok([]), data)
+    Error(decode.DataTooShort) -> #(Ok(acc), data)
     Error(e) -> #(Error(ChannelDecodeError(e)), <<>>)
+    Ok(#(packet, rest)) -> decode_all([packet, ..acc], rest)
   }
 }

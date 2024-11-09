@@ -36,6 +36,29 @@ pub fn receive_split_packet_test() {
   let assert Error(Nil) = process.receive(receive, 1)
 }
 
+pub fn receive_multiple_packets_test() {
+  let #(receive, raw_receive) = set_up_receive()
+
+  let connack = <<2:4, 0:4, 2:8, 0:16>>
+  let pingresp = <<13:4, 0:4, 0:8>>
+  process.send(raw_receive, Ok(<<connack:bits, pingresp:bits>>))
+  let assert Ok(Ok([incoming.ConnAck(_, _), incoming.PingResp])) =
+    process.receive(receive, 10)
+}
+
+pub fn receive_multiple_packets_split_test() {
+  let #(receive, raw_receive) = set_up_receive()
+
+  let connack = <<2:4, 0:4, 2:8, 0:16>>
+  let pingresp_start = <<13:4, 0:4>>
+  let pingresp_rest = <<0:8>>
+  process.send(raw_receive, Ok(<<connack:bits, pingresp_start:bits>>))
+  let assert Ok(Ok([incoming.ConnAck(_, _)])) = process.receive(receive, 10)
+
+  process.send(raw_receive, Ok(pingresp_rest))
+  let assert Ok(Ok([incoming.PingResp])) = process.receive(receive, 10)
+}
+
 fn encode(packet: outgoing.Packet) -> BitArray {
   let assert Ok(bits) =
     outgoing.encode_packet(packet)
