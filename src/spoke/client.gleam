@@ -1,12 +1,12 @@
 import gleam/erlang/process.{type Subject}
-import gleamqtt.{
+import spoke.{
   type ConnectError, type ConnectOptions, type PublishData, type PublishError,
   type SubscribeError, type SubscribeRequest, type Subscription, type Update,
 }
-import gleamqtt/internal/client_impl.{type ClientImpl}
-import gleamqtt/internal/transport/channel.{type EncodedChannel}
-import gleamqtt/internal/transport/tcp
-import gleamqtt/transport.{type TransportOptions}
+import spoke/internal/client_impl.{type ClientImpl}
+import spoke/internal/transport/channel.{type EncodedChannel}
+import spoke/internal/transport/tcp
+import spoke/transport.{type TransportOptions}
 
 pub opaque type Client {
   Client(impl: ClientImpl)

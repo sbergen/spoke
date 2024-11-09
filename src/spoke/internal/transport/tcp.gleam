@@ -4,10 +4,10 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
-import gleamqtt/transport.{
+import mug.{type Socket}
+import spoke/transport.{
   type ByteChannel, type ChannelError, type ChannelResult, type Receiver,
 }
-import mug.{type Socket}
 
 pub fn connect(
   host: String,

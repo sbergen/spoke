@@ -1,5 +1,5 @@
-import gleamqtt/internal/packet/decode
 import gleeunit/should
+import spoke/internal/packet/decode
 
 pub fn decode_string_too_short_test() {
   let assert Error(decode.DataTooShort) = decode.string(<<8:16, 0>>)

@@ -1,11 +1,11 @@
 import gleam/bytes_builder
 import gleam/erlang/process.{type Subject}
 import gleam/result
-import gleamqtt/internal/packet/incoming
-import gleamqtt/internal/packet/outgoing
-import gleamqtt/internal/transport/channel.{type EncodedChannel}
-import gleamqtt/transport.{type Receiver}
 import gleeunit/should
+import spoke/internal/packet/incoming
+import spoke/internal/packet/outgoing
+import spoke/internal/transport/channel.{type EncodedChannel}
+import spoke/transport.{type Receiver}
 import transport/fake_channel
 
 pub fn send_contained_packet_test() {

@@ -1,6 +1,6 @@
-import gleamqtt/internal/packet/decode
-import gleamqtt/internal/packet/encode
 import gleeunit/should
+import spoke/internal/packet/decode
+import spoke/internal/packet/encode
 
 // The string tests use the decode module,
 // but that should be good enough to ensure they keep functioning correctly.

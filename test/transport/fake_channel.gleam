@@ -1,5 +1,5 @@
 import gleam/erlang/process.{type Subject}
-import gleamqtt/transport.{type Channel, type Receiver}
+import spoke/transport.{type Channel, type Receiver}
 
 pub fn new(
   send: Subject(out),

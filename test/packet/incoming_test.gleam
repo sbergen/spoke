@@ -1,10 +1,10 @@
 import gleam/option.{None}
-import gleamqtt.{QoS0, QoS1, QoS2}
-import gleamqtt/internal/packet
-import gleamqtt/internal/packet/decode
-import gleamqtt/internal/packet/encode
-import gleamqtt/internal/packet/incoming.{SubscribeFailure, SubscribeSuccess}
 import gleeunit/should
+import spoke.{QoS0, QoS1, QoS2}
+import spoke/internal/packet
+import spoke/internal/packet/decode
+import spoke/internal/packet/encode
+import spoke/internal/packet/incoming.{SubscribeFailure, SubscribeSuccess}
 
 pub fn decode_too_short_test() {
   incoming.decode_packet(<<0:7>>)
@@ -52,7 +52,7 @@ pub fn connack_session_should_be_present_test() {
 pub fn connack_return_code_should_be_id_refused_test() {
   let assert Ok(#(packet, _)) =
     incoming.decode_packet(<<2:4, 0:4, 2:8, 0:8, 2:8>>)
-  packet |> should.equal(incoming.ConnAck(Error(gleamqtt.IdentifierRefused)))
+  packet |> should.equal(incoming.ConnAck(Error(spoke.IdentifierRefused)))
 }
 
 pub fn ping_resp_decode_test() {

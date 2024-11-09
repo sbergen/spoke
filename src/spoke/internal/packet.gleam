@@ -1,5 +1,5 @@
 import gleam/option.{type Option}
-import gleamqtt.{type QoS}
+import spoke.{type QoS}
 
 pub type PublishData {
   PublishData(

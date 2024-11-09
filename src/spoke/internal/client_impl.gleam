@@ -4,15 +4,15 @@ import gleam/list
 import gleam/option.{None}
 import gleam/otp/actor
 import gleam/string
-import gleamqtt.{
+import spoke.{
   type ConnectError, type ConnectOptions, type PublishData, type PublishError,
   type SubscribeError, type SubscribeRequest, type Subscription, type Update,
 }
-import gleamqtt/internal/packet
-import gleamqtt/internal/packet/incoming.{type SubscribeResult}
-import gleamqtt/internal/packet/outgoing
-import gleamqtt/internal/transport/channel.{type EncodedChannel}
-import gleamqtt/transport.{type ChannelResult}
+import spoke/internal/packet
+import spoke/internal/packet/incoming.{type SubscribeResult}
+import spoke/internal/packet/outgoing
+import spoke/internal/transport/channel.{type EncodedChannel}
+import spoke/transport.{type ChannelResult}
 
 pub opaque type ClientImpl {
   ClientImpl(subject: Subject(ClientMsg))
@@ -39,7 +39,7 @@ pub fn publish(
 ) -> Result(Nil, PublishError) {
   case process.try_call(client.subject, Publish(data, _), timeout) {
     Ok(result) -> result
-    Error(e) -> Error(gleamqtt.PublishError(string.inspect(e)))
+    Error(e) -> Error(spoke.PublishError(string.inspect(e)))
   }
 }
 
@@ -50,7 +50,7 @@ pub fn subscribe(
 ) -> Result(List(Subscription), SubscribeError) {
   case process.try_call(client.subject, Subscribe(topics, _), timeout) {
     Ok(result) -> Ok(result)
-    Error(_) -> Error(gleamqtt.SubscribeError)
+    Error(_) -> Error(spoke.SubscribeError)
   }
 }
 
@@ -143,7 +143,7 @@ fn handle_outgoing_publish(
     ))
   let result = case get_channel(state).send(packet) {
     Ok(_) -> Ok(Nil)
-    Error(e) -> Error(gleamqtt.PublishError(string.inspect(e)))
+    Error(e) -> Error(spoke.PublishError(string.inspect(e)))
   }
   process.send(reply_to, result)
   actor.continue(state)
@@ -165,7 +165,7 @@ fn handle_receive(
 
 fn handle_connack(
   state: ClientState,
-  status: Result(Bool, gleamqtt.ConnectError),
+  status: Result(Bool, spoke.ConnectError),
 ) -> actor.Next(ClientMsg, ClientState) {
   let assert ConnectingToServer(connection, reply_to) = state.conn_state
   process.send(reply_to, status)
@@ -190,8 +190,8 @@ fn handle_suback(
     use #(topic, result) <- list.map(pairs)
     case result {
       incoming.SubscribeSuccess(qos) ->
-        gleamqtt.SuccessfulSubscription(topic.filter, qos)
-      incoming.SubscribeFailure -> gleamqtt.FailedSubscription
+        spoke.SuccessfulSubscription(topic.filter, qos)
+      incoming.SubscribeFailure -> spoke.FailedSubscription
     }
   }
 
@@ -217,7 +217,7 @@ fn handle_incoming_publish(
   state: ClientState,
   data: packet.PublishData,
 ) -> actor.Next(ClientMsg, ClientState) {
-  let update = gleamqtt.ReceivedMessage(data.topic, data.payload, data.retain)
+  let update = spoke.ReceivedMessage(data.topic, data.payload, data.retain)
   process.send(state.updates, update)
   actor.continue(state)
 }

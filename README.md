@@ -1,6 +1,6 @@
-# gleamqtt
+# spoke
 
-Gleamqtt is a MQTT client package very early in development,
+Spoke is a MQTT client package very early in development,
 written in Gleam.
 
 You should probably not yet use it for anything important,
@@ -12,15 +12,15 @@ import gleam/erlang/process
 import gleam/int
 import gleam/io
 import gleam/string
-import gleamqtt.{QoS0}
-import gleamqtt/client
-import gleamqtt/transport
+import spoke.{QoS0}
+import spoke/client
+import spoke/transport
 
 pub fn main() {
-  let client_id = "gleamqtt-" <> string.inspect(int.random(999_999_999))
-  let topic = "gleamqtt-test"
+  let client_id = "spoke-" <> string.inspect(int.random(999_999_999))
+  let topic = "spoke-test"
 
-  let connect_opts = gleamqtt.ConnectOptions(client_id, keep_alive: 60)
+  let connect_opts = spoke.ConnectOptions(client_id, keep_alive: 60)
   let transport_opts =
     transport.TcpOptions(
       "test.mosquitto.org",
@@ -34,10 +34,10 @@ pub fn main() {
   let assert Ok(_) = client.connect(client, timeout: 1000)
 
   let assert Ok(_) =
-    client.subscribe(client, [gleamqtt.SubscribeRequest(topic, QoS0)], 1000)
+    client.subscribe(client, [spoke.SubscribeRequest(topic, QoS0)], 1000)
 
   let message =
-    gleamqtt.PublishData(topic, <<"Hello from gleamqtt!">>, QoS0, retain: False)
+    spoke.PublishData(topic, <<"Hello from spoke!">>, QoS0, retain: False)
   let assert Ok(_) = client.publish(client, message, 1000)
 
   let update = process.receive(updates, 1000)
@@ -47,7 +47,7 @@ pub fn main() {
 
 This should print
 ```
-Ok(ReceivedMessage("gleamqtt-test", "Hello from gleamqtt!", False))
+Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ```
 
 ## Development status

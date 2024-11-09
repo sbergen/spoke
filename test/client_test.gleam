@@ -3,13 +3,13 @@ import gleam/function
 import gleam/list
 import gleam/option.{None}
 import gleam/otp/task
-import gleamqtt.{type Update, QoS0, QoS1}
-import gleamqtt/internal/client_impl.{type ClientImpl}
-import gleamqtt/internal/packet
-import gleamqtt/internal/packet/incoming
-import gleamqtt/internal/packet/outgoing
-import gleamqtt/transport.{type Receiver}
 import gleeunit/should
+import spoke.{type Update, QoS0, QoS1}
+import spoke/internal/client_impl.{type ClientImpl}
+import spoke/internal/packet
+import spoke/internal/packet/incoming
+import spoke/internal/packet/outgoing
+import spoke/transport.{type Receiver}
 import transport/fake_channel
 
 const id = "client-id"
@@ -38,8 +38,8 @@ pub fn subscribe_success_test() {
   let #(client, sent_packets, server_out, _updates) = set_up_connected()
 
   let topics = [
-    gleamqtt.SubscribeRequest("topic0", QoS0),
-    gleamqtt.SubscribeRequest("topic1", QoS1),
+    spoke.SubscribeRequest("topic0", QoS0),
+    spoke.SubscribeRequest("topic1", QoS1),
   ]
   let results = {
     use topic <- list.map(topics)
@@ -57,8 +57,8 @@ pub fn subscribe_success_test() {
   let assert Ok(Ok(results)) = task.try_await(subscribe, 10)
   results
   |> should.equal([
-    gleamqtt.SuccessfulSubscription("topic0", QoS0),
-    gleamqtt.SuccessfulSubscription("topic1", QoS1),
+    spoke.SuccessfulSubscription("topic0", QoS0),
+    spoke.SuccessfulSubscription("topic1", QoS1),
   ])
 }
 
@@ -76,14 +76,13 @@ pub fn receive_message_test() {
     )
   process.send(server_out, Ok(incoming.Publish(data)))
 
-  let assert Ok(gleamqtt.ReceivedMessage(_, _, _)) =
-    process.receive(updates, 10)
+  let assert Ok(spoke.ReceivedMessage(_, _, _)) = process.receive(updates, 10)
 }
 
 pub fn publish_message_test() {
   let #(client, sent_packets, _server_out, _updates) = set_up_connected()
 
-  let data = gleamqtt.PublishData("topic", <<"payload">>, QoS0, False)
+  let data = spoke.PublishData("topic", <<"payload">>, QoS0, False)
   let assert Ok(_) = client_impl.publish(client, data, 10)
 
   let assert Ok(outgoing.Publish(data)) = process.receive(sent_packets, 10)
@@ -121,7 +120,7 @@ fn set_up() -> #(
   Subject(Receiver(incoming.Packet)),
   Subject(Update),
 ) {
-  let options = gleamqtt.ConnectOptions(id, keep_alive)
+  let options = spoke.ConnectOptions(id, keep_alive)
 
   let send_to = process.new_subject()
   let connections = process.new_subject()

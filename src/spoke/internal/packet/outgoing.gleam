@@ -1,9 +1,9 @@
 import gleam/bool
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/list
-import gleamqtt.{type QoS, type SubscribeRequest, QoS0, QoS1, QoS2}
-import gleamqtt/internal/packet.{type PublishData}
-import gleamqtt/internal/packet/encode.{type EncodeError}
+import spoke.{type QoS, type SubscribeRequest, QoS0, QoS1, QoS2}
+import spoke/internal/packet.{type PublishData}
+import spoke/internal/packet/encode.{type EncodeError}
 
 const protocol_level: Int = 4
 
@@ -123,8 +123,8 @@ fn encode_parts(
 
 fn encode_qos(qos: QoS) -> Int {
   case qos {
-    gleamqtt.QoS0 -> 0
-    gleamqtt.QoS1 -> 1
-    gleamqtt.QoS2 -> 2
+    spoke.QoS0 -> 0
+    spoke.QoS1 -> 1
+    spoke.QoS2 -> 2
   }
 }

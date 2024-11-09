@@ -2,10 +2,10 @@ import gleam/bit_array
 import gleam/erlang/process
 import gleam/otp/actor
 import gleam/string
-import gleamqtt/internal/packet/decode
-import gleamqtt/internal/packet/incoming
-import gleamqtt/internal/packet/outgoing
-import gleamqtt/transport.{type ChannelResult, type Receiver}
+import spoke/internal/packet/decode
+import spoke/internal/packet/incoming
+import spoke/internal/packet/outgoing
+import spoke/transport.{type ChannelResult, type Receiver}
 
 pub type EncodedChannel =
   transport.Channel(outgoing.Packet, incoming.Packet)

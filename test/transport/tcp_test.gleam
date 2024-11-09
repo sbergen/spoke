@@ -1,7 +1,7 @@
 import gleam/bytes_builder
 import gleam/erlang/process
-import gleamqtt/internal/transport/tcp
 import gleeunit/should
+import spoke/internal/transport/tcp
 import transport/echo_server
 
 pub fn send_and_receive_test() {
