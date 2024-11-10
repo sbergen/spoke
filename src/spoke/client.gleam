@@ -4,10 +4,7 @@ import gleam/list
 import gleam/option.{None}
 import gleam/otp/actor
 import gleam/string
-import spoke.{
-  type ConnectError, type ConnectOptions, type PublishData, type PublishError,
-  type SubscribeError, type SubscribeRequest, type Subscription, type Update,
-}
+import spoke.{type ConnectError, type QoS, type SubscribeRequest}
 import spoke/internal/packet
 import spoke/internal/packet/incoming.{type SubscribeResult}
 import spoke/internal/packet/outgoing
@@ -17,6 +14,32 @@ import spoke/transport.{type ChannelResult, type TransportOptions}
 
 pub opaque type Client {
   Client(subject: Subject(ClientMsg))
+}
+
+pub type ConnectOptions {
+  ConnectOptions(client_id: String, keep_alive: Int)
+}
+
+pub type Update {
+  ReceivedMessage(topic: String, payload: BitArray, retained: Bool)
+}
+
+pub type PublishData {
+  PublishData(topic: String, payload: BitArray, qos: QoS, retain: Bool)
+}
+
+pub type PublishError {
+  PublishError(String)
+}
+
+pub type Subscription {
+  SuccessfulSubscription(topic_filter: String, qos: QoS)
+  FailedSubscription
+}
+
+pub type SubscribeError {
+  // TODO more details here
+  SubscribeError
 }
 
 /// Starts a new MQTT client with the given options
@@ -42,7 +65,7 @@ pub fn publish(
 ) -> Result(Nil, PublishError) {
   case process.try_call(client.subject, Publish(data, _), timeout) {
     Ok(result) -> result
-    Error(e) -> Error(spoke.PublishError(string.inspect(e)))
+    Error(e) -> Error(PublishError(string.inspect(e)))
   }
 }
 
@@ -53,7 +76,7 @@ pub fn subscribe(
 ) -> Result(List(Subscription), SubscribeError) {
   case process.try_call(client.subject, Subscribe(topics, _), timeout) {
     Ok(result) -> Ok(result)
-    Error(_) -> Error(spoke.SubscribeError)
+    Error(_) -> Error(SubscribeError)
   }
 }
 
@@ -165,7 +188,7 @@ fn handle_outgoing_publish(
     ))
   let result = case get_channel(state).send(packet) {
     Ok(_) -> Ok(Nil)
-    Error(e) -> Error(spoke.PublishError(string.inspect(e)))
+    Error(e) -> Error(PublishError(string.inspect(e)))
   }
   process.send(reply_to, result)
   actor.continue(state)
@@ -212,8 +235,8 @@ fn handle_suback(
     use #(topic, result) <- list.map(pairs)
     case result {
       incoming.SubscribeSuccess(qos) ->
-        spoke.SuccessfulSubscription(topic.filter, qos)
-      incoming.SubscribeFailure -> spoke.FailedSubscription
+        SuccessfulSubscription(topic.filter, qos)
+      incoming.SubscribeFailure -> FailedSubscription
     }
   }
 
@@ -239,7 +262,7 @@ fn handle_incoming_publish(
   state: ClientState,
   data: packet.PublishData,
 ) -> actor.Next(ClientMsg, ClientState) {
-  let update = spoke.ReceivedMessage(data.topic, data.payload, data.retain)
+  let update = ReceivedMessage(data.topic, data.payload, data.retain)
   process.send(state.updates, update)
   actor.continue(state)
 }
