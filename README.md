@@ -20,7 +20,7 @@ pub fn main() {
   let client_id = "spoke-" <> string.inspect(int.random(999_999_999))
   let topic = "spoke-test"
 
-  let connect_opts = spoke.ConnectOptions(client_id, keep_alive: 60)
+  let connect_opts = client.ConnectOptions(client_id, keep_alive: 60)
   let transport_opts =
     transport.TcpOptions(
       "test.mosquitto.org",
@@ -37,7 +37,7 @@ pub fn main() {
     client.subscribe(client, [spoke.SubscribeRequest(topic, QoS0)], 1000)
 
   let message =
-    spoke.PublishData(topic, <<"Hello from spoke!">>, QoS0, retain: False)
+    client.PublishData(topic, <<"Hello from spoke!">>, QoS0, retain: False)
   let assert Ok(_) = client.publish(client, message, 1000)
 
   let update = process.receive(updates, 1000)
