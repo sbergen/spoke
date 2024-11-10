@@ -5,7 +5,7 @@ import gleam/option.{None}
 import gleam/otp/task
 import gleeunit/should
 import spoke.{type Update, QoS0, QoS1}
-import spoke/internal/client_impl.{type ClientImpl}
+import spoke/client.{type Client}
 import spoke/internal/packet
 import spoke/internal/packet/incoming
 import spoke/internal/packet/outgoing
@@ -19,7 +19,7 @@ const keep_alive = 60
 pub fn connect_success_test() {
   let #(client, sent_packets, connections, _updates) = set_up()
 
-  let connect_task = task.async(fn() { client_impl.connect(client, 10) })
+  let connect_task = task.async(fn() { client.connect(client, 10) })
 
   // Open channel
   let assert Ok(server_out) = process.receive(connections, 10)
@@ -47,8 +47,7 @@ pub fn subscribe_success_test() {
   }
   let expected_id = 1
 
-  let subscribe =
-    task.async(fn() { client_impl.subscribe(client, topics, 100) })
+  let subscribe = task.async(fn() { client.subscribe(client, topics, 100) })
 
   let assert Ok(result) = process.receive(sent_packets, 10)
   result |> should.equal(outgoing.Subscribe(expected_id, topics))
@@ -83,7 +82,7 @@ pub fn publish_message_test() {
   let #(client, sent_packets, _server_out, _updates) = set_up_connected()
 
   let data = spoke.PublishData("topic", <<"payload">>, QoS0, False)
-  let assert Ok(_) = client_impl.publish(client, data, 10)
+  let assert Ok(_) = client.publish(client, data, 10)
 
   let assert Ok(outgoing.Publish(data)) = process.receive(sent_packets, 10)
   data
@@ -98,13 +97,13 @@ pub fn publish_message_test() {
 }
 
 fn set_up_connected() -> #(
-  ClientImpl,
+  Client,
   Subject(outgoing.Packet),
   Receiver(incoming.Packet),
   Subject(Update),
 ) {
   let #(client, sent_packets, connections, updates) = set_up()
-  let connect_task = task.async(fn() { client_impl.connect(client, 10) })
+  let connect_task = task.async(fn() { client.connect(client, 10) })
 
   let assert Ok(server_out) = process.receive(connections, 10)
   let assert Ok(outgoing.Connect(_, _)) = process.receive(sent_packets, 10)
@@ -115,7 +114,7 @@ fn set_up_connected() -> #(
 }
 
 fn set_up() -> #(
-  ClientImpl,
+  Client,
   Subject(outgoing.Packet),
   Subject(Receiver(incoming.Packet)),
   Subject(Update),
@@ -129,6 +128,6 @@ fn set_up() -> #(
   let connect = fn() {
     fake_channel.new(send_to, function.identity, connections)
   }
-  let client = client_impl.run(options, connect, client_receives)
+  let client = client.run(options, connect, client_receives)
   #(client, send_to, connections, client_receives)
 }
