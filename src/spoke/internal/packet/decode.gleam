@@ -45,15 +45,15 @@ fn accumulate_varint(
   multiplier: Int,
   bytes: BitArray,
 ) -> Result(#(Int, BitArray), DecodeError) {
-  case multiplier, bytes {
-    268_435_456, _ -> Error(VarIntTooLarge)
-    _, <<continue:1, next:7, rest:bits>> -> {
+  case bytes {
+    _ if multiplier >= 268_435_456 -> Error(VarIntTooLarge)
+    <<continue:1, next:7, rest:bits>> -> {
       let value = value + multiplier * next
       case continue {
         0 -> Ok(#(value, rest))
         _ -> accumulate_varint(value, 128 * multiplier, rest)
       }
     }
-    _, _ -> Error(DataTooShort)
+    _ -> Error(DataTooShort)
   }
 }
