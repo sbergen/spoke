@@ -1,4 +1,5 @@
 import gleam/erlang/process.{type Subject, type Timer}
+import gleam/function
 import gleam/otp/actor
 
 // Having either of the following features in gleam would make this much simpler:
@@ -13,8 +14,8 @@ pub fn start(
   interval interval: Int,
 ) -> fn() -> Nil {
   let config = Config(subject, message, interval)
-  let assert Ok(pinger) = actor.start(NotStarted(config), run)
-  process.send(pinger, Start(pinger))
+  let assert Ok(pinger) =
+    actor.start_spec(actor.Spec(fn() { init(config) }, 100, run))
   fn() { process.send(pinger, Reset) }
 }
 
@@ -23,34 +24,41 @@ type Config(a) {
 }
 
 type State(a) {
-  NotStarted(config: Config(a))
-  Waiting(config: Config(a), self: Subject(Message(a)), timer: Timer)
+  State(config: Config(a), self: Subject(Message), timer: Timer)
 }
 
-type Message(a) {
-  Start(Subject(Message(a)))
+type Message {
   Reset
   Send
 }
 
-fn run(message: Message(a), state: State(a)) -> actor.Next(Message(a), State(a)) {
-  let #(config, self) = case message {
-    Start(self) -> {
-      let assert NotStarted(config) = state
-      #(config, self)
-    }
+fn init(config: Config(a)) -> actor.InitResult(State(a), Message) {
+  let self = process.new_subject()
+  let timer = process.send_after(self, config.interval, Send)
+  let state = State(config, self, timer)
+
+  let selector =
+    process.new_selector()
+    |> process.selecting(self, function.identity)
+
+  actor.Ready(state, selector)
+}
+
+fn run(message: Message, state: State(a)) -> actor.Next(Message, State(a)) {
+  case message {
     Reset -> {
-      let assert Waiting(config, self, timer) = state
-      process.cancel_timer(timer)
-      #(config, self)
+      process.cancel_timer(state.timer)
+      Nil
     }
     Send -> {
-      let assert Waiting(config, self, _timer) = state
-      process.send(config.subject, config.message)
-      #(config, self)
+      send(state.config)
     }
   }
 
-  let timer = process.send_after(self, config.interval, Send)
-  actor.continue(Waiting(config, self, timer))
+  let timer = process.send_after(state.self, state.config.interval, Send)
+  actor.continue(State(..state, timer: timer))
+}
+
+fn send(config: Config(a)) -> Nil {
+  process.send(config.subject, config.message)
 }
