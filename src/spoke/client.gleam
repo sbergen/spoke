@@ -1,10 +1,12 @@
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
+import gleam/function
 import gleam/list
 import gleam/option.{None}
 import gleam/otp/actor
 import gleam/string
 import spoke.{type ConnectError, type QoS, type SubscribeRequest}
+import spoke/internal/interval
 import spoke/internal/packet
 import spoke/internal/packet/incoming.{type SubscribeResult}
 import spoke/internal/packet/outgoing
@@ -48,7 +50,12 @@ pub fn start(
   transport_opts: TransportOptions,
   updates: Subject(Update),
 ) -> Client {
-  run(connect_opts, fn() { create_channel(transport_opts) }, updates)
+  run(
+    connect_opts,
+    fn() { create_channel(transport_opts) },
+    interval.start,
+    updates,
+  )
 }
 
 pub fn connect(
@@ -80,14 +87,19 @@ pub fn subscribe(
   }
 }
 
+// Internal for testability:
+// * EncodedChannel avoids having to encode packets we don't need to otherwise encode
+// * start_ping: allows simulating time
 @internal
 pub fn run(
   options: ConnectOptions,
   connect: fn() -> EncodedChannel,
+  start_ping: fn(interval.Action, Int) -> interval.Reset,
   updates: Subject(Update),
 ) -> Client {
-  let state = new_state(options, connect, updates)
-  let assert Ok(client) = actor.start(state, run_client)
+  let config = Config(options, connect, start_ping)
+  let assert Ok(client) =
+    actor.start_spec(actor.Spec(fn() { init(config, updates) }, 100, run_client))
   Client(client)
 }
 
@@ -99,10 +111,18 @@ fn create_channel(options: TransportOptions) -> EncodedChannel {
   channel.as_encoded(raw_channel)
 }
 
-type ClientState {
-  ClientState(
+type Config {
+  Config(
     options: ConnectOptions,
     connect: fn() -> EncodedChannel,
+    start_ping: fn(interval.Action, Int) -> interval.Reset,
+  )
+}
+
+type ClientState {
+  ClientState(
+    self: Subject(ClientMsg),
+    config: Config,
     updates: Subject(Update),
     conn_state: ConnectionState,
     packet_id: Int,
@@ -115,12 +135,13 @@ type ClientMsg {
   Publish(PublishData, Subject(Result(Nil, PublishError)))
   Subscribe(List(SubscribeRequest), Subject(List(Subscription)))
   Received(ChannelResult(incoming.Packet))
+  Ping
 }
 
 type ConnectionState {
   Disconnected
   ConnectingToServer(EncodedChannel, Subject(Result(Bool, ConnectError)))
-  Connected(EncodedChannel)
+  Connected(EncodedChannel, interval.Reset)
 }
 
 type PendingSubscription {
@@ -130,12 +151,19 @@ type PendingSubscription {
   )
 }
 
-fn new_state(
-  options: ConnectOptions,
-  connect: fn() -> EncodedChannel,
+fn init(
+  config: Config,
   updates: Subject(Update),
-) -> ClientState {
-  ClientState(options, connect, updates, Disconnected, 1, dict.new())
+) -> actor.InitResult(ClientState, ClientMsg) {
+  let self = process.new_subject()
+
+  let state = ClientState(self, config, updates, Disconnected, 1, dict.new())
+
+  let selector =
+    process.new_selector()
+    |> process.selecting(self, function.identity)
+
+  actor.Ready(state, selector)
 }
 
 fn run_client(
@@ -147,6 +175,7 @@ fn run_client(
     Received(r) -> handle_receive(state, r)
     Publish(data, reply_to) -> handle_outgoing_publish(state, data, reply_to)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
+    Ping -> handle_ping(state)
   }
 }
 
@@ -155,16 +184,17 @@ fn handle_connect(
   reply_to: Subject(Result(Bool, ConnectError)),
 ) -> actor.Next(ClientMsg, ClientState) {
   let assert Disconnected = state.conn_state
-  let channel = state.connect()
+  let channel = state.config.connect()
 
   let receives = process.new_subject()
   let new_selector =
     process.new_selector()
+    |> process.selecting(state.self, function.identity)
     |> process.selecting(receives, Received(_))
   channel.start_receive(receives)
 
-  let connect_packet =
-    outgoing.Connect(state.options.client_id, state.options.keep_alive)
+  let options = state.config.options
+  let connect_packet = outgoing.Connect(options.client_id, options.keep_alive)
   let assert Ok(_) = channel.send(connect_packet)
 
   let new_state =
@@ -204,6 +234,7 @@ fn handle_receive(
     incoming.ConnAck(status) -> handle_connack(state, status)
     incoming.SubAck(id, results) -> handle_suback(state, id, results)
     incoming.Publish(data) -> handle_incoming_publish(state, data)
+    incoming.PingResp -> handle_pingresp(state)
     _ -> todo as "Packet type not handled"
   }
 }
@@ -216,8 +247,17 @@ fn handle_connack(
   process.send(reply_to, status)
 
   case status {
-    Ok(_) ->
-      actor.continue(ClientState(..state, conn_state: Connected(connection)))
+    Ok(_) -> {
+      let pings =
+        state.config.start_ping(
+          fn() { process.send(state.self, Ping) },
+          state.config.options.keep_alive * 1000,
+        )
+      actor.continue(
+        ClientState(..state, conn_state: Connected(connection, pings)),
+      )
+    }
+
     _ -> todo as "Should disconnect"
   }
 }
@@ -267,6 +307,17 @@ fn handle_incoming_publish(
   actor.continue(state)
 }
 
+fn handle_ping(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
+  let assert Ok(_) = get_channel(state).send(outgoing.PingReq)
+  // TODO: Disconnect at some point?
+  actor.continue(state)
+}
+
+fn handle_pingresp(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
+  // TODO: Cancel disconnect
+  actor.continue(state)
+}
+
 fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {
   let id = state.packet_id
   let state = ClientState(..state, packet_id: id + 1)
@@ -287,7 +338,7 @@ fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {
 // will not be processed if the Server rejects the connection.
 fn get_channel(state: ClientState) {
   case state.conn_state {
-    Connected(channel) -> channel
+    Connected(channel, _) -> channel
     _ -> todo as "Not fully connected, handle better"
   }
 }

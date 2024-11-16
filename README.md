@@ -55,9 +55,8 @@ Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 Here's an overview of what MQTT features are implemented.
 In summary, only QoS 0 over TCP with permanent subscriptions
 is currently supported.
-Also, since it doesn't yet do pings,
-you should probably select a really big keep-alive value
-(planning on fixing this soon).
+Pings are currently partially handled
+(not optimized, "should close the network connection" not implemented).
 
 ### MQTT features
 - [x] Connect
