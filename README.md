@@ -13,7 +13,6 @@ import gleam/int
 import gleam/io
 import gleam/string
 import spoke
-import spoke/transport
 
 pub fn main() {
   let client_id = "spoke-" <> string.inspect(int.random(999_999_999))
@@ -26,11 +25,7 @@ pub fn main() {
       server_timeout_ms: 1000,
     )
   let transport_opts =
-    transport.TcpOptions(
-      "test.mosquitto.org",
-      1883,
-      connect_timeout: 1000,
-    )
+    spoke.TcpOptions("test.mosquitto.org", 1883, connect_timeout: 1000)
 
   let updates = process.new_subject()
   let client = spoke.start(connect_opts, transport_opts, updates)

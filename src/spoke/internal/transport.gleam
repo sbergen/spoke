@@ -20,10 +20,6 @@ pub type ByteChannel =
 pub type ChannelResult(a) =
   Result(a, ChannelError)
 
-pub type TransportOptions {
-  TcpOptions(host: String, port: Int, connect_timeout: Int)
-}
-
 /// Generic error type for channels.
 /// Will need to refine the errors later...
 pub type ChannelError {

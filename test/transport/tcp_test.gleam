@@ -1,8 +1,8 @@
 import gleam/bytes_builder
 import gleam/erlang/process
 import gleeunit/should
+import spoke/internal/transport.{type ByteChannel}
 import spoke/internal/transport/tcp
-import spoke/transport.{type ByteChannel}
 import transport/echo_server
 
 pub fn send_receive_and_shutdown_test() {

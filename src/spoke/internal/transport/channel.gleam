@@ -5,7 +5,7 @@ import gleam/string
 import spoke/internal/packet/decode
 import spoke/internal/packet/incoming
 import spoke/internal/packet/outgoing
-import spoke/transport.{type ChannelResult}
+import spoke/internal/transport.{type ChannelResult}
 
 /// One-to-many mapping on the receiving side
 pub type EncodedChannel =

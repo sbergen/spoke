@@ -4,8 +4,8 @@ import gleam/result
 import gleeunit/should
 import spoke/internal/packet/incoming
 import spoke/internal/packet/outgoing
+import spoke/internal/transport
 import spoke/internal/transport/channel.{type EncodedChannel}
-import spoke/transport
 
 pub fn send_contained_packet_test() {
   let #(channel, sent) = set_up_send()

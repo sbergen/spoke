@@ -3,7 +3,9 @@ import gleam/erlang/process
 import gleam/result
 import gleam/string
 import mug
-import spoke/transport.{type ByteChannel, type ChannelError, type ChannelResult}
+import spoke/internal/transport.{
+  type ByteChannel, type ChannelError, type ChannelResult,
+}
 
 pub fn connect(
   host: String,

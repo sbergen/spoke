@@ -6,7 +6,7 @@ import spoke.{type Client, AtLeastOnce, AtMostOnce, ExactlyOnce}
 import spoke/internal/packet
 import spoke/internal/packet/incoming
 import spoke/internal/packet/outgoing
-import spoke/transport
+import spoke/internal/transport
 
 const id = "client-id"
 

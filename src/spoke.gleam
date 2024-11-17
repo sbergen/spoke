@@ -9,14 +9,16 @@ import gleam/string
 import spoke/internal/packet
 import spoke/internal/packet/incoming.{type SubscribeResult}
 import spoke/internal/packet/outgoing
+import spoke/internal/transport.{type ChannelError, type ChannelResult}
 import spoke/internal/transport/channel.{type EncodedChannel}
 import spoke/internal/transport/tcp
-import spoke/transport.{
-  type ChannelError, type ChannelResult, type TransportOptions,
-}
 
 pub opaque type Client {
   Client(subject: Subject(ClientMsg))
+}
+
+pub type TransportOptions {
+  TcpOptions(host: String, port: Int, connect_timeout: Int)
 }
 
 pub type ConnectOptions {
@@ -149,7 +151,7 @@ pub fn run(
 
 fn create_channel(options: TransportOptions) -> EncodedChannel {
   let assert Ok(raw_channel) = case options {
-    transport.TcpOptions(host, port, connect_timeout) ->
+    TcpOptions(host, port, connect_timeout) ->
       tcp.connect(host, port, connect_timeout)
   }
   channel.as_encoded(raw_channel)
