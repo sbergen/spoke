@@ -17,17 +17,19 @@ pub fn connect(
     mug.connect(options) |> map_mug_error(transport.ConnectFailed),
   )
 
-  mug.receive_next_packet_as_message(socket)
   let selector =
     process.new_selector()
-    |> mug.selecting_tcp_messages(map_tcp_message(socket, _))
+    |> mug.selecting_tcp_messages(map_tcp_message)
 
   Ok(
     transport.Channel(
       send: send(socket, _),
-      selecting_next: fn(_) { selector },
+      selecting_next: fn(_) {
+        mug.receive_next_packet_as_message(socket)
+        selector
+      },
       shutdown: fn() {
-        // TODO, should I check the result?
+        // Nothing to do if this fails
         let _ = mug.shutdown(socket)
         Nil
       },
@@ -40,15 +42,9 @@ fn send(socket: mug.Socket, data: BytesBuilder) -> ChannelResult(Nil) {
   |> map_mug_error(transport.SendFailed)
 }
 
-fn map_tcp_message(
-  socket: mug.Socket,
-  msg: mug.TcpMessage,
-) -> #(Nil, ChannelResult(BitArray)) {
+fn map_tcp_message(msg: mug.TcpMessage) -> #(Nil, ChannelResult(BitArray)) {
   let result = case msg {
-    mug.Packet(_, data) -> {
-      mug.receive_next_packet_as_message(socket)
-      Ok(data)
-    }
+    mug.Packet(_, data) -> Ok(data)
     mug.SocketClosed(_) -> Error(transport.ChannelClosed)
     mug.TcpError(_, e) -> Error(transport.TransportError(string.inspect(e)))
   }
