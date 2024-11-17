@@ -147,11 +147,10 @@ pub fn run(
   Client(client)
 }
 
-/// Keep-alive interval in millisseconds
 fn create_channel(options: TransportOptions) -> EncodedChannel {
   let assert Ok(raw_channel) = case options {
-    transport.TcpOptions(host, port, connect_timeout, send_timeout) ->
-      tcp.connect(host, port, connect_timeout, send_timeout)
+    transport.TcpOptions(host, port, connect_timeout) ->
+      tcp.connect(host, port, connect_timeout)
   }
   channel.as_encoded(raw_channel)
 }
@@ -180,7 +179,8 @@ type ClientMsg {
   Connect(Subject(Result(Bool, ConnectError)))
   Publish(PublishData, Subject(Result(Nil, PublishError)))
   Subscribe(List(SubscribeRequest), Subject(List(Subscription)))
-  Received(ChannelResult(incoming.Packet))
+  Received(#(BitArray, ChannelResult(List(incoming.Packet))))
+  ProcessReceived(incoming.Packet)
   Ping
   // TODO: Add disconnect reason
   Disconnect
@@ -188,7 +188,10 @@ type ClientMsg {
 
 type ConnectionState {
   NotConnected
-  ConnectingToServer(EncodedChannel, Subject(Result(Bool, ConnectError)))
+  ConnectingToServer(
+    channel: EncodedChannel,
+    reply_to: Subject(Result(Bool, ConnectError)),
+  )
   Connected(
     channel: EncodedChannel,
     ping_timer: process.Timer,
@@ -224,7 +227,9 @@ fn run_client(
 ) -> actor.Next(ClientMsg, ClientState) {
   case msg {
     Connect(reply_to) -> handle_connect(state, reply_to)
-    Received(r) -> handle_receive(state, r)
+    Received(#(new_chan_state, packets)) ->
+      handle_receive(state, new_chan_state, packets)
+    ProcessReceived(packet) -> process_packet(state, packet)
     Publish(data, reply_to) -> handle_outgoing_publish(state, data, reply_to)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
     Ping -> send_ping(state)
@@ -238,13 +243,7 @@ fn handle_connect(
 ) -> actor.Next(ClientMsg, ClientState) {
   let assert NotConnected = state.conn_state
   let channel = state.config.connect()
-
-  let receives = process.new_subject()
-  let new_selector =
-    process.new_selector()
-    |> process.selecting(state.self, function.identity)
-    |> process.selecting(receives, Received(_))
-  channel.start_receive(receives)
+  let selector = next_selector(channel, <<>>, state.self)
 
   let state =
     ClientState(..state, conn_state: ConnectingToServer(channel, reply_to))
@@ -254,7 +253,7 @@ fn handle_connect(
     outgoing.Connect(config.client_id, config.keep_alive / 1000)
   let assert Ok(state) = send_packet(state, connect_packet)
 
-  actor.with_selector(actor.continue(state), new_selector)
+  actor.with_selector(actor.continue(state), selector)
 }
 
 fn handle_outgoing_publish(
@@ -285,16 +284,46 @@ fn handle_outgoing_publish(
 
 fn handle_receive(
   state: ClientState,
-  data: ChannelResult(incoming.Packet),
+  new_conn_state: BitArray,
+  packets: ChannelResult(List(incoming.Packet)),
 ) -> actor.Next(ClientMsg, ClientState) {
-  let assert Ok(packet) = data
+  let assert Ok(packets) = packets
+  {
+    use packet <- list.each(packets)
+    process.send(state.self, ProcessReceived(packet))
+  }
 
+  case state.conn_state {
+    Connected(channel, _, _) | ConnectingToServer(channel, _) ->
+      actor.with_selector(
+        actor.continue(state),
+        next_selector(channel, new_conn_state, state.self),
+      )
+    NotConnected -> actor.continue(state)
+  }
+}
+
+fn process_packet(
+  state: ClientState,
+  packet: incoming.Packet,
+) -> actor.Next(ClientMsg, ClientState) {
+  use <- if_connected(state)
   case packet {
     incoming.ConnAck(status) -> handle_connack(state, status)
     incoming.SubAck(id, results) -> handle_suback(state, id, results)
     incoming.Publish(data) -> handle_incoming_publish(state, data)
     incoming.PingResp -> handle_pingresp(state)
     _ -> todo as "Packet type not handled"
+  }
+}
+
+fn if_connected(
+  state: ClientState,
+  do: fn() -> actor.Next(ClientMsg, ClientState),
+) -> actor.Next(ClientMsg, ClientState) {
+  case state.conn_state {
+    NotConnected -> actor.continue(state)
+    _ -> do()
   }
 }
 
@@ -422,6 +451,15 @@ fn handle_disconnect(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
 
   process.send(state.updates, Disconnected)
   actor.continue(ClientState(..state, conn_state: NotConnected))
+}
+
+fn next_selector(
+  channel: EncodedChannel,
+  channel_state: BitArray,
+  self: Subject(ClientMsg),
+) -> process.Selector(ClientMsg) {
+  process.map_selector(channel.selecting_next(channel_state), Received(_))
+  |> process.selecting(self, function.identity)
 }
 
 // Clients are allowed to send further Control Packets immediately after sending a CONNECT Packet;

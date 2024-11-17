@@ -1,5 +1,4 @@
 import gleam/erlang/process.{type Subject}
-import gleam/function
 import gleam/option.{None}
 import gleam/otp/task
 import gleeunit/should
@@ -7,27 +6,23 @@ import spoke.{type Client, AtLeastOnce, AtMostOnce, ExactlyOnce}
 import spoke/internal/packet
 import spoke/internal/packet/incoming
 import spoke/internal/packet/outgoing
-import spoke/transport.{type Receiver}
-import transport/fake_channel
+import spoke/transport
 
 const id = "client-id"
 
 pub fn connect_success_test() {
   let keep_alive_s = 15
-  let #(client, sent_packets, connections, _, _) =
+  let #(client, sent_packets, receives, _, _) =
     set_up(keep_alive_s * 1000, server_timeout: 100)
 
-  let connect_task = task.async(fn() { spoke.connect(client, 10) })
-
-  // Open channel
-  let assert Ok(server_out) = process.receive(connections, 10)
+  let connect_task = task.async(fn() { spoke.connect(client, 1000) })
 
   // Connect request
   let assert Ok(request) = process.receive(sent_packets, 10)
   request |> should.equal(outgoing.Connect(id, keep_alive_s))
 
   // Connect response
-  process.send(server_out, Ok(incoming.ConnAck(Ok(False))))
+  simulate_server(receives, incoming.ConnAck(Ok(False)))
 
   let assert Ok(Ok(False)) = task.try_await(connect_task, 10)
 
@@ -36,18 +31,15 @@ pub fn connect_success_test() {
 
 pub fn disconnects_after_server_rejects_connect_test() {
   let keep_alive_s = 15
-  let #(client, _, connections, disconnects, updates) =
+  let #(client, _, receives, disconnects, updates) =
     set_up(keep_alive_s * 1000, server_timeout: 100)
 
   let connect_task = task.async(fn() { spoke.connect(client, 10) })
 
-  // Open channel
-  let assert Ok(server_out) = process.receive(connections, 10)
-
   // Connect response
-  process.send(
-    server_out,
-    Ok(incoming.ConnAck(Error(incoming.BadUsernameOrPassword))),
+  simulate_server(
+    receives,
+    incoming.ConnAck(Error(incoming.BadUsernameOrPassword)),
   )
 
   let assert Ok(Error(spoke.BadUsernameOrPassword)) =
@@ -74,7 +66,7 @@ pub fn aborted_connect_disconnects_with_correct_status_test() {
 }
 
 pub fn subscribe_success_test() {
-  let #(client, sent_packets, server_out, _, _) =
+  let #(client, sent_packets, receives, _, _) =
     set_up_connected(keep_alive: 1000, server_timeout: 100)
 
   let topics = [
@@ -99,7 +91,7 @@ pub fn subscribe_success_test() {
 
   let assert Ok(result) = process.receive(sent_packets, 10)
   result |> should.equal(outgoing.Subscribe(expected_id, request_payload))
-  process.send(server_out, Ok(incoming.SubAck(expected_id, results)))
+  simulate_server(receives, incoming.SubAck(expected_id, results))
 
   let assert Ok(Ok(results)) = task.try_await(subscribe, 10)
   results
@@ -113,7 +105,7 @@ pub fn subscribe_success_test() {
 }
 
 pub fn receive_message_test() {
-  let #(client, _, server_out, _, updates) =
+  let #(client, _, receives, _, updates) =
     set_up_connected(keep_alive: 1000, server_timeout: 100)
 
   let data =
@@ -125,7 +117,8 @@ pub fn receive_message_test() {
       retain: False,
       packet_id: None,
     )
-  process.send(server_out, Ok(incoming.Publish(data)))
+
+  simulate_server(receives, incoming.Publish(data))
 
   let assert Ok(spoke.ReceivedMessage(_, _, _)) = process.receive(updates, 10)
 
@@ -162,14 +155,14 @@ pub fn publish_message_test() {
 // TODO: Add validation of user-passed arguments to these
 
 pub fn pings_are_sent_when_no_other_activity_test() {
-  let #(client, sent_packets, server_out, _, _) =
+  let #(client, sent_packets, receives, _, _) =
     set_up_connected(keep_alive: 4, server_timeout: 2)
 
   let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
-  process.send(server_out, Ok(incoming.PingResp))
+  simulate_server(receives, incoming.PingResp)
 
   let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
-  process.send(server_out, Ok(incoming.PingResp))
+  simulate_server(receives, incoming.PingResp)
 
   spoke.disconnect(client)
 }
@@ -206,26 +199,33 @@ pub fn connection_is_shut_down_if_no_pingresp_within_server_timeout_test() {
   let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
 }
 
+fn simulate_server(
+  receives: Subject(Subject(incoming.Packet)),
+  packet: incoming.Packet,
+) -> Nil {
+  let assert Ok(receiver) = process.receive(receives, 10)
+  process.send(receiver, packet)
+}
+
 fn set_up_connected(
   keep_alive keep_alive: Int,
   server_timeout server_timeout: Int,
 ) -> #(
   Client,
   Subject(outgoing.Packet),
-  Receiver(incoming.Packet),
+  Subject(Subject(incoming.Packet)),
   Subject(Nil),
   Subject(spoke.Update),
 ) {
-  let #(client, sent_packets, connections, disconnects, updates) =
+  let #(client, sent_packets, receives, disconnects, updates) =
     set_up(keep_alive, server_timeout)
   let connect_task = task.async(fn() { spoke.connect(client, 10) })
 
-  let assert Ok(server_out) = process.receive(connections, 10)
   let assert Ok(outgoing.Connect(_, _)) = process.receive(sent_packets, 10)
-  process.send(server_out, Ok(incoming.ConnAck(Ok(False))))
+  simulate_server(receives, incoming.ConnAck(Ok(False)))
 
   let assert Ok(Ok(_)) = task.try_await(connect_task, 10)
-  #(client, sent_packets, server_out, disconnects, updates)
+  #(client, sent_packets, receives, disconnects, updates)
 }
 
 fn set_up(
@@ -234,21 +234,35 @@ fn set_up(
 ) -> #(
   Client,
   Subject(outgoing.Packet),
-  Subject(Receiver(incoming.Packet)),
+  Subject(Subject(incoming.Packet)),
   Subject(Nil),
   Subject(spoke.Update),
 ) {
-  let send_to = process.new_subject()
-  let updates = process.new_subject()
-
-  let connections = process.new_subject()
+  let outgoing = process.new_subject()
+  let receives = process.new_subject()
   let disconnects = process.new_subject()
   let connect = fn() {
-    fake_channel.new(send_to, function.identity, connections, fn() {
-      process.send(disconnects, Nil)
-    })
+    transport.Channel(
+      send: fn(packet) {
+        process.send(outgoing, packet)
+        Ok(Nil)
+      },
+      selecting_next: fn(state) {
+        // We don't test chunking in these tests, should write them separately
+        let assert <<>> = state
+
+        // This subject needs to be created by the client process
+        let incoming = process.new_subject()
+        process.send(receives, incoming)
+
+        process.new_selector()
+        |> process.selecting(incoming, fn(packet) { #(<<>>, Ok([packet])) })
+      },
+      shutdown: fn() { process.send(disconnects, Nil) },
+    )
   }
 
+  let updates = process.new_subject()
   let client = spoke.run(id, keep_alive, server_timeout, connect, updates)
-  #(client, send_to, connections, disconnects, updates)
+  #(client, outgoing, receives, disconnects, updates)
 }

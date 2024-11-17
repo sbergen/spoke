@@ -30,7 +30,6 @@ pub fn main() {
       "test.mosquitto.org",
       1883,
       connect_timeout: 1000,
-      send_timeout: 1000,
     )
 
   let updates = process.new_subject()

@@ -5,66 +5,52 @@ import gleeunit/should
 import spoke/internal/packet/incoming
 import spoke/internal/packet/outgoing
 import spoke/internal/transport/channel.{type EncodedChannel}
-import spoke/transport.{type Receiver}
-import transport/fake_channel
+import spoke/transport
 
 pub fn send_contained_packet_test() {
-  let #(channel, send) = set_up_send()
+  let #(channel, sent) = set_up_send()
   let assert Ok(_) = channel.send(outgoing.PingReq)
-  process.receive(send, 10) |> should.equal(Ok(encode(outgoing.PingReq)))
+  process.receive(sent, 10) |> should.equal(Ok(encode(outgoing.PingReq)))
 }
 
 pub fn receive_contained_packet_test() {
-  let #(receive, raw_receive) = set_up_receive()
+  let #(channel, receive) = set_up_receive()
 
-  process.send(raw_receive, Ok(<<13:4, 0:4, 0:8>>))
-  let assert Ok(Ok(incoming.PingResp)) = process.receive(receive, 10)
+  process.send(receive, <<13:4, 0:4, 0:8>>)
+  let assert #(<<>>, [incoming.PingResp]) = receive_next(channel, <<>>)
 
-  process.send(raw_receive, Ok(<<13:4, 0:4, 0:8>>))
-  let assert Ok(Ok(incoming.PingResp)) = process.receive(receive, 10)
+  process.send(receive, <<13:4, 0:4, 0:8>>)
+  let assert #(<<>>, [incoming.PingResp]) = receive_next(channel, <<>>)
 }
 
 pub fn receive_split_packet_test() {
-  let #(receive, raw_receive) = set_up_receive()
+  let #(channel, receive) = set_up_receive()
 
-  process.send(raw_receive, Ok(<<13:4, 0:4>>))
-  process.send(raw_receive, Ok(<<0:8>>))
+  process.send(receive, <<13:4, 0:4>>)
+  let assert #(state, []) = receive_next(channel, <<>>)
 
-  let assert Ok(Ok(incoming.PingResp)) = process.receive(receive, 10)
-  let assert Error(Nil) = process.receive(receive, 1)
+  process.send(receive, <<0:8>>)
+  let assert #(<<>>, [incoming.PingResp]) = receive_next(channel, state)
 }
 
 pub fn receive_multiple_packets_test() {
-  let #(receive, raw_receive) = set_up_receive()
+  let #(channel, receive) = set_up_receive()
 
   let connack = <<2:4, 0:4, 2:8, 0:16>>
   let pingresp = <<13:4, 0:4, 0:8>>
-  process.send(raw_receive, Ok(<<connack:bits, pingresp:bits>>))
-  let assert Ok(Ok(incoming.ConnAck(_))) = process.receive(receive, 10)
-  let assert Ok(Ok(incoming.PingResp)) = process.receive(receive, 10)
-}
+  process.send(receive, <<connack:bits, pingresp:bits>>)
 
-pub fn receive_multiple_packets_split_test() {
-  let #(receive, raw_receive) = set_up_receive()
-
-  let connack = <<2:4, 0:4, 2:8, 0:16>>
-  let pingresp_start = <<13:4, 0:4>>
-  let pingresp_rest = <<0:8>>
-  process.send(raw_receive, Ok(<<connack:bits, pingresp_start:bits>>))
-  let assert Ok(Ok(incoming.ConnAck(_))) = process.receive(receive, 10)
-
-  process.send(raw_receive, Ok(pingresp_rest))
-  let assert Ok(Ok(incoming.PingResp)) = process.receive(receive, 10)
+  let assert #(<<>>, [incoming.ConnAck(_), incoming.PingResp]) =
+    receive_next(channel, <<>>)
 }
 
 pub fn shutdown_shuts_down_underlying_channel_test() {
   let shutdowns = process.new_subject()
   let channel =
-    fake_channel.new(
-      process.new_subject(),
-      bytes_builder.to_bit_array,
-      process.new_subject(),
-      fn() { process.send(shutdowns, Nil) },
+    transport.Channel(
+      send: fn(_) { panic },
+      selecting_next: fn(_) { panic },
+      shutdown: fn() { process.send(shutdowns, Nil) },
     )
     |> channel.as_encoded
 
@@ -80,36 +66,41 @@ fn encode(packet: outgoing.Packet) -> BitArray {
 }
 
 fn set_up_send() -> #(EncodedChannel, Subject(BitArray)) {
-  let send = process.new_subject()
-  let channel =
-    fake_channel.new(
-      send,
-      bytes_builder.to_bit_array,
-      process.new_subject(),
-      fn() { Nil },
+  let sent = process.new_subject()
+  let raw_channel =
+    transport.Channel(
+      send: fn(builder) {
+        process.send(sent, bytes_builder.to_bit_array(builder))
+        Ok(Nil)
+      },
+      selecting_next: fn(_) { panic },
+      shutdown: fn() { panic },
     )
-    |> channel.as_encoded
 
-  #(channel, send)
+  #(channel.as_encoded(raw_channel), sent)
 }
 
-fn set_up_receive() -> #(
-  Receiver(incoming.Packet),
-  transport.Receiver(BitArray),
-) {
-  let receivers = process.new_subject()
-  let channel =
-    fake_channel.new(
-      process.new_subject(),
-      bytes_builder.to_bit_array,
-      receivers,
-      fn() { Nil },
+fn set_up_receive() -> #(EncodedChannel, Subject(BitArray)) {
+  let receive = process.new_subject()
+  let raw_channel =
+    transport.Channel(
+      send: fn(_) { panic },
+      selecting_next: fn(_) {
+        process.new_selector()
+        |> process.selecting(receive, fn(data) { #(Nil, Ok(data)) })
+      },
+      shutdown: fn() { panic },
     )
-    |> channel.as_encoded
 
-  let receiver = process.new_subject()
-  channel.start_receive(receiver)
-  let assert Ok(raw_eceiver) = process.receive(receivers, 10)
+  let channel = channel.as_encoded(raw_channel)
+  #(channel, receive)
+}
 
-  #(receiver, raw_eceiver)
+fn receive_next(
+  channel: EncodedChannel,
+  state: BitArray,
+) -> #(BitArray, List(incoming.Packet)) {
+  let assert Ok(#(state, Ok(packets))) =
+    process.select(channel.selecting_next(state), 100)
+  #(state, packets)
 }
