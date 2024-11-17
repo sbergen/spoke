@@ -6,7 +6,6 @@ import gleam/option.{None}
 import gleam/otp/actor
 import gleam/string
 import spoke.{type ConnectError, type QoS, type SubscribeRequest}
-import spoke/internal/interval
 import spoke/internal/packet
 import spoke/internal/packet/incoming.{type SubscribeResult}
 import spoke/internal/packet/outgoing
@@ -58,7 +57,6 @@ pub fn start(
     connect_opts.client_id,
     connect_opts.keep_alive * 1000,
     fn() { create_channel(transport_opts) },
-    interval.start,
     updates,
   )
 }
@@ -94,17 +92,15 @@ pub fn subscribe(
 
 // Internal for testability:
 // * EncodedChannel avoids having to encode packets we don't need to otherwise encode
-// * start_ping: allows simulating time
 // * keep_alive: allow sub-second keep-alive for faster tests
 @internal
 pub fn run(
   client_id: String,
   keep_alive: Int,
   connect: fn() -> EncodedChannel,
-  start_ping: fn(interval.Action, Int) -> interval.Reset,
   updates: Subject(Update),
 ) -> Client {
-  let config = Config(client_id, keep_alive, connect, start_ping)
+  let config = Config(client_id, keep_alive, connect)
   let assert Ok(client) =
     actor.start_spec(actor.Spec(fn() { init(config, updates) }, 100, run_client))
   Client(client)
@@ -120,12 +116,7 @@ fn create_channel(options: TransportOptions) -> EncodedChannel {
 }
 
 type Config {
-  Config(
-    client_id: String,
-    keep_alive: Int,
-    connect: fn() -> EncodedChannel,
-    start_ping: fn(interval.Action, Int) -> interval.Reset,
-  )
+  Config(client_id: String, keep_alive: Int, connect: fn() -> EncodedChannel)
 }
 
 type ClientState {
@@ -150,7 +141,7 @@ type ClientMsg {
 type ConnectionState {
   Disconnected
   ConnectingToServer(EncodedChannel, Subject(Result(Bool, ConnectError)))
-  Connected(EncodedChannel, interval.Reset)
+  Connected(channel: EncodedChannel, ping_timer: process.Timer)
 }
 
 type PendingSubscription {
@@ -253,21 +244,11 @@ fn handle_connack(
   state: ClientState,
   status: Result(Bool, spoke.ConnectError),
 ) -> actor.Next(ClientMsg, ClientState) {
-  let assert ConnectingToServer(connection, reply_to) = state.conn_state
+  let assert ConnectingToServer(_, reply_to) = state.conn_state
   process.send(reply_to, status)
 
   case status {
-    Ok(_) -> {
-      let pings =
-        state.config.start_ping(
-          fn() { process.send(state.self, Ping) },
-          state.config.keep_alive,
-        )
-      actor.continue(
-        ClientState(..state, conn_state: Connected(connection, pings)),
-      )
-    }
-
+    Ok(_) -> actor.continue(start_ping_timeout(state))
     _ -> todo as "Should disconnect"
   }
 }
@@ -325,7 +306,12 @@ fn handle_ping(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
 
 fn handle_pingresp(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
   // TODO: Cancel disconnect
-  actor.continue(state)
+  actor.continue(start_ping_timeout(state))
+}
+
+fn start_ping_timeout(state: ClientState) -> ClientState {
+  let ping = process.send_after(state.self, state.config.keep_alive, Ping)
+  ClientState(..state, conn_state: Connected(get_channel(state), ping))
 }
 
 fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {
@@ -348,6 +334,7 @@ fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {
 // will not be processed if the Server rejects the connection.
 fn get_channel(state: ClientState) {
   case state.conn_state {
+    ConnectingToServer(channel, _) -> channel
     Connected(channel, _) -> channel
     _ -> todo as "Not fully connected, handle better"
   }
