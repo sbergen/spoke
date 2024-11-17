@@ -13,7 +13,7 @@ pub type Packet {
   PubRel
   PubComp
   SubAck(packet_id: Int, return_codes: List(SubscribeResult))
-  UsubAck
+  UnsubAck
 }
 
 pub type ConnectError {

@@ -295,37 +295,24 @@ fn handle_receive(
     process.send(state.self, ProcessReceived(packet))
   }
 
-  case state.conn_state {
-    Connected(channel, _, _) | ConnectingToServer(channel, _) ->
-      actor.with_selector(
-        actor.continue(state),
-        next_selector(channel, new_conn_state, state.self),
-      )
-    NotConnected -> actor.continue(state)
-  }
+  use channel <- if_connected(state)
+  actor.with_selector(
+    actor.continue(state),
+    next_selector(channel, new_conn_state, state.self),
+  )
 }
 
 fn process_packet(
   state: ClientState,
   packet: incoming.Packet,
 ) -> actor.Next(ClientMsg, ClientState) {
-  use <- if_connected(state)
+  use _ <- if_connected(state)
   case packet {
     incoming.ConnAck(status) -> handle_connack(state, status)
     incoming.SubAck(id, results) -> handle_suback(state, id, results)
     incoming.Publish(data) -> handle_incoming_publish(state, data)
     incoming.PingResp -> handle_pingresp(state)
     _ -> todo as "Packet type not handled"
-  }
-}
-
-fn if_connected(
-  state: ClientState,
-  do: fn() -> actor.Next(ClientMsg, ClientState),
-) -> actor.Next(ClientMsg, ClientState) {
-  case state.conn_state {
-    NotConnected -> actor.continue(state)
-    _ -> do()
   }
 }
 
@@ -481,25 +468,14 @@ fn send_packet(
   case state.conn_state {
     ConnectingToServer(channel, _) -> {
       // Don't start ping if connection has not yet finished
-      case channel.send(packet) {
-        Ok(_) -> Ok(state)
-        Error(e) -> Error(e)
-      }
+      use _ <- result.try(channel.send(packet))
+      Ok(state)
     }
     Connected(channel, ping, disconnect) -> {
-      case channel.send(packet) {
-        Ok(_) -> {
-          process.cancel_timer(ping)
-          let ping = start_ping_timeout(state)
-          Ok(
-            ClientState(
-              ..state,
-              conn_state: Connected(channel, ping, disconnect),
-            ),
-          )
-        }
-        Error(e) -> Error(e)
-      }
+      use _ <- result.try(channel.send(packet))
+      process.cancel_timer(ping)
+      let ping = start_ping_timeout(state)
+      Ok(ClientState(..state, conn_state: Connected(channel, ping, disconnect)))
     }
     _ ->
       panic as {
@@ -517,6 +493,16 @@ fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {
   let id = state.packet_id
   let state = ClientState(..state, packet_id: id + 1)
   #(state, id)
+}
+
+fn if_connected(
+  state: ClientState,
+  do: fn(channel.EncodedChannel) -> actor.Next(ClientMsg, ClientState),
+) -> actor.Next(ClientMsg, ClientState) {
+  case state.conn_state {
+    NotConnected -> actor.continue(state)
+    Connected(channel, _, _) | ConnectingToServer(channel, _) -> do(channel)
+  }
 }
 
 // The below conversion are _mostly_ required because we can't re-export constructors
