@@ -2,7 +2,7 @@ import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/function
 import gleam/list
-import gleam/option.{None}
+import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/string
 import spoke.{type ConnectError, type QoS, type SubscribeRequest}
@@ -23,12 +23,16 @@ pub type ConnectOptions {
   ConnectOptions(
     client_id: String,
     /// Keep-alive interval in seconds (MQTT spec doesn't allow more granular control)
-    keep_alive: Int,
+    keep_alive_seconds: Int,
+    /// "Reasonable amount of time" for the server to respond (including network latency),
+    /// as used in the MQTT specification.
+    server_timeout_ms: Int,
   )
 }
 
 pub type Update {
   ReceivedMessage(topic: String, payload: BitArray, retained: Bool)
+  Disconnected
 }
 
 pub type PublishData {
@@ -57,7 +61,8 @@ pub fn start(
 ) -> Client {
   run(
     connect_opts.client_id,
-    connect_opts.keep_alive * 1000,
+    connect_opts.keep_alive_seconds * 1000,
+    connect_opts.server_timeout_ms,
     fn() { create_channel(transport_opts) },
     updates,
   )
@@ -68,6 +73,10 @@ pub fn connect(
   timeout timeout: Int,
 ) -> Result(Bool, ConnectError) {
   process.call(client.subject, Connect(_), timeout)
+}
+
+pub fn disconnect(client: Client) {
+  process.send(client.subject, Disconnect)
 }
 
 pub fn publish(
@@ -98,11 +107,12 @@ pub fn subscribe(
 @internal
 pub fn run(
   client_id: String,
-  keep_alive: Int,
+  keep_alive_ms: Int,
+  server_timeout_ms: Int,
   connect: fn() -> EncodedChannel,
   updates: Subject(Update),
 ) -> Client {
-  let config = Config(client_id, keep_alive, connect)
+  let config = Config(client_id, keep_alive_ms, server_timeout_ms, connect)
   let assert Ok(client) =
     actor.start_spec(actor.Spec(fn() { init(config, updates) }, 100, run_client))
   Client(client)
@@ -118,7 +128,12 @@ fn create_channel(options: TransportOptions) -> EncodedChannel {
 }
 
 type Config {
-  Config(client_id: String, keep_alive: Int, connect: fn() -> EncodedChannel)
+  Config(
+    client_id: String,
+    keep_alive: Int,
+    server_timeout: Int,
+    connect: fn() -> EncodedChannel,
+  )
 }
 
 type ClientState {
@@ -138,12 +153,18 @@ type ClientMsg {
   Subscribe(List(SubscribeRequest), Subject(List(Subscription)))
   Received(ChannelResult(incoming.Packet))
   Ping
+  // TODO: Add disconnect reason
+  Disconnect
 }
 
 type ConnectionState {
-  Disconnected
+  NotConnected
   ConnectingToServer(EncodedChannel, Subject(Result(Bool, ConnectError)))
-  Connected(channel: EncodedChannel, ping_timer: process.Timer)
+  Connected(
+    channel: EncodedChannel,
+    ping_timer: process.Timer,
+    disconnect_timer: Option(process.Timer),
+  )
 }
 
 type PendingSubscription {
@@ -159,7 +180,7 @@ fn init(
 ) -> actor.InitResult(ClientState, ClientMsg) {
   let self = process.new_subject()
 
-  let state = ClientState(self, config, updates, Disconnected, 1, dict.new())
+  let state = ClientState(self, config, updates, NotConnected, 1, dict.new())
 
   let selector =
     process.new_selector()
@@ -177,7 +198,8 @@ fn run_client(
     Received(r) -> handle_receive(state, r)
     Publish(data, reply_to) -> handle_outgoing_publish(state, data, reply_to)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
-    Ping -> handle_ping(state)
+    Ping -> send_ping(state)
+    Disconnect -> handle_disconnect(state)
   }
 }
 
@@ -185,7 +207,7 @@ fn handle_connect(
   state: ClientState,
   reply_to: Subject(Result(Bool, ConnectError)),
 ) -> actor.Next(ClientMsg, ClientState) {
-  let assert Disconnected = state.conn_state
+  let assert NotConnected = state.conn_state
   let channel = state.config.connect()
 
   let receives = process.new_subject()
@@ -257,7 +279,7 @@ fn handle_connack(
 
   case status {
     Ok(_session_present) -> {
-      let conn_state = Connected(channel, start_ping_timeout(state))
+      let conn_state = Connected(channel, start_ping_timeout(state), None)
       actor.continue(ClientState(..state, conn_state: conn_state))
     }
     _ -> todo as "Should disconnect"
@@ -309,15 +331,60 @@ fn handle_incoming_publish(
   actor.continue(state)
 }
 
-fn handle_ping(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
-  let assert Ok(_) = send_packet(state, outgoing.PingReq)
-  // TODO: Disconnect at some point?
-  actor.continue(state)
+fn send_ping(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
+  case state.conn_state {
+    // There can be some race conditions here, especially with our test values
+    // Just ignore the ping if we are disconnected
+    NotConnected -> actor.continue(state)
+    ConnectingToServer(_, _) -> actor.continue(state)
+    // TODO                  v this should be None
+    Connected(channel, ping, _) -> {
+      let assert process.TimerNotFound = process.cancel_timer(ping)
+      let assert Ok(state) = send_packet(state, outgoing.PingReq)
+      let disconnect =
+        process.send_after(state.self, state.config.server_timeout, Disconnect)
+      actor.continue(
+        ClientState(
+          ..state,
+          conn_state: Connected(channel, ping, Some(disconnect)),
+        ),
+      )
+    }
+  }
 }
 
 fn handle_pingresp(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
-  // TODO: Cancel disconnect
-  actor.continue(state)
+  let assert Connected(channel, ping, Some(disconnect)) = state.conn_state
+  process.cancel_timer(disconnect)
+  actor.continue(
+    ClientState(..state, conn_state: Connected(channel, ping, None)),
+  )
+}
+
+fn handle_disconnect(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
+  case state.conn_state {
+    ConnectingToServer(channel, reply_to) -> {
+      channel.shutdown()
+      process.send(reply_to, Error(spoke.DisconnectRequested))
+    }
+    Connected(channel, ping, disconnect) -> {
+      process.cancel_timer(ping)
+
+      // Play it safe:
+      case disconnect {
+        Some(disconnect) -> process.cancel_timer(disconnect)
+        None -> process.TimerNotFound
+      }
+
+      // TODO: other things to reset?
+
+      channel.shutdown()
+    }
+    NotConnected -> Nil
+  }
+
+  process.send(state.updates, Disconnected)
+  actor.continue(ClientState(..state, conn_state: NotConnected))
 }
 
 // Clients are allowed to send further Control Packets immediately after sending a CONNECT Packet;
@@ -342,17 +409,26 @@ fn send_packet(
         Error(e) -> Error(e)
       }
     }
-    Connected(channel, ping) -> {
+    Connected(channel, ping, disconnect) -> {
       case channel.send(packet) {
         Ok(_) -> {
           process.cancel_timer(ping)
           let ping = start_ping_timeout(state)
-          Ok(ClientState(..state, conn_state: Connected(channel, ping)))
+          Ok(
+            ClientState(
+              ..state,
+              conn_state: Connected(channel, ping, disconnect),
+            ),
+          )
         }
         Error(e) -> Error(e)
       }
     }
-    _ -> panic as "Not connecting or connected when trying to send packet"
+    _ ->
+      panic as {
+        "Not connecting or connected when trying to send packet: "
+        <> string.inspect(packet)
+      }
   }
 }
 

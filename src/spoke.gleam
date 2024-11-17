@@ -20,6 +20,9 @@ pub type ConnectError {
   ServerUnavailable
   BadUsernameOrPassword
   NotAuthorized
+
+  // TODO: This is in addition to the MQTT ones, so this can be split
+  DisconnectRequested
 }
 
 pub type SubscribeRequest {

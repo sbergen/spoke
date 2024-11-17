@@ -2,7 +2,7 @@ import gleam/bytes_builder.{type BytesBuilder}
 import gleam/erlang/process.{type Subject}
 
 /// General abstraction over a data channel
-/// User internally for e.g. chunking and encoding/decoding
+/// Used internally for e.g. chunking and encoding/decoding
 /// Note: only one call to start_receive is supported at the moment!
 pub type Channel(s, r) {
   Channel(

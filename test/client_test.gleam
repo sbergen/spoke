@@ -16,7 +16,8 @@ const id = "client-id"
 
 pub fn connect_success_test() {
   let keep_alive_s = 15
-  let #(client, sent_packets, connections, _) = set_up(keep_alive_s * 1000)
+  let #(client, sent_packets, connections, _, _) =
+    set_up(keep_alive_s * 1000, server_timeout: 100)
 
   let connect_task = task.async(fn() { client.connect(client, 10) })
 
@@ -31,11 +32,13 @@ pub fn connect_success_test() {
   process.send(server_out, Ok(incoming.ConnAck(Ok(False))))
 
   let assert Ok(Ok(False)) = task.try_await(connect_task, 10)
+
+  client.disconnect(client)
 }
 
 pub fn subscribe_success_test() {
-  let #(client, sent_packets, server_out, _updates) =
-    set_up_connected(keep_alive: 1000)
+  let #(client, sent_packets, server_out, _, _) =
+    set_up_connected(keep_alive: 1000, server_timeout: 100)
 
   let topics = [
     spoke.SubscribeRequest("topic0", QoS0),
@@ -59,10 +62,13 @@ pub fn subscribe_success_test() {
     client.SuccessfulSubscription("topic0", QoS0),
     client.SuccessfulSubscription("topic1", QoS1),
   ])
+
+  client.disconnect(client)
 }
 
 pub fn receive_message_test() {
-  let #(_, _, server_out, updates) = set_up_connected(keep_alive: 1000)
+  let #(client, _, server_out, _, updates) =
+    set_up_connected(keep_alive: 1000, server_timeout: 100)
 
   let data =
     packet.PublishData(
@@ -76,10 +82,13 @@ pub fn receive_message_test() {
   process.send(server_out, Ok(incoming.Publish(data)))
 
   let assert Ok(client.ReceivedMessage(_, _, _)) = process.receive(updates, 10)
+
+  client.disconnect(client)
 }
 
 pub fn publish_message_test() {
-  let #(client, sent_packets, _, _) = set_up_connected(keep_alive: 1000)
+  let #(client, sent_packets, _, _, _) =
+    set_up_connected(keep_alive: 1000, server_timeout: 100)
 
   let data = client.PublishData("topic", <<"payload">>, QoS0, False)
   let assert Ok(_) = client.publish(client, data, 10)
@@ -94,24 +103,34 @@ pub fn publish_message_test() {
     False,
     None,
   ))
+
+  client.disconnect(client)
 }
 
 // The ping tests might be a bit flaky, as we are dealing with time.
 // I couldn't find any easy way to fake time,
 // and faking an interval became overly complicated.
 
+// Note that keep_alive, has to be significantly longer than server_timeout,
+// otherwise things get really racy.
+// TODO: Add validation of user-passed arguments to these
+
 pub fn pings_are_sent_when_no_other_activity_test() {
-  let #(_, sent_packets, server_out, _) = set_up_connected(keep_alive: 2)
+  let #(client, sent_packets, server_out, _, _) =
+    set_up_connected(keep_alive: 4, server_timeout: 2)
 
-  let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 4)
+  let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
   process.send(server_out, Ok(incoming.PingResp))
 
-  let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 4)
+  let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
   process.send(server_out, Ok(incoming.PingResp))
+
+  client.disconnect(client)
 }
 
 pub fn pings_are_not_sent_when_has_other_activity_test() {
-  let #(client, sent_packets, _, _) = set_up_connected(keep_alive: 4)
+  let #(client, sent_packets, _, _, _) =
+    set_up_connected(keep_alive: 4, server_timeout: 100)
 
   let publish_data = client.PublishData("topic", <<>>, QoS0, False)
 
@@ -128,17 +147,31 @@ pub fn pings_are_not_sent_when_has_other_activity_test() {
   // The ping should be delayed
   let assert Error(_) = process.receive(sent_packets, 2)
   let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 4)
+
+  client.disconnect(client)
+}
+
+pub fn connection_is_shut_down_if_no_pingresp_within_server_timeout_test() {
+  let #(_, sent_packets, _, disconnects, updates) =
+    set_up_connected(keep_alive: 4, server_timeout: 1)
+
+  let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
+  let assert Ok(Nil) = process.receive(disconnects, 3)
+  let assert Ok(client.Disconnected) = process.receive(updates, 1)
 }
 
 fn set_up_connected(
   keep_alive keep_alive: Int,
+  server_timeout server_timeout: Int,
 ) -> #(
   Client,
   Subject(outgoing.Packet),
   Receiver(incoming.Packet),
+  Subject(Nil),
   Subject(client.Update),
 ) {
-  let #(client, sent_packets, connections, updates) = set_up(keep_alive)
+  let #(client, sent_packets, connections, disconnects, updates) =
+    set_up(keep_alive, server_timeout)
   let connect_task = task.async(fn() { client.connect(client, 10) })
 
   let assert Ok(server_out) = process.receive(connections, 10)
@@ -146,25 +179,30 @@ fn set_up_connected(
   process.send(server_out, Ok(incoming.ConnAck(Ok(False))))
 
   let assert Ok(Ok(_)) = task.try_await(connect_task, 10)
-  #(client, sent_packets, server_out, updates)
+  #(client, sent_packets, server_out, disconnects, updates)
 }
 
 fn set_up(
   keep_alive keep_alive: Int,
+  server_timeout server_timeout: Int,
 ) -> #(
   Client,
   Subject(outgoing.Packet),
   Subject(Receiver(incoming.Packet)),
+  Subject(Nil),
   Subject(client.Update),
 ) {
   let send_to = process.new_subject()
-  let connections = process.new_subject()
-  let client_receives = process.new_subject()
+  let updates = process.new_subject()
 
+  let connections = process.new_subject()
+  let disconnects = process.new_subject()
   let connect = fn() {
-    fake_channel.new(send_to, function.identity, connections, fn() { todo })
+    fake_channel.new(send_to, function.identity, connections, fn() {
+      process.send(disconnects, Nil)
+    })
   }
 
-  let client = client.run(id, keep_alive, connect, client_receives)
-  #(client, send_to, connections, client_receives)
+  let client = client.run(id, keep_alive, server_timeout, connect, updates)
+  #(client, send_to, connections, disconnects, updates)
 }

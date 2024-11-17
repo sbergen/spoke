@@ -6,7 +6,7 @@ written in Gleam.
 You should probably not yet use it for anything important,
 but feel free to try it out, and give feedback on anything!
 
-Exmple usage:
+Example usage:
 ```gleam
 import gleam/erlang/process
 import gleam/int
@@ -55,21 +55,19 @@ Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 Here's an overview of what MQTT features are implemented.
 In summary, only QoS 0 over TCP with permanent subscriptions
 is currently supported.
-Pings are currently partially handled
-("should close the network connection" not implemented).
 
 ### MQTT features
 - [x] Connect
   - [ ] Auth
 - [x] Subscribe
 - [ ] Unsubscribe
-- [ ] Pings (keep alive)
+- [x] Pings (keep alive)
 - [x] Receive messages
 - [x] Send messages
-- [ ] Session management & reconnects
 - [x] QoS 0
 - [ ] QoS 1
 - [ ] QoS 2
+- [ ] Session management & reconnects (only required for QoS > 0?)
 - [ ] Will
 
 ### Transport
