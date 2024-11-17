@@ -11,7 +11,9 @@ import spoke/internal/packet/incoming.{type SubscribeResult}
 import spoke/internal/packet/outgoing
 import spoke/internal/transport/channel.{type EncodedChannel}
 import spoke/internal/transport/tcp
-import spoke/transport.{type ChannelResult, type TransportOptions}
+import spoke/transport.{
+  type ChannelError, type ChannelResult, type TransportOptions,
+}
 
 pub opaque type Client {
   Client(subject: Subject(ClientMsg))
@@ -193,14 +195,15 @@ fn handle_connect(
     |> process.selecting(receives, Received(_))
   channel.start_receive(receives)
 
+  let state =
+    ClientState(..state, conn_state: ConnectingToServer(channel, reply_to))
+
   let config = state.config
   let connect_packet =
     outgoing.Connect(config.client_id, config.keep_alive / 1000)
-  let assert Ok(_) = channel.send(connect_packet)
+  let assert Ok(state) = send_packet(state, connect_packet)
 
-  let new_state =
-    ClientState(..state, conn_state: ConnectingToServer(channel, reply_to))
-  actor.with_selector(actor.continue(new_state), new_selector)
+  actor.with_selector(actor.continue(state), new_selector)
 }
 
 fn handle_outgoing_publish(
@@ -217,12 +220,16 @@ fn handle_outgoing_publish(
       retain: data.retain,
       packet_id: None,
     ))
-  let result = case get_channel(state).send(packet) {
-    Ok(_) -> Ok(Nil)
-    Error(e) -> Error(PublishError(string.inspect(e)))
+  case send_packet(state, packet) {
+    Ok(new_state) -> {
+      process.send(reply_to, Ok(Nil))
+      actor.continue(new_state)
+    }
+    Error(e) -> {
+      process.send(reply_to, Error(PublishError(string.inspect(e))))
+      actor.continue(state)
+    }
   }
-  process.send(reply_to, result)
-  actor.continue(state)
 }
 
 fn handle_receive(
@@ -244,11 +251,15 @@ fn handle_connack(
   state: ClientState,
   status: Result(Bool, spoke.ConnectError),
 ) -> actor.Next(ClientMsg, ClientState) {
-  let assert ConnectingToServer(_, reply_to) = state.conn_state
+  let assert ConnectingToServer(channel, reply_to) = state.conn_state
+
   process.send(reply_to, status)
 
   case status {
-    Ok(_) -> actor.continue(start_ping_timeout(state))
+    Ok(_session_present) -> {
+      let conn_state = Connected(channel, start_ping_timeout(state))
+      actor.continue(ClientState(..state, conn_state: conn_state))
+    }
     _ -> todo as "Should disconnect"
   }
 }
@@ -282,11 +293,11 @@ fn handle_subscribe(
 ) -> actor.Next(ClientMsg, ClientState) {
   let #(state, id) = reserve_packet_id(state)
   let pending_sub = PendingSubscription(topics, reply_to)
-  let pendietsubs = state.pending_subs |> dict.insert(id, pending_sub)
+  let pending_subs = state.pending_subs |> dict.insert(id, pending_sub)
 
-  let assert Ok(_) = get_channel(state).send(outgoing.Subscribe(id, topics))
+  let assert Ok(_) = send_packet(state, outgoing.Subscribe(id, topics))
 
-  actor.continue(ClientState(..state, pending_subs: pendietsubs))
+  actor.continue(ClientState(..state, pending_subs: pending_subs))
 }
 
 fn handle_incoming_publish(
@@ -299,29 +310,16 @@ fn handle_incoming_publish(
 }
 
 fn handle_ping(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
-  let assert Ok(_) = get_channel(state).send(outgoing.PingReq)
+  let assert Ok(_) = send_packet(state, outgoing.PingReq)
   // TODO: Disconnect at some point?
   actor.continue(state)
 }
 
 fn handle_pingresp(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
   // TODO: Cancel disconnect
-  actor.continue(start_ping_timeout(state))
+  actor.continue(state)
 }
 
-fn start_ping_timeout(state: ClientState) -> ClientState {
-  let ping = process.send_after(state.self, state.config.keep_alive, Ping)
-  ClientState(..state, conn_state: Connected(get_channel(state), ping))
-}
-
-fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {
-  let id = state.packet_id
-  let state = ClientState(..state, packet_id: id + 1)
-  #(state, id)
-}
-
-// TODO: This should do some kind of error handling
-// From specs, not sure what to do with this yet:
 // Clients are allowed to send further Control Packets immediately after sending a CONNECT Packet;
 // Clients need not wait for a CONNACK Packet to arrive from the Server.
 // If the Server rejects the CONNECT, it MUST NOT process any data sent by the Client after the CONNECT Packet
@@ -332,10 +330,38 @@ fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {
 // it might simplify the Client implementation as it does not have to police the connected state.
 // The Client accepts that any data that it sends before it receives a CONNACK packet from the Server
 // will not be processed if the Server rejects the connection.
-fn get_channel(state: ClientState) {
+fn send_packet(
+  state: ClientState,
+  packet: outgoing.Packet,
+) -> Result(ClientState, ChannelError) {
   case state.conn_state {
-    ConnectingToServer(channel, _) -> channel
-    Connected(channel, _) -> channel
-    _ -> todo as "Not fully connected, handle better"
+    ConnectingToServer(channel, _) -> {
+      // Don't start ping if connection has not yet finished
+      case channel.send(packet) {
+        Ok(_) -> Ok(state)
+        Error(e) -> Error(e)
+      }
+    }
+    Connected(channel, ping) -> {
+      case channel.send(packet) {
+        Ok(_) -> {
+          process.cancel_timer(ping)
+          let ping = start_ping_timeout(state)
+          Ok(ClientState(..state, conn_state: Connected(channel, ping)))
+        }
+        Error(e) -> Error(e)
+      }
+    }
+    _ -> panic as "Not connecting or connected when trying to send packet"
   }
+}
+
+fn start_ping_timeout(state: ClientState) -> process.Timer {
+  process.send_after(state.self, state.config.keep_alive, Ping)
+}
+
+fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {
+  let id = state.packet_id
+  let state = ClientState(..state, packet_id: id + 1)
+  #(state, id)
 }

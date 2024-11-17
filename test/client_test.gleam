@@ -96,6 +96,10 @@ pub fn publish_message_test() {
   ))
 }
 
+// The ping tests might be a bit flaky, as we are dealing with time.
+// I couldn't find any easy way to fake time,
+// and faking an interval became overly complicated.
+
 pub fn pings_are_sent_when_no_other_activity_test() {
   let #(_, sent_packets, server_out, _) = set_up_connected(keep_alive: 2)
 
@@ -104,6 +108,26 @@ pub fn pings_are_sent_when_no_other_activity_test() {
 
   let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 4)
   process.send(server_out, Ok(incoming.PingResp))
+}
+
+pub fn pings_are_not_sent_when_has_other_activity_test() {
+  let #(client, sent_packets, _, _) = set_up_connected(keep_alive: 4)
+
+  let publish_data = client.PublishData("topic", <<>>, QoS0, False)
+
+  // Send data at intevals less than the keep-alive
+  let assert Ok(_) = client.publish(client, publish_data, 10)
+  let assert Ok(outgoing.Publish(_)) = process.receive(sent_packets, 10)
+  process.sleep(2)
+  let assert Ok(_) = client.publish(client, publish_data, 10)
+  let assert Ok(outgoing.Publish(_)) = process.receive(sent_packets, 10)
+  process.sleep(2)
+  let assert Ok(_) = client.publish(client, publish_data, 10)
+  let assert Ok(outgoing.Publish(_)) = process.receive(sent_packets, 10)
+
+  // The ping should be delayed
+  let assert Error(_) = process.receive(sent_packets, 2)
+  let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 4)
 }
 
 fn set_up_connected(
