@@ -11,15 +11,14 @@ pub type EncodedChannel =
   transport.Channel(outgoing.Packet, incoming.Packet)
 
 pub fn as_encoded(channel: transport.ByteChannel) -> EncodedChannel {
+  let assert Ok(chunker) = actor.start(NotReceiving(channel), run_chunker)
+
   transport.Channel(
     send: send(channel, _),
     start_receive: fn(receiver) {
-      let assert Ok(chunker) =
-        actor.start(ChunkerState(receiver, <<>>), run_chunker)
-      channel.start_receive(chunker)
+      process.send(chunker, StartReceive(receiver))
     },
-    // TODO: This should shut down the actor
-    shutdown: fn() { todo },
+    shutdown: fn() { process.send(chunker, ShutDown) },
   )
 }
 
@@ -34,24 +33,68 @@ fn send(
 }
 
 type ChunkerState {
-  ChunkerState(receiver: Receiver(incoming.Packet), leftover: BitArray)
+  NotReceiving(channel: transport.ByteChannel)
+  Receiving(
+    channel: transport.ByteChannel,
+    receiver: Receiver(incoming.Packet),
+    leftover: BitArray,
+  )
+}
+
+type ChunkerMsg {
+  StartReceive(transport.Receiver(incoming.Packet))
+  IncomingData(ChannelResult(BitArray))
+  ShutDown
 }
 
 fn run_chunker(
+  msg: ChunkerMsg,
+  state: ChunkerState,
+) -> actor.Next(ChunkerMsg, ChunkerState) {
+  case msg {
+    IncomingData(data) -> chunk_data(data, state)
+    ShutDown -> {
+      let channel = case state {
+        NotReceiving(channel) -> channel
+        Receiving(channel, _, _) -> channel
+      }
+      channel.shutdown()
+      actor.Stop(process.Normal)
+    }
+    StartReceive(receiver) -> {
+      let assert NotReceiving(channel) = state
+      let incoming = process.new_subject()
+      channel.start_receive(incoming)
+
+      let selector =
+        process.new_selector()
+        |> process.selecting(incoming, IncomingData)
+
+      actor.with_selector(
+        actor.continue(Receiving(channel, receiver, <<>>)),
+        selector,
+      )
+    }
+  }
+}
+
+fn chunk_data(
   data: ChannelResult(BitArray),
   state: ChunkerState,
-) -> actor.Next(ChannelResult(BitArray), ChunkerState) {
+) -> actor.Next(ChunkerMsg, ChunkerState) {
+  let assert Receiving(channel, receiver, leftover) = state
+
   case data {
     Error(e) -> {
       actor.Stop(process.Abnormal(string.inspect(e)))
     }
 
     Ok(data) -> {
-      let all_data = bit_array.concat([state.leftover, data])
-      case decode_all(state.receiver, all_data) {
-        Ok(rest) -> actor.continue(ChunkerState(..state, leftover: rest))
+      let all_data = bit_array.concat([leftover, data])
+      case decode_all(receiver, all_data) {
+        Ok(rest) -> actor.continue(Receiving(channel, receiver, leftover: rest))
         Error(e) -> {
-          process.send(state.receiver, Error(e))
+          process.send(receiver, Error(e))
           actor.Stop(process.Abnormal(string.inspect(e)))
         }
       }

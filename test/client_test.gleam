@@ -162,7 +162,7 @@ fn set_up(
   let client_receives = process.new_subject()
 
   let connect = fn() {
-    fake_channel.new(send_to, function.identity, connections)
+    fake_channel.new(send_to, function.identity, connections, fn() { todo })
   }
 
   let client = client.run(id, keep_alive, connect, client_receives)

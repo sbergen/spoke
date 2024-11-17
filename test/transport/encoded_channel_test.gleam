@@ -57,6 +57,21 @@ pub fn receive_multiple_packets_split_test() {
   let assert Ok(Ok(incoming.PingResp)) = process.receive(receive, 10)
 }
 
+pub fn shutdown_shuts_down_underlying_channel_test() {
+  let shutdowns = process.new_subject()
+  let channel =
+    fake_channel.new(
+      process.new_subject(),
+      bytes_builder.to_bit_array,
+      process.new_subject(),
+      fn() { process.send(shutdowns, Nil) },
+    )
+    |> channel.as_encoded
+
+  channel.shutdown()
+  let assert Ok(Nil) = process.receive(shutdowns, 10)
+}
+
 fn encode(packet: outgoing.Packet) -> BitArray {
   let assert Ok(bits) =
     outgoing.encode_packet(packet)
@@ -67,8 +82,14 @@ fn encode(packet: outgoing.Packet) -> BitArray {
 fn set_up_send() -> #(EncodedChannel, Subject(BitArray)) {
   let send = process.new_subject()
   let channel =
-    fake_channel.new(send, bytes_builder.to_bit_array, process.new_subject())
-  let channel = channel.as_encoded(channel)
+    fake_channel.new(
+      send,
+      bytes_builder.to_bit_array,
+      process.new_subject(),
+      fn() { Nil },
+    )
+    |> channel.as_encoded
+
   #(channel, send)
 }
 
@@ -82,8 +103,9 @@ fn set_up_receive() -> #(
       process.new_subject(),
       bytes_builder.to_bit_array,
       receivers,
+      fn() { Nil },
     )
-  let channel = channel.as_encoded(channel)
+    |> channel.as_encoded
 
   let receiver = process.new_subject()
   channel.start_receive(receiver)

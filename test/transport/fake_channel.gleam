@@ -5,10 +5,11 @@ pub fn new(
   send: Subject(out),
   map_send: fn(s) -> out,
   receivers: Subject(Receiver(r)),
+  on_shutdown: fn() -> Nil,
 ) -> Channel(s, r) {
   transport.Channel(
     send: fn(data) { Ok(process.send(send, map_send(data))) },
     start_receive: fn(receiver) { process.send(receivers, receiver) },
-    shutdown: fn() { todo },
+    shutdown: on_shutdown,
   )
 }
