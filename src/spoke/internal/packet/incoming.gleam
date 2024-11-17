@@ -1,8 +1,7 @@
 import gleam/list
 import gleam/option.{None}
 import gleam/result.{try}
-import spoke.{type ConnectError, type QoS, QoS0, QoS1, QoS2}
-import spoke/internal/packet.{type PublishData}
+import spoke/internal/packet.{type PublishData, type QoS, QoS0, QoS1, QoS2}
 import spoke/internal/packet/decode.{type DecodeError}
 
 pub type Packet {
@@ -15,6 +14,14 @@ pub type Packet {
   PubComp
   SubAck(packet_id: Int, return_codes: List(SubscribeResult))
   UsubAck
+}
+
+pub type ConnectError {
+  UnacceptableProtocolVersion
+  IdentifierRefused
+  ServerUnavailable
+  BadUsernameOrPassword
+  NotAuthorized
 }
 
 pub type SubscribeResult {
@@ -121,11 +128,11 @@ fn decode_connack_code(
 ) -> Result(Result(Bool, ConnectError), DecodeError) {
   case code {
     0 -> Ok(Ok(session_present == 1))
-    1 -> Ok(Error(spoke.UnacceptableProtocolVersion))
-    2 -> Ok(Error(spoke.IdentifierRefused))
-    3 -> Ok(Error(spoke.ServerUnavailable))
-    4 -> Ok(Error(spoke.BadUsernameOrPassword))
-    5 -> Ok(Error(spoke.NotAuthorized))
+    1 -> Ok(Error(UnacceptableProtocolVersion))
+    2 -> Ok(Error(IdentifierRefused))
+    3 -> Ok(Error(ServerUnavailable))
+    4 -> Ok(Error(BadUsernameOrPassword))
+    5 -> Ok(Error(NotAuthorized))
     _ -> Error(decode.InvalidConnAckReturnCode)
   }
 }
@@ -156,9 +163,9 @@ fn decode_suback_return(val: Int) -> Result(SubscribeResult, DecodeError) {
 
 fn decode_qos(val: Int) -> Result(QoS, DecodeError) {
   case val {
-    0 -> Ok(spoke.QoS0)
-    1 -> Ok(spoke.QoS1)
-    2 -> Ok(spoke.QoS2)
+    0 -> Ok(QoS0)
+    1 -> Ok(QoS1)
+    2 -> Ok(QoS2)
     _ -> Error(decode.InvalidQoS)
   }
 }

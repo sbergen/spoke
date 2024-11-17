@@ -1,11 +1,9 @@
 import gleam/erlang/process.{type Subject}
 import gleam/function
-import gleam/list
 import gleam/option.{None}
 import gleam/otp/task
 import gleeunit/should
-import spoke.{QoS0, QoS1}
-import spoke/client.{type Client}
+import spoke.{type Client, AtLeastOnce, AtMostOnce, ExactlyOnce}
 import spoke/internal/packet
 import spoke/internal/packet/incoming
 import spoke/internal/packet/outgoing
@@ -19,7 +17,7 @@ pub fn connect_success_test() {
   let #(client, sent_packets, connections, _, _) =
     set_up(keep_alive_s * 1000, server_timeout: 100)
 
-  let connect_task = task.async(fn() { client.connect(client, 10) })
+  let connect_task = task.async(fn() { spoke.connect(client, 10) })
 
   // Open channel
   let assert Ok(server_out) = process.receive(connections, 10)
@@ -33,7 +31,7 @@ pub fn connect_success_test() {
 
   let assert Ok(Ok(False)) = task.try_await(connect_task, 10)
 
-  client.disconnect(client)
+  spoke.disconnect(client)
 }
 
 pub fn subscribe_success_test() {
@@ -41,29 +39,38 @@ pub fn subscribe_success_test() {
     set_up_connected(keep_alive: 1000, server_timeout: 100)
 
   let topics = [
-    spoke.SubscribeRequest("topic0", QoS0),
-    spoke.SubscribeRequest("topic1", QoS1),
+    spoke.SubscribeRequest("topic0", AtMostOnce),
+    spoke.SubscribeRequest("topic1", AtLeastOnce),
+    spoke.SubscribeRequest("topic2", ExactlyOnce),
   ]
-  let results = {
-    use topic <- list.map(topics)
-    incoming.SubscribeSuccess(topic.qos)
-  }
+  let request_payload = [
+    outgoing.SubscribeRequest("topic0", packet.QoS0),
+    outgoing.SubscribeRequest("topic1", packet.QoS1),
+    outgoing.SubscribeRequest("topic2", packet.QoS2),
+  ]
+  let results = [
+    incoming.SubscribeSuccess(packet.QoS0),
+    incoming.SubscribeSuccess(packet.QoS1),
+    incoming.SubscribeSuccess(packet.QoS2),
+  ]
+
   let expected_id = 1
 
-  let subscribe = task.async(fn() { client.subscribe(client, topics, 100) })
+  let subscribe = task.async(fn() { spoke.subscribe(client, topics, 100) })
 
   let assert Ok(result) = process.receive(sent_packets, 10)
-  result |> should.equal(outgoing.Subscribe(expected_id, topics))
+  result |> should.equal(outgoing.Subscribe(expected_id, request_payload))
   process.send(server_out, Ok(incoming.SubAck(expected_id, results)))
 
   let assert Ok(Ok(results)) = task.try_await(subscribe, 10)
   results
   |> should.equal([
-    client.SuccessfulSubscription("topic0", QoS0),
-    client.SuccessfulSubscription("topic1", QoS1),
+    spoke.SuccessfulSubscription("topic0", AtMostOnce),
+    spoke.SuccessfulSubscription("topic1", AtLeastOnce),
+    spoke.SuccessfulSubscription("topic2", ExactlyOnce),
   ])
 
-  client.disconnect(client)
+  spoke.disconnect(client)
 }
 
 pub fn receive_message_test() {
@@ -75,23 +82,23 @@ pub fn receive_message_test() {
       topic: "topic0",
       payload: <<"payload">>,
       dup: True,
-      qos: QoS0,
+      qos: packet.QoS0,
       retain: False,
       packet_id: None,
     )
   process.send(server_out, Ok(incoming.Publish(data)))
 
-  let assert Ok(client.ReceivedMessage(_, _, _)) = process.receive(updates, 10)
+  let assert Ok(spoke.ReceivedMessage(_, _, _)) = process.receive(updates, 10)
 
-  client.disconnect(client)
+  spoke.disconnect(client)
 }
 
 pub fn publish_message_test() {
   let #(client, sent_packets, _, _, _) =
     set_up_connected(keep_alive: 1000, server_timeout: 100)
 
-  let data = client.PublishData("topic", <<"payload">>, QoS0, False)
-  let assert Ok(_) = client.publish(client, data, 10)
+  let data = spoke.PublishData("topic", <<"payload">>, AtMostOnce, False)
+  let assert Ok(_) = spoke.publish(client, data, 10)
 
   let assert Ok(outgoing.Publish(data)) = process.receive(sent_packets, 10)
   data
@@ -99,12 +106,12 @@ pub fn publish_message_test() {
     "topic",
     <<"payload">>,
     False,
-    QoS0,
+    packet.QoS0,
     False,
     None,
   ))
 
-  client.disconnect(client)
+  spoke.disconnect(client)
 }
 
 // The ping tests might be a bit flaky, as we are dealing with time.
@@ -125,30 +132,30 @@ pub fn pings_are_sent_when_no_other_activity_test() {
   let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
   process.send(server_out, Ok(incoming.PingResp))
 
-  client.disconnect(client)
+  spoke.disconnect(client)
 }
 
 pub fn pings_are_not_sent_when_has_other_activity_test() {
   let #(client, sent_packets, _, _, _) =
     set_up_connected(keep_alive: 4, server_timeout: 100)
 
-  let publish_data = client.PublishData("topic", <<>>, QoS0, False)
+  let publish_data = spoke.PublishData("topic", <<>>, AtMostOnce, False)
 
   // Send data at intevals less than the keep-alive
-  let assert Ok(_) = client.publish(client, publish_data, 10)
+  let assert Ok(_) = spoke.publish(client, publish_data, 10)
   let assert Ok(outgoing.Publish(_)) = process.receive(sent_packets, 10)
   process.sleep(2)
-  let assert Ok(_) = client.publish(client, publish_data, 10)
+  let assert Ok(_) = spoke.publish(client, publish_data, 10)
   let assert Ok(outgoing.Publish(_)) = process.receive(sent_packets, 10)
   process.sleep(2)
-  let assert Ok(_) = client.publish(client, publish_data, 10)
+  let assert Ok(_) = spoke.publish(client, publish_data, 10)
   let assert Ok(outgoing.Publish(_)) = process.receive(sent_packets, 10)
 
   // The ping should be delayed
   let assert Error(_) = process.receive(sent_packets, 2)
   let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 4)
 
-  client.disconnect(client)
+  spoke.disconnect(client)
 }
 
 pub fn connection_is_shut_down_if_no_pingresp_within_server_timeout_test() {
@@ -157,7 +164,7 @@ pub fn connection_is_shut_down_if_no_pingresp_within_server_timeout_test() {
 
   let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
   let assert Ok(Nil) = process.receive(disconnects, 3)
-  let assert Ok(client.Disconnected) = process.receive(updates, 1)
+  let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
 }
 
 fn set_up_connected(
@@ -168,11 +175,11 @@ fn set_up_connected(
   Subject(outgoing.Packet),
   Receiver(incoming.Packet),
   Subject(Nil),
-  Subject(client.Update),
+  Subject(spoke.Update),
 ) {
   let #(client, sent_packets, connections, disconnects, updates) =
     set_up(keep_alive, server_timeout)
-  let connect_task = task.async(fn() { client.connect(client, 10) })
+  let connect_task = task.async(fn() { spoke.connect(client, 10) })
 
   let assert Ok(server_out) = process.receive(connections, 10)
   let assert Ok(outgoing.Connect(_, _)) = process.receive(sent_packets, 10)
@@ -190,7 +197,7 @@ fn set_up(
   Subject(outgoing.Packet),
   Subject(Receiver(incoming.Packet)),
   Subject(Nil),
-  Subject(client.Update),
+  Subject(spoke.Update),
 ) {
   let send_to = process.new_subject()
   let updates = process.new_subject()
@@ -203,6 +210,6 @@ fn set_up(
     })
   }
 
-  let client = client.run(id, keep_alive, server_timeout, connect, updates)
+  let client = spoke.run(id, keep_alive, server_timeout, connect, updates)
   #(client, send_to, connections, disconnects, updates)
 }

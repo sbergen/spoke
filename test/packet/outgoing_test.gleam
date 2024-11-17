@@ -2,8 +2,7 @@ import gleam/bit_array
 import gleam/bytes_builder
 import gleam/option.{None}
 import gleeunit/should
-import spoke.{QoS0, QoS1, QoS2}
-import spoke/internal/packet
+import spoke/internal/packet.{QoS0, QoS1, QoS2}
 import spoke/internal/packet/decode
 import spoke/internal/packet/outgoing
 
@@ -31,9 +30,9 @@ pub fn encode_subscribe_test() {
   let assert Ok(builder) =
     outgoing.encode_packet(
       outgoing.Subscribe(42, [
-        spoke.SubscribeRequest("topic0", QoS0),
-        spoke.SubscribeRequest("topic1", QoS1),
-        spoke.SubscribeRequest("topic2", QoS2),
+        outgoing.SubscribeRequest("topic0", QoS0),
+        outgoing.SubscribeRequest("topic1", QoS1),
+        outgoing.SubscribeRequest("topic2", QoS2),
       ]),
     )
 

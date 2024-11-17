@@ -1,8 +1,7 @@
 import gleam/bool
 import gleam/bytes_builder.{type BytesBuilder}
 import gleam/list
-import spoke.{type QoS, type SubscribeRequest, QoS0, QoS1, QoS2}
-import spoke/internal/packet.{type PublishData}
+import spoke/internal/packet.{type PublishData, type QoS, QoS0, QoS1, QoS2}
 import spoke/internal/packet/encode.{type EncodeError}
 
 const protocol_level: Int = 4
@@ -18,6 +17,10 @@ pub type Packet {
   Subscribe(packet_id: Int, topics: List(SubscribeRequest))
   Unsubscribe
   Disconnect
+}
+
+pub type SubscribeRequest {
+  SubscribeRequest(filter: String, qos: QoS)
 }
 
 pub type ConnectReturnCode {
@@ -123,8 +126,8 @@ fn encode_parts(
 
 fn encode_qos(qos: QoS) -> Int {
   case qos {
-    spoke.QoS0 -> 0
-    spoke.QoS1 -> 1
-    spoke.QoS2 -> 2
+    QoS0 -> 0
+    QoS1 -> 1
+    QoS2 -> 2
   }
 }

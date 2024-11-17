@@ -1,5 +1,12 @@
+//// Data types shared between incoming and outgoing packets
+
 import gleam/option.{type Option}
-import spoke.{type QoS}
+
+pub type QoS {
+  QoS0
+  QoS1
+  QoS2
+}
 
 pub type PublishData {
   PublishData(

@@ -1,3 +1,5 @@
+//// Encoding of fundamental MQTT data types and shared error codes
+
 import gleam/bit_array
 
 pub type EncodeError {

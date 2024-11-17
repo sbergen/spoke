@@ -1,3 +1,5 @@
+//// Decoding of fundamental MQTT data types and shared error codes
+
 import gleam/bit_array
 import gleam/result.{try}
 
