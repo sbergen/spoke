@@ -12,15 +12,19 @@ import gleam/erlang/process
 import gleam/int
 import gleam/io
 import gleam/string
-import spoke.{QoS0}
-import spoke/client
+import spoke
 import spoke/transport
 
 pub fn main() {
   let client_id = "spoke-" <> string.inspect(int.random(999_999_999))
   let topic = "spoke-test"
 
-  let connect_opts = client.ConnectOptions(client_id, keep_alive: 60)
+  let connect_opts =
+    spoke.ConnectOptions(
+      client_id,
+      keep_alive_seconds: 1,
+      server_timeout_ms: 1000,
+    )
   let transport_opts =
     transport.TcpOptions(
       "test.mosquitto.org",
@@ -30,15 +34,24 @@ pub fn main() {
     )
 
   let updates = process.new_subject()
-  let client = client.start(connect_opts, transport_opts, updates)
-  let assert Ok(_) = client.connect(client, timeout: 1000)
+  let client = spoke.start(connect_opts, transport_opts, updates)
+  let assert Ok(_) = spoke.connect(client, timeout: 1000)
 
   let assert Ok(_) =
-    client.subscribe(client, [spoke.SubscribeRequest(topic, QoS0)], 1000)
+    spoke.subscribe(
+      client,
+      [spoke.SubscribeRequest(topic, spoke.AtMostOnce)],
+      1000,
+    )
 
   let message =
-    client.PublishData(topic, <<"Hello from spoke!">>, QoS0, retain: False)
-  let assert Ok(_) = client.publish(client, message, 1000)
+    spoke.PublishData(
+      topic,
+      <<"Hello from spoke!">>,
+      spoke.AtMostOnce,
+      retain: False,
+    )
+  let assert Ok(_) = spoke.publish(client, message, 1000)
 
   let update = process.receive(updates, 1000)
   io.debug(update)

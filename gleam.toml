@@ -21,3 +21,4 @@ gleam_otp = ">= 0.13.0 and < 1.0.0"
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
 glisten = ">= 6.0.0 and < 7.0.0"
+checkmark = ">= 0.1.0 and < 1.0.0"
