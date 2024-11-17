@@ -4,8 +4,9 @@ import gleeunit/should
 import spoke/internal/transport/tcp
 import transport/echo_server
 
-pub fn send_and_receive_test() {
-  let port = echo_server.start()
+pub fn send_receive_and_shutdown_test() {
+  let shutdowns = process.new_subject()
+  let port = echo_server.start(fn() { process.send(shutdowns, Nil) })
   let assert Ok(channel) =
     tcp.connect(
       "localhost",
@@ -24,4 +25,8 @@ pub fn send_and_receive_test() {
   let assert Ok(_) = channel.send(bytes_builder.from_string("and again!"))
   let assert Ok(Ok(bytes)) = process.receive(receiver, 100)
   bytes |> should.equal(<<"and again!">>)
+
+  let assert Error(_) = process.receive(shutdowns, 0)
+  channel.shutdown()
+  let assert Ok(_) = process.receive(shutdowns, 10)
 }

@@ -8,6 +8,7 @@ pub type Channel(s, r) {
   Channel(
     send: fn(s) -> ChannelResult(Nil),
     start_receive: fn(Receiver(r)) -> Nil,
+    shutdown: fn() -> Nil,
   )
 }
 

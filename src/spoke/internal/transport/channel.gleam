@@ -11,11 +11,16 @@ pub type EncodedChannel =
   transport.Channel(outgoing.Packet, incoming.Packet)
 
 pub fn as_encoded(channel: transport.ByteChannel) -> EncodedChannel {
-  transport.Channel(send: send(channel, _), start_receive: fn(receiver) {
-    let assert Ok(chunker) =
-      actor.start(ChunkerState(receiver, <<>>), run_chunker)
-    channel.start_receive(chunker)
-  })
+  transport.Channel(
+    send: send(channel, _),
+    start_receive: fn(receiver) {
+      let assert Ok(chunker) =
+        actor.start(ChunkerState(receiver, <<>>), run_chunker)
+      channel.start_receive(chunker)
+    },
+    // TODO: This should shut down the actor
+    shutdown: fn() { todo },
+  )
 }
 
 fn send(

@@ -9,5 +9,6 @@ pub fn new(
   transport.Channel(
     send: fn(data) { Ok(process.send(send, map_send(data))) },
     start_receive: fn(receiver) { process.send(receivers, receiver) },
+    shutdown: fn() { todo },
   )
 }

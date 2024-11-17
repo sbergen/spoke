@@ -17,17 +17,21 @@ pub fn connect(
 ) -> Result(ByteChannel, actor.StartError) {
   let mug_options = mug.ConnectionOptions(host, port, connect_timeout)
 
-  actor.start_spec(actor.Spec(
-    fn() { init(mug_options) },
-    mug_options.timeout + 100,
-    handle_message,
-  ))
-  |> result.map(fn(subject) {
+  use subject <- result.try(
+    actor.start_spec(actor.Spec(
+      fn() { init(mug_options) },
+      mug_options.timeout + 100,
+      handle_message,
+    )),
+  )
+
+  Ok(
     transport.Channel(
       send: fn(bytes) { actor.call(subject, Send(bytes, _), send_timeout) },
       start_receive: fn(receiver) { actor.send(subject, SetReceiver(receiver)) },
-    )
-  })
+      shutdown: fn() { process.send(subject, ShutDown) },
+    ),
+  )
 }
 
 type State {
@@ -38,6 +42,7 @@ type Message {
   SetReceiver(Receiver(BitArray))
   Send(data: BytesBuilder, reply_with: Receiver(Nil))
   Received(ChannelResult(BitArray))
+  ShutDown
 }
 
 fn init(options: mug.ConnectionOptions) -> actor.InitResult(State, Message) {
@@ -73,6 +78,11 @@ fn handle_message(message: Message, state: State) -> actor.Next(Message, State) 
         |> map_mug_error(transport.SendFailed)
       process.send(reply_to, reply)
       actor.continue(state)
+    }
+
+    ShutDown -> {
+      let _ = mug.shutdown(state.socket)
+      actor.Stop(process.Normal)
     }
   }
 }
