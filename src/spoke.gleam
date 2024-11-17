@@ -366,13 +366,15 @@ fn handle_incoming_publish(
 
 fn send_ping(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
   case state.conn_state {
-    // There can be some race conditions here, especially with our test values
-    // Just ignore the ping if we are disconnected
-    NotConnected -> actor.continue(state)
-    ConnectingToServer(_, _) -> actor.continue(state)
-    // TODO                  v this should be None
-    Connected(channel, ping, _) -> {
+    // There can be some race conditions here, especially with our test values.
+    // Just ignore the ping if we are not fully connected.
+    NotConnected | ConnectingToServer(_, _) -> actor.continue(state)
+    Connected(channel, ping, disconnect) -> {
+      // We should not be waiting for a ping
+      let assert None = disconnect
+      // ..and also no longer scheduling a ping
       let assert process.TimerNotFound = process.cancel_timer(ping)
+
       let assert Ok(state) = send_packet(state, outgoing.PingReq)
       let disconnect =
         process.send_after(state.self, state.config.server_timeout, Disconnect)
