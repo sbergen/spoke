@@ -311,7 +311,9 @@ fn handle_connack(
       let conn_state = Connected(channel, start_ping_timeout(state), None)
       actor.continue(ClientState(..state, conn_state: conn_state))
     }
-    _ -> todo as "Should disconnect"
+    Error(_) -> {
+      handle_disconnect(state)
+    }
   }
 }
 

@@ -34,6 +34,45 @@ pub fn connect_success_test() {
   spoke.disconnect(client)
 }
 
+pub fn disconnects_after_server_rejects_connect_test() {
+  let keep_alive_s = 15
+  let #(client, _, connections, disconnects, updates) =
+    set_up(keep_alive_s * 1000, server_timeout: 100)
+
+  let connect_task = task.async(fn() { spoke.connect(client, 10) })
+
+  // Open channel
+  let assert Ok(server_out) = process.receive(connections, 10)
+
+  // Connect response
+  process.send(
+    server_out,
+    Ok(incoming.ConnAck(Error(incoming.BadUsernameOrPassword))),
+  )
+
+  let assert Ok(Error(spoke.BadUsernameOrPassword)) =
+    task.try_await(connect_task, 10)
+  let assert Ok(Nil) = process.receive(disconnects, 1)
+  let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
+}
+
+pub fn aborted_connect_disconnects_with_correct_status_test() {
+  let keep_alive_s = 15
+  let #(client, _, connections, disconnects, updates) =
+    set_up(keep_alive_s * 1000, server_timeout: 100)
+
+  let connect_task = task.async(fn() { spoke.connect(client, 10) })
+  // Open channel
+  let assert Ok(_) = process.receive(connections, 10)
+
+  spoke.disconnect(client)
+
+  let assert Ok(Error(spoke.DisconnectRequested)) =
+    task.try_await(connect_task, 10)
+  let assert Ok(Nil) = process.receive(disconnects, 1)
+  let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
+}
+
 pub fn subscribe_success_test() {
   let #(client, sent_packets, server_out, _, _) =
     set_up_connected(keep_alive: 1000, server_timeout: 100)
