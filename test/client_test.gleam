@@ -137,8 +137,6 @@ fn set_up() -> #(
   Subject(Receiver(incoming.Packet)),
   Subject(client.Update),
 ) {
-  let options = client.ConnectOptions(id, keep_alive)
-
   let send_to = process.new_subject()
   let connections = process.new_subject()
   let client_receives = process.new_subject()
@@ -152,6 +150,7 @@ fn set_up() -> #(
     fake_interval.start(fake_interval, action, interval)
   }
 
-  let client = client.run(options, connect, start_interval, client_receives)
+  let client =
+    client.run(id, keep_alive * 1000, connect, start_interval, client_receives)
   #(client, fake_interval, send_to, connections, client_receives)
 }

@@ -19,7 +19,11 @@ pub opaque type Client {
 }
 
 pub type ConnectOptions {
-  ConnectOptions(client_id: String, keep_alive: Int)
+  ConnectOptions(
+    client_id: String,
+    /// Keep-alive interval in seconds (MQTT spec doesn't allow more granular control)
+    keep_alive: Int,
+  )
 }
 
 pub type Update {
@@ -51,7 +55,8 @@ pub fn start(
   updates: Subject(Update),
 ) -> Client {
   run(
-    connect_opts,
+    connect_opts.client_id,
+    connect_opts.keep_alive * 1000,
     fn() { create_channel(transport_opts) },
     interval.start,
     updates,
@@ -90,19 +95,22 @@ pub fn subscribe(
 // Internal for testability:
 // * EncodedChannel avoids having to encode packets we don't need to otherwise encode
 // * start_ping: allows simulating time
+// * keep_alive: allow sub-second keep-alive for faster tests
 @internal
 pub fn run(
-  options: ConnectOptions,
+  client_id: String,
+  keep_alive: Int,
   connect: fn() -> EncodedChannel,
   start_ping: fn(interval.Action, Int) -> interval.Reset,
   updates: Subject(Update),
 ) -> Client {
-  let config = Config(options, connect, start_ping)
+  let config = Config(client_id, keep_alive, connect, start_ping)
   let assert Ok(client) =
     actor.start_spec(actor.Spec(fn() { init(config, updates) }, 100, run_client))
   Client(client)
 }
 
+/// Keep-alive interval in millisseconds
 fn create_channel(options: TransportOptions) -> EncodedChannel {
   let assert Ok(raw_channel) = case options {
     transport.TcpOptions(host, port, connect_timeout, send_timeout) ->
@@ -113,7 +121,8 @@ fn create_channel(options: TransportOptions) -> EncodedChannel {
 
 type Config {
   Config(
-    options: ConnectOptions,
+    client_id: String,
+    keep_alive: Int,
     connect: fn() -> EncodedChannel,
     start_ping: fn(interval.Action, Int) -> interval.Reset,
   )
@@ -193,8 +202,9 @@ fn handle_connect(
     |> process.selecting(receives, Received(_))
   channel.start_receive(receives)
 
-  let options = state.config.options
-  let connect_packet = outgoing.Connect(options.client_id, options.keep_alive)
+  let config = state.config
+  let connect_packet =
+    outgoing.Connect(config.client_id, config.keep_alive / 1000)
   let assert Ok(_) = channel.send(connect_packet)
 
   let new_state =
@@ -251,7 +261,7 @@ fn handle_connack(
       let pings =
         state.config.start_ping(
           fn() { process.send(state.self, Ping) },
-          state.config.options.keep_alive * 1000,
+          state.config.keep_alive,
         )
       actor.continue(
         ClientState(..state, conn_state: Connected(connection, pings)),
