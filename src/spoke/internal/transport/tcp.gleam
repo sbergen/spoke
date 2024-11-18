@@ -1,4 +1,4 @@
-import gleam/bytes_builder.{type BytesBuilder}
+import gleam/bytes_tree.{type BytesTree}
 import gleam/erlang/process
 import gleam/result
 import gleam/string
@@ -37,7 +37,7 @@ pub fn connect(
   )
 }
 
-fn send(socket: mug.Socket, data: BytesBuilder) -> ChannelResult(Nil) {
+fn send(socket: mug.Socket, data: BytesTree) -> ChannelResult(Nil) {
   mug.send_builder(socket, data)
   |> map_mug_error(transport.SendFailed)
 }

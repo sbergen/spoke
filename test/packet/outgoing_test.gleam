@@ -1,5 +1,5 @@
 import gleam/bit_array
-import gleam/bytes_builder
+import gleam/bytes_tree
 import gleam/option.{None}
 import gleeunit/should
 import spoke/internal/packet.{QoS0, QoS1, QoS2}
@@ -10,7 +10,7 @@ pub fn encode_connect_test() {
   let assert Ok(builder) =
     outgoing.encode_packet(outgoing.Connect("test-client-id", 15))
 
-  let assert <<1:4, 0:4, rest:bits>> = bytes_builder.to_bit_array(builder)
+  let assert <<1:4, 0:4, rest:bits>> = bytes_tree.to_bit_array(builder)
   let rest = validate_remaining_len(rest)
   let assert Ok(#("MQTT", rest)) = decode.string(rest)
 
@@ -37,7 +37,7 @@ pub fn encode_subscribe_test() {
     )
 
   // flags are reserved
-  let assert <<8:4, 2:4, rest:bits>> = bytes_builder.to_bit_array(builder)
+  let assert <<8:4, 2:4, rest:bits>> = bytes_tree.to_bit_array(builder)
   let rest = validate_remaining_len(rest)
 
   let assert <<42:big-size(16), rest:bits>> = rest
@@ -54,12 +54,12 @@ pub fn encode_subscribe_test() {
 
 pub fn encode_disconnect_test() {
   let assert Ok(builder) = outgoing.encode_packet(outgoing.Disconnect)
-  let assert <<14:4, 0:4, 0:8>> = bytes_builder.to_bit_array(builder)
+  let assert <<14:4, 0:4, 0:8>> = bytes_tree.to_bit_array(builder)
 }
 
 pub fn encode_ping_req_test() {
   let assert Ok(builder) = outgoing.encode_packet(outgoing.PingReq)
-  let assert <<12:4, 0:4, 0:8>> = bytes_builder.to_bit_array(builder)
+  let assert <<12:4, 0:4, 0:8>> = bytes_tree.to_bit_array(builder)
 }
 
 pub fn encode_publish_test() {
@@ -73,7 +73,7 @@ pub fn encode_publish_test() {
       packet_id: None,
     )
   let assert Ok(builder) = outgoing.encode_packet(outgoing.Publish(data))
-  let assert <<3:4, 0:4, rest:bits>> = bytes_builder.to_bit_array(builder)
+  let assert <<3:4, 0:4, rest:bits>> = bytes_tree.to_bit_array(builder)
   let rest = validate_remaining_len(rest)
   let assert Ok(#("topic", rest)) = decode.string(rest)
   let assert <<"payload">> = rest

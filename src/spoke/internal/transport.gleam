@@ -1,4 +1,4 @@
-import gleam/bytes_builder.{type BytesBuilder}
+import gleam/bytes_tree.{type BytesTree}
 import gleam/erlang/process.{type Selector}
 
 /// General abstraction over a data channel
@@ -15,7 +15,7 @@ pub type Channel(state, send, receive) {
 /// (E.g. TCP, WebSocket, Quic)
 /// Currently we don't support state, could be added later.
 pub type ByteChannel =
-  Channel(Nil, BytesBuilder, BitArray)
+  Channel(Nil, BytesTree, BitArray)
 
 pub type ChannelResult(a) =
   Result(a, ChannelError)

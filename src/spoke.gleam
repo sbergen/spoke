@@ -431,8 +431,6 @@ fn handle_disconnect(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
         None -> process.TimerNotFound
       }
 
-      // TODO: other things to reset?
-
       channel.shutdown()
     }
     NotConnected -> Nil

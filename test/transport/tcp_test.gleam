@@ -1,4 +1,4 @@
-import gleam/bytes_builder
+import gleam/bytes_tree
 import gleam/erlang/process
 import gleeunit/should
 import spoke/internal/transport.{type ByteChannel}
@@ -11,10 +11,10 @@ pub fn send_receive_and_shutdown_test() {
   let assert Ok(channel) =
     tcp.connect("localhost", port: port, connect_timeout: 100)
 
-  let assert Ok(_) = channel.send(bytes_builder.from_string("let's go!"))
+  let assert Ok(_) = channel.send(bytes_tree.from_string("let's go!"))
   receive_next(channel) |> should.equal(<<"let's go!">>)
 
-  let assert Ok(_) = channel.send(bytes_builder.from_string("and again!"))
+  let assert Ok(_) = channel.send(bytes_tree.from_string("and again!"))
   receive_next(channel) |> should.equal(<<"and again!">>)
 
   let assert Error(_) = process.receive(shutdowns, 0)

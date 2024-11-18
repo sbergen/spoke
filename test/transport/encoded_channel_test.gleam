@@ -1,4 +1,4 @@
-import gleam/bytes_builder
+import gleam/bytes_tree
 import gleam/erlang/process.{type Subject}
 import gleam/result
 import gleeunit/should
@@ -61,7 +61,7 @@ pub fn shutdown_shuts_down_underlying_channel_test() {
 fn encode(packet: outgoing.Packet) -> BitArray {
   let assert Ok(bits) =
     outgoing.encode_packet(packet)
-    |> result.map(bytes_builder.to_bit_array)
+    |> result.map(bytes_tree.to_bit_array)
   bits
 }
 
@@ -70,7 +70,7 @@ fn set_up_send() -> #(EncodedChannel, Subject(BitArray)) {
   let raw_channel =
     transport.Channel(
       send: fn(builder) {
-        process.send(sent, bytes_builder.to_bit_array(builder))
+        process.send(sent, bytes_tree.to_bit_array(builder))
         Ok(Nil)
       },
       selecting_next: fn(_) { panic },
