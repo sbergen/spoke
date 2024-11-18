@@ -62,10 +62,11 @@ pub fn aborted_connect_disconnects_with_correct_status_test() {
 }
 
 pub fn timed_out_connect_disconnects_test() {
-  let #(client, _, _, disconnects, _) =
+  let #(client, _, _, disconnects, updates) =
     test_client.set_up_disconnected(1000, server_timeout: 100)
 
   // The timeout used for connect is what matters (server timeout does not)
   let assert Error(spoke.ConnectTimedOut) = spoke.connect(client, 2)
   let assert Ok(Nil) = process.receive(disconnects, 1)
+  let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
 }

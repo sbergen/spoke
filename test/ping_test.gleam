@@ -50,7 +50,7 @@ pub fn pings_are_not_sent_when_has_other_activity_test() {
 
 pub fn connection_is_shut_down_if_no_pingresp_within_server_timeout_test() {
   let #(_, sent_packets, _, disconnects, updates) =
-    test_client.set_up_connected(keep_alive: 4, server_timeout: 1)
+    test_client.set_up_connected(keep_alive: 4, server_timeout: 2)
 
   let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
   let assert Ok(Nil) = process.receive(disconnects, 3)

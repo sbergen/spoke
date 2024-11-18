@@ -42,7 +42,9 @@ pub type PublishData {
 }
 
 pub type PublishError {
-  PublishError(String)
+  PublishTimedOut
+  PublishChannelError(String)
+  KilledDuringPublish
 }
 
 pub type Subscription {
@@ -79,7 +81,7 @@ pub type ConnectError {
   NotAuthorized
   DisconnectRequested
   ConnectTimedOut
-  Killed
+  KilledDuringConnect
 }
 
 pub type SubscribeRequest {
@@ -101,36 +103,43 @@ pub fn start(
   )
 }
 
+/// Connects to the MQTT server.
+/// Will disconnect if the connect times out,
+/// and send the `Disconnect` update.
 pub fn connect(
   client: Client,
   timeout timeout: Int,
 ) -> Result(Bool, ConnectError) {
-  process.try_call(client.subject, Connect(_), timeout)
-  |> result.map_error(fn(e) {
-    case e {
-      process.CallTimeout -> {
-        process.send(client.subject, Disconnect)
-        ConnectTimedOut
-      }
-      process.CalleeDown(_) -> Killed
-    }
-  })
-  |> result.flatten
+  call_or_disconnect(
+    client,
+    Connect(_),
+    timeout,
+    KilledDuringConnect,
+    ConnectTimedOut,
+  )
 }
 
 pub fn disconnect(client: Client) {
   process.send(client.subject, Disconnect)
 }
 
+/// Connects to the MQTT server.
+/// Will disconnect if the connect times out,
+/// and send the `Disconnect` update.
+/// Note that in case of a timeout,
+/// the message might still have been already published.
 pub fn publish(
   client: Client,
   data: PublishData,
   timeout: Int,
 ) -> Result(Nil, PublishError) {
-  case process.try_call(client.subject, Publish(data, _), timeout) {
-    Ok(result) -> result
-    Error(e) -> Error(PublishError(string.inspect(e)))
-  }
+  call_or_disconnect(
+    client,
+    Publish(data, _),
+    timeout,
+    KilledDuringPublish,
+    PublishTimedOut,
+  )
 }
 
 pub fn subscribe(
@@ -142,6 +151,26 @@ pub fn subscribe(
     Ok(result) -> Ok(result)
     Error(_) -> Error(SubscribeError)
   }
+}
+
+fn call_or_disconnect(
+  client: Client,
+  make_request: fn(Subject(Result(result, error))) -> ClientMsg,
+  timeout: Int,
+  killed_error: error,
+  timed_out_error: error,
+) {
+  process.try_call(client.subject, make_request, timeout)
+  |> result.map_error(fn(e) {
+    case e {
+      process.CallTimeout -> {
+        process.send(client.subject, Disconnect)
+        timed_out_error
+      }
+      process.CalleeDown(_) -> killed_error
+    }
+  })
+  |> result.flatten
 }
 
 // Internal for testability:
@@ -289,7 +318,7 @@ fn handle_outgoing_publish(
       actor.continue(new_state)
     }
     Error(e) -> {
-      process.send(reply_to, Error(PublishError(string.inspect(e))))
+      process.send(reply_to, Error(PublishChannelError(string.inspect(e))))
       actor.continue(state)
     }
   }
