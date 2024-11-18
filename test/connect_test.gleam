@@ -4,6 +4,7 @@ import gleeunit/should
 import spoke
 import spoke/internal/packet/incoming
 import spoke/internal/packet/outgoing
+import spoke/internal/transport
 import test_client
 
 pub fn connect_success_test() {
@@ -69,4 +70,31 @@ pub fn timed_out_connect_disconnects_test() {
   let assert Error(spoke.ConnectTimedOut) = spoke.connect(client, 2)
   let assert Ok(Nil) = process.receive(disconnects, 1)
   let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
+}
+
+pub fn channel_connect_error_fails_connect_test() {
+  let connect = fn() { Error(transport.ChannelClosed) }
+  let updates = process.new_subject()
+  let client = spoke.run("client-id", 1000, 100, connect, updates)
+
+  let assert Error(spoke.ConnectChannelError("ChannelClosed")) =
+    spoke.connect(client, 2)
+}
+
+pub fn channel_error_on_connect_packet_fails_connect_call_test() {
+  let shutdowns = process.new_subject()
+  let connect = fn() {
+    Ok(
+      transport.Channel(
+        send: fn(_) { Error(transport.ChannelClosed) },
+        selecting_next: fn(_) { process.new_selector() },
+        shutdown: fn() { process.send(shutdowns, Nil) },
+      ),
+    )
+  }
+  let updates = process.new_subject()
+  let client = spoke.run("client-id", 1000, 100, connect, updates)
+
+  let assert Error(spoke.ConnectChannelError("ChannelClosed")) =
+    spoke.connect(client, 2)
 }

@@ -27,7 +27,7 @@ pub fn publish_message_test() {
   spoke.disconnect(client)
 }
 
-pub fn publish_timeout_test() {
+pub fn publish_timeout_disconnects_test() {
   let #(client, _, _, disconnects, updates) =
     test_client.set_up_connected(keep_alive: 1000, server_timeout: 100)
 

@@ -82,6 +82,7 @@ pub type ConnectError {
   DisconnectRequested
   ConnectTimedOut
   KilledDuringConnect
+  ConnectChannelError(String)
 }
 
 pub type SubscribeRequest {
@@ -181,7 +182,7 @@ pub fn run(
   client_id: String,
   keep_alive_ms: Int,
   server_timeout_ms: Int,
-  connect: fn() -> EncodedChannel,
+  connect: fn() -> ChannelResult(EncodedChannel),
   updates: Subject(Update),
 ) -> Client {
   let config = Config(client_id, keep_alive_ms, server_timeout_ms, connect)
@@ -190,12 +191,12 @@ pub fn run(
   Client(client)
 }
 
-fn create_channel(options: TransportOptions) -> EncodedChannel {
-  let assert Ok(raw_channel) = case options {
+fn create_channel(options: TransportOptions) -> ChannelResult(EncodedChannel) {
+  case options {
     TcpOptions(host, port, connect_timeout) ->
       tcp.connect(host, port, connect_timeout)
   }
-  channel.as_encoded(raw_channel)
+  |> result.map(channel.as_encoded)
 }
 
 type Config {
@@ -203,7 +204,7 @@ type Config {
     client_id: String,
     keep_alive: Int,
     server_timeout: Int,
-    connect: fn() -> EncodedChannel,
+    connect: fn() -> ChannelResult(EncodedChannel),
   )
 }
 
@@ -284,18 +285,30 @@ fn handle_connect(
   reply_to: Subject(Result(Bool, ConnectError)),
 ) -> actor.Next(ClientMsg, ClientState) {
   let assert NotConnected = state.conn_state
-  let channel = state.config.connect()
-  let selector = next_selector(channel, <<>>, state.self)
+  case state.config.connect() {
+    Ok(channel) -> {
+      let selector = next_selector(channel, <<>>, state.self)
 
-  let state =
-    ClientState(..state, conn_state: ConnectingToServer(channel, reply_to))
+      let state =
+        ClientState(..state, conn_state: ConnectingToServer(channel, reply_to))
 
-  let config = state.config
-  let connect_packet =
-    outgoing.Connect(config.client_id, config.keep_alive / 1000)
-  let assert Ok(state) = send_packet(state, connect_packet)
-
-  actor.with_selector(actor.continue(state), selector)
+      let config = state.config
+      let connect_packet =
+        outgoing.Connect(config.client_id, config.keep_alive / 1000)
+      case send_packet(state, connect_packet) {
+        Ok(state) -> actor.with_selector(actor.continue(state), selector)
+        Error(e) -> {
+          process.send(reply_to, Error(ConnectChannelError(string.inspect(e))))
+          handle_disconnect(state)
+        }
+      }
+    }
+    Error(e) -> {
+      // Channel connection failed, to change to state
+      process.send(reply_to, Error(ConnectChannelError(string.inspect(e))))
+      actor.continue(state)
+    }
+  }
 }
 
 fn handle_outgoing_publish(

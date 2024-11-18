@@ -50,7 +50,7 @@ pub fn set_up_disconnected(
   let receives = process.new_subject()
   let disconnects = process.new_subject()
   let connect = fn() {
-    transport.Channel(
+    Ok(transport.Channel(
       send: fn(packet) {
         process.send(outgoing, packet)
         Ok(Nil)
@@ -67,7 +67,7 @@ pub fn set_up_disconnected(
         |> process.selecting(incoming, fn(packet) { #(<<>>, Ok([packet])) })
       },
       shutdown: fn() { process.send(disconnects, Nil) },
-    )
+    ))
   }
 
   let updates = process.new_subject()
