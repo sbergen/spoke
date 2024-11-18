@@ -78,6 +78,8 @@ pub type ConnectError {
   BadUsernameOrPassword
   NotAuthorized
   DisconnectRequested
+  ConnectTimedOut
+  Killed
 }
 
 pub type SubscribeRequest {
@@ -103,7 +105,17 @@ pub fn connect(
   client: Client,
   timeout timeout: Int,
 ) -> Result(Bool, ConnectError) {
-  process.call(client.subject, Connect(_), timeout)
+  process.try_call(client.subject, Connect(_), timeout)
+  |> result.map_error(fn(e) {
+    case e {
+      process.CallTimeout -> {
+        process.send(client.subject, Disconnect)
+        ConnectTimedOut
+      }
+      process.CalleeDown(_) -> Killed
+    }
+  })
+  |> result.flatten
 }
 
 pub fn disconnect(client: Client) {
@@ -184,7 +196,6 @@ type ClientMsg {
   Received(#(BitArray, ChannelResult(List(incoming.Packet))))
   ProcessReceived(incoming.Packet)
   Ping
-  // TODO: Add disconnect reason
   Disconnect
 }
 

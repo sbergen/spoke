@@ -46,13 +46,12 @@ pub fn disconnects_after_server_rejects_connect_test() {
 }
 
 pub fn aborted_connect_disconnects_with_correct_status_test() {
-  let keep_alive_s = 15
-  let #(client, _, connections, disconnects, updates) =
-    test_client.set_up_disconnected(keep_alive_s * 1000, server_timeout: 100)
+  let #(client, _, receives, disconnects, updates) =
+    test_client.set_up_disconnected(1000, server_timeout: 100)
 
   let connect_task = task.async(fn() { spoke.connect(client, 10) })
   // Open channel
-  let assert Ok(_) = process.receive(connections, 10)
+  let assert Ok(_) = process.receive(receives, 10)
 
   spoke.disconnect(client)
 
@@ -60,4 +59,13 @@ pub fn aborted_connect_disconnects_with_correct_status_test() {
     task.try_await(connect_task, 10)
   let assert Ok(Nil) = process.receive(disconnects, 1)
   let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
+}
+
+pub fn timed_out_connect_disconnects_test() {
+  let #(client, _, _, disconnects, _) =
+    test_client.set_up_disconnected(1000, server_timeout: 100)
+
+  // The timeout used for connect is what matters (server timeout does not)
+  let assert Error(spoke.ConnectTimedOut) = spoke.connect(client, 2)
+  let assert Ok(Nil) = process.receive(disconnects, 1)
 }
