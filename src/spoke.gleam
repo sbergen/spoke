@@ -74,15 +74,26 @@ pub type QoS {
 }
 
 pub type ConnectError {
+  /// The MQTT server doesn't support MQTT 3.1.1
   UnacceptableProtocolVersion
+  /// The Client identifier is correct UTF-8 but not allowed by the Server
   IdentifierRefused
+  /// The Network Connection has been made but the MQTT service is unavailable
   ServerUnavailable
+  /// The data in the user name or password is malformed
   BadUsernameOrPassword
+  /// The Client is not authorized to connect
   NotAuthorized
+  /// A disconnect was requested while connecting
   DisconnectRequested
+  /// The connection timed out
   ConnectTimedOut
+  /// The MQTT process was killed during a connect call
   KilledDuringConnect
+  /// There was a transport channel error during connecting
   ConnectChannelError(String)
+  /// A connect is already established, or being established
+  AlreadyConnected
 }
 
 pub type SubscribeRequest {
@@ -284,7 +295,19 @@ fn handle_connect(
   state: ClientState,
   reply_to: Subject(Result(Bool, ConnectError)),
 ) -> actor.Next(ClientMsg, ClientState) {
-  let assert NotConnected = state.conn_state
+  case state.conn_state {
+    NotConnected -> do_connect(state, reply_to)
+    _ -> {
+      process.send(reply_to, Error(AlreadyConnected))
+      actor.continue(state)
+    }
+  }
+}
+
+fn do_connect(
+  state: ClientState,
+  reply_to: Subject(Result(Bool, ConnectError)),
+) -> actor.Next(ClientMsg, ClientState) {
   case state.config.connect() {
     Ok(channel) -> {
       let selector = next_selector(channel, <<>>, state.self)

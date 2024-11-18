@@ -72,6 +72,25 @@ pub fn timed_out_connect_disconnects_test() {
   let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
 }
 
+pub fn connecting_when_already_connected_fails_test() {
+  let #(client, _, receives, _, _) =
+    test_client.set_up_disconnected(1000, server_timeout: 100)
+
+  let task_started = process.new_subject()
+  let initial_connect =
+    task.async(fn() {
+      process.send(task_started, Nil)
+      spoke.connect(client, 4)
+    })
+
+  let assert Ok(Nil) = process.receive(task_started, 2)
+  let assert Error(spoke.AlreadyConnected) = spoke.connect(client, 4)
+
+  // initial connect should still succeed
+  test_client.simulate_server_response(receives, incoming.ConnAck(Ok(False)))
+  let assert Ok(Ok(False)) = task.try_await(initial_connect, 10)
+}
+
 pub fn channel_connect_error_fails_connect_test() {
   let connect = fn() { Error(transport.ChannelClosed) }
   let updates = process.new_subject()
