@@ -2,8 +2,9 @@ import gleam/erlang/process
 import gleam/otp/task
 import gleeunit/should
 import spoke
-import spoke/internal/packet/incoming
-import spoke/internal/packet/outgoing
+import spoke/internal/packet
+import spoke/internal/packet/client/incoming
+import spoke/internal/packet/client/outgoing
 import spoke/internal/transport
 import test_client
 
@@ -37,7 +38,7 @@ pub fn disconnects_after_server_rejects_connect_test() {
   // Connect response
   test_client.simulate_server_response(
     receives,
-    incoming.ConnAck(Error(incoming.BadUsernameOrPassword)),
+    incoming.ConnAck(Error(packet.BadUsernameOrPassword)),
   )
 
   let assert Ok(Error(spoke.BadUsernameOrPassword)) =

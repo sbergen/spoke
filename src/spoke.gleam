@@ -6,9 +6,9 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
-import spoke/internal/packet
-import spoke/internal/packet/incoming.{type SubscribeResult}
-import spoke/internal/packet/outgoing
+import spoke/internal/packet.{type SubscribeResult}
+import spoke/internal/packet/client/incoming
+import spoke/internal/packet/client/outgoing
 import spoke/internal/transport.{type ChannelError, type ChannelResult}
 import spoke/internal/transport/channel.{type EncodedChannel}
 import spoke/internal/transport/tcp
@@ -394,7 +394,7 @@ fn process_packet(
 
 fn handle_connack(
   state: ClientState,
-  status: Result(Bool, incoming.ConnectError),
+  status: packet.ConnAckResult,
 ) -> actor.Next(ClientMsg, ClientState) {
   let assert ConnectingToServer(channel, reply_to) = state.conn_state
 
@@ -422,11 +422,12 @@ fn handle_suback(
     // TODO: Validate result length?
     let pairs = list.zip(pending_sub.topics, results)
     use #(topic, result) <- list.map(pairs)
-    case result {
-      incoming.SubscribeSuccess(qos) ->
-        SuccessfulSubscription(topic.filter, from_packet_qos(qos))
-      incoming.SubscribeFailure -> FailedSubscription
-    }
+
+    result
+    |> result.map(fn(qos) {
+      SuccessfulSubscription(topic.filter, from_packet_qos(qos))
+    })
+    |> result.unwrap(FailedSubscription)
   }
 
   process.send(pending_sub.reply_to, result)
@@ -444,7 +445,7 @@ fn handle_subscribe(
 
   let topics = {
     use topic <- list.map(topics)
-    outgoing.SubscribeRequest(topic.filter, to_packet_qos(topic.qos))
+    packet.SubscribeRequest(topic.filter, to_packet_qos(topic.qos))
   }
   let assert Ok(_) = send_packet(state, outgoing.Subscribe(id, topics))
 
@@ -597,12 +598,12 @@ fn from_packet_qos(qos: packet.QoS) -> QoS {
   }
 }
 
-fn from_packet_connect_error(error: incoming.ConnectError) -> ConnectError {
+fn from_packet_connect_error(error: packet.ConnectError) -> ConnectError {
   case error {
-    incoming.BadUsernameOrPassword -> BadUsernameOrPassword
-    incoming.IdentifierRefused -> IdentifierRefused
-    incoming.NotAuthorized -> NotAuthorized
-    incoming.ServerUnavailable -> ServerUnavailable
-    incoming.UnacceptableProtocolVersion -> UnacceptableProtocolVersion
+    packet.BadUsernameOrPassword -> BadUsernameOrPassword
+    packet.IdentifierRefused -> IdentifierRefused
+    packet.NotAuthorized -> NotAuthorized
+    packet.ServerUnavailable -> ServerUnavailable
+    packet.UnacceptableProtocolVersion -> UnacceptableProtocolVersion
   }
 }

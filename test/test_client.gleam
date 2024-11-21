@@ -1,8 +1,8 @@
 import gleam/erlang/process.{type Subject}
 import gleam/otp/task
 import spoke.{type Client}
-import spoke/internal/packet/incoming
-import spoke/internal/packet/outgoing
+import spoke/internal/packet/client/incoming
+import spoke/internal/packet/client/outgoing
 import spoke/internal/transport
 
 pub const client_id = "client-id"

@@ -2,9 +2,9 @@ import gleam/bit_array
 import gleam/erlang/process.{type Selector}
 import gleam/list
 import gleam/string
+import spoke/internal/packet/client/incoming
+import spoke/internal/packet/client/outgoing
 import spoke/internal/packet/decode
-import spoke/internal/packet/incoming
-import spoke/internal/packet/outgoing
 import spoke/internal/transport.{type ChannelResult}
 
 /// One-to-many mapping on the receiving side

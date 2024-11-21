@@ -1,7 +1,13 @@
 //// Decoding of fundamental MQTT data types and shared error codes
 
 import gleam/bit_array
+import gleam/list
+import gleam/option.{None}
 import gleam/result.{try}
+import spoke/internal/packet.{
+  type ConnAckResult, type PublishData, type QoS, type SubscribeResult, QoS0,
+  QoS1, QoS2,
+}
 
 pub type DecodeError {
   DecodeNotImplemented
@@ -15,6 +21,69 @@ pub type DecodeError {
   InvalidUTF8
   InvalidQoS
   VarIntTooLarge
+}
+
+pub fn connack(
+  flags: BitArray,
+  data: BitArray,
+  construct: fn(ConnAckResult) -> packet,
+) -> Result(#(packet, BitArray), DecodeError) {
+  use #(data, rest) <- try(split_fixed_data(data, 3))
+  case flags, data {
+    <<0:4>>, <<2:8, 0:7, session_present:1, return_code:8>> -> {
+      use status <- try(decode_connack_code(session_present, return_code))
+      let result = construct(status)
+      Ok(#(result, rest))
+    }
+    _, _ -> Error(InvalidConnAckData)
+  }
+}
+
+pub fn publish(
+  flags: BitArray,
+  data: BitArray,
+  construct: fn(PublishData) -> packet,
+) -> Result(#(packet, BitArray), DecodeError) {
+  case flags {
+    <<dup:1, qos:2, retain:1>> -> {
+      use qos <- try(decode_qos(qos))
+      use #(data, remainder) <- try(split_var_data(data))
+      // TODO: Packet id for QoS > 0
+      use #(topic, rest) <- try(string(data))
+      let data =
+        packet.PublishData(topic, rest, dup == 1, qos, retain == 1, None)
+      Ok(#(construct(data), remainder))
+    }
+    _ -> Error(InvalidPublishData)
+  }
+}
+
+pub fn pingresp(
+  flags: BitArray,
+  data: BitArray,
+  value: packet,
+) -> Result(#(packet, BitArray), DecodeError) {
+  use #(data, rest) <- try(split_fixed_data(data, 1))
+  case flags, data {
+    <<0:4>>, <<0:8>> -> Ok(#(value, rest))
+    _, _ -> Error(InvalidPingRespData)
+  }
+}
+
+pub fn suback(
+  flags: BitArray,
+  data: BitArray,
+  construct: fn(Int, List(SubscribeResult)) -> packet,
+) -> Result(#(packet, BitArray), DecodeError) {
+  case flags, data {
+    <<0:4>>, _ -> {
+      use #(data, remainder) <- try(split_var_data(data))
+      use #(packet_id, rest) <- try(integer(data))
+      use return_codes <- try(decode_suback_returns(rest, []))
+      Ok(#(construct(packet_id, return_codes), remainder))
+    }
+    _, _ -> Error(InvalidSubAckData)
+  }
 }
 
 pub fn string(bits: BitArray) -> Result(#(String, BitArray), DecodeError) {
@@ -57,5 +126,70 @@ fn accumulate_varint(
       }
     }
     _ -> Error(DataTooShort)
+  }
+}
+
+/// Splits a fixed amount of data off the bit array, or returns DataTooShort
+fn split_fixed_data(
+  bytes: BitArray,
+  len: Int,
+) -> Result(#(BitArray, BitArray), DecodeError) {
+  case bytes {
+    <<data:bytes-size(len), rest:bytes>> -> Ok(#(data, rest))
+    _ -> Error(DataTooShort)
+  }
+}
+
+/// Reads the variable size value and splits the data to that length + the rest
+fn split_var_data(bytes: BitArray) -> Result(#(BitArray, BitArray), DecodeError) {
+  use #(len, rest) <- try(varint(bytes))
+  split_fixed_data(rest, len)
+}
+
+fn decode_connack_code(
+  session_present: Int,
+  code: Int,
+) -> Result(ConnAckResult, DecodeError) {
+  case code {
+    0 -> Ok(Ok(session_present == 1))
+    1 -> Ok(Error(packet.UnacceptableProtocolVersion))
+    2 -> Ok(Error(packet.IdentifierRefused))
+    3 -> Ok(Error(packet.ServerUnavailable))
+    4 -> Ok(Error(packet.BadUsernameOrPassword))
+    5 -> Ok(Error(packet.NotAuthorized))
+    _ -> Error(InvalidConnAckReturnCode)
+  }
+}
+
+fn decode_suback_returns(
+  bytes: BitArray,
+  codes: List(SubscribeResult),
+) -> Result(List(SubscribeResult), DecodeError) {
+  case bytes {
+    <<>> -> Ok(list.reverse(codes))
+    <<val:8, rest:bytes>> -> {
+      use code <- try(decode_suback_return(val))
+      rest |> decode_suback_returns([code, ..codes])
+    }
+    _ -> Error(InvalidSubAckData)
+  }
+}
+
+fn decode_suback_return(val: Int) -> Result(SubscribeResult, DecodeError) {
+  case val {
+    0 -> Ok(Ok(QoS0))
+    1 -> Ok(Ok(QoS1))
+    2 -> Ok(Ok(QoS2))
+    8 -> Ok(Error(Nil))
+    _ -> Error(InvalidSubAckData)
+  }
+}
+
+fn decode_qos(val: Int) -> Result(QoS, DecodeError) {
+  case val {
+    0 -> Ok(QoS0)
+    1 -> Ok(QoS1)
+    2 -> Ok(QoS2)
+    _ -> Error(InvalidQoS)
   }
 }

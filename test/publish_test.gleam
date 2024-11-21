@@ -3,7 +3,7 @@ import gleam/option.{None}
 import gleeunit/should
 import spoke.{AtMostOnce}
 import spoke/internal/packet
-import spoke/internal/packet/outgoing
+import spoke/internal/packet/client/outgoing
 import test_client
 
 pub fn publish_message_test() {

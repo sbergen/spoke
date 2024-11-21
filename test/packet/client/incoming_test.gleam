@@ -1,9 +1,9 @@
 import gleam/option.{None}
 import gleeunit/should
 import spoke/internal/packet.{QoS0, QoS1, QoS2}
+import spoke/internal/packet/client/incoming
 import spoke/internal/packet/decode
 import spoke/internal/packet/encode
-import spoke/internal/packet/incoming.{SubscribeFailure, SubscribeSuccess}
 
 pub fn decode_too_short_test() {
   incoming.decode_packet(<<0:7>>)
@@ -51,7 +51,7 @@ pub fn connack_session_should_be_present_test() {
 pub fn connack_return_code_should_be_id_refused_test() {
   let assert Ok(#(packet, _)) =
     incoming.decode_packet(<<2:4, 0:4, 2:8, 0:8, 2:8>>)
-  packet |> should.equal(incoming.ConnAck(Error(incoming.IdentifierRefused)))
+  packet |> should.equal(incoming.ConnAck(Error(packet.IdentifierRefused)))
 }
 
 pub fn ping_resp_decode_test() {
@@ -91,10 +91,10 @@ pub fn suback_decode_test() {
   packet
   |> should.equal(
     incoming.SubAck(packet_id: 42, return_codes: [
-      SubscribeSuccess(QoS0),
-      SubscribeSuccess(QoS1),
-      SubscribeSuccess(QoS2),
-      SubscribeFailure,
+      Ok(QoS0),
+      Ok(QoS1),
+      Ok(QoS2),
+      Error(Nil),
     ]),
   )
 }

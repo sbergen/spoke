@@ -2,8 +2,8 @@ import gleam/bytes_tree
 import gleam/erlang/process.{type Subject}
 import gleam/result
 import gleeunit/should
-import spoke/internal/packet/incoming
-import spoke/internal/packet/outgoing
+import spoke/internal/packet/client/incoming
+import spoke/internal/packet/client/outgoing
 import spoke/internal/transport
 import spoke/internal/transport/channel.{type EncodedChannel}
 

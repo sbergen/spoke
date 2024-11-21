@@ -1,7 +1,7 @@
 import gleam/erlang/process
 import spoke.{AtMostOnce}
-import spoke/internal/packet/incoming
-import spoke/internal/packet/outgoing
+import spoke/internal/packet/client/incoming
+import spoke/internal/packet/client/outgoing
 import test_client
 
 // The ping tests might be a bit flaky, as we are dealing with time.

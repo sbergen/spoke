@@ -2,7 +2,7 @@ import gleam/erlang/process
 import gleam/option.{None}
 import spoke
 import spoke/internal/packet
-import spoke/internal/packet/incoming
+import spoke/internal/packet/client/incoming
 import test_client
 
 pub fn receive_message_test() {

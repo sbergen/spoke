@@ -3,8 +3,8 @@ import gleam/otp/task
 import gleeunit/should
 import spoke.{AtLeastOnce, AtMostOnce, ExactlyOnce}
 import spoke/internal/packet
-import spoke/internal/packet/incoming
-import spoke/internal/packet/outgoing
+import spoke/internal/packet/client/incoming
+import spoke/internal/packet/client/outgoing
 import test_client
 
 pub fn subscribe_success_test() {
@@ -17,15 +17,11 @@ pub fn subscribe_success_test() {
     spoke.SubscribeRequest("topic2", ExactlyOnce),
   ]
   let request_payload = [
-    outgoing.SubscribeRequest("topic0", packet.QoS0),
-    outgoing.SubscribeRequest("topic1", packet.QoS1),
-    outgoing.SubscribeRequest("topic2", packet.QoS2),
+    packet.SubscribeRequest("topic0", packet.QoS0),
+    packet.SubscribeRequest("topic1", packet.QoS1),
+    packet.SubscribeRequest("topic2", packet.QoS2),
   ]
-  let results = [
-    incoming.SubscribeSuccess(packet.QoS0),
-    incoming.SubscribeSuccess(packet.QoS1),
-    incoming.SubscribeSuccess(packet.QoS2),
-  ]
+  let results = [Ok(packet.QoS0), Ok(packet.QoS1), Ok(packet.QoS2)]
 
   let expected_id = 1
 
