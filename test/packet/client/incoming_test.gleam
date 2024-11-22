@@ -2,7 +2,7 @@ import gleam/option.{None}
 import gleeunit/should
 import spoke/internal/packet.{QoS0, QoS1, QoS2}
 import spoke/internal/packet/client/incoming
-import spoke/internal/packet/decode
+import spoke/internal/packet/decode.{InvalidData}
 import spoke/internal/packet/encode
 
 pub fn decode_too_short_test() {
@@ -12,7 +12,7 @@ pub fn decode_too_short_test() {
 
 pub fn decode_invalid_id_test() {
   incoming.decode_packet(<<0:8>>)
-  |> should.equal(Error(decode.InvalidPacketIdentifier))
+  |> should.equal(Error(decode.InvalidPacketIdentifier(0)))
 }
 
 pub fn connack_decode_test() {
@@ -24,7 +24,7 @@ pub fn connack_decode_test() {
 
 pub fn connack_decode_invalid_length_test() {
   incoming.decode_packet(<<2:4, 0:4, 3:8, 0:32>>)
-  |> should.equal(Error(decode.InvalidConnAckData))
+  |> should.equal(Error(decode.InvalidData))
 }
 
 pub fn connack_decode_too_short_test() {
@@ -34,12 +34,12 @@ pub fn connack_decode_too_short_test() {
 
 pub fn connack_decode_invalid_flags_test() {
   incoming.decode_packet(<<2:4, 1:4, 2:8, 0:16>>)
-  |> should.equal(Error(decode.InvalidConnAckData))
+  |> should.equal(Error(decode.InvalidData))
 }
 
 pub fn connack_decode_invalid_return_code_test() {
   incoming.decode_packet(<<2:4, 0:4, 2:8, 0:8, 6:8>>)
-  |> should.equal(Error(decode.InvalidConnAckReturnCode))
+  |> should.equal(Error(decode.InvalidData))
 }
 
 pub fn connack_session_should_be_present_test() {
@@ -66,7 +66,7 @@ pub fn ping_resp_too_short_test() {
 }
 
 pub fn ping_resp_invalid_length_test() {
-  let assert Error(decode.InvalidPingRespData) =
+  let assert Error(decode.InvalidData) =
     incoming.decode_packet(<<13:4, 0:4, 1:8, 1:8>>)
 }
 
@@ -119,10 +119,10 @@ pub fn publish_decode_qos0_test() {
   |> should.equal(packet.PublishData(
     "topic",
     <<"foo">>,
-    False,
-    QoS0,
-    False,
-    None,
+    dup: False,
+    qos: QoS0,
+    retain: False,
+    packet_id: None,
   ))
 }
 
@@ -132,5 +132,36 @@ pub fn publish_decode_should_be_retained_test() {
   let assert Ok(#(incoming.Publish(data), <<>>)) = incoming.decode_packet(data)
 
   data
-  |> should.equal(packet.PublishData("", <<>>, False, QoS0, True, None))
+  |> should.equal(packet.PublishData(
+    "",
+    <<>>,
+    False,
+    QoS0,
+    retain: True,
+    packet_id: None,
+  ))
+}
+
+pub fn pub_xxx_decode_test() {
+  let data = <<4:4, 0:4, encode.varint(2):bits, 42:big-size(16)>>
+  let assert Ok(#(incoming.PubAck(42), <<>>)) = incoming.decode_packet(data)
+
+  let data = <<5:4, 0:4, encode.varint(2):bits, 43:big-size(16), 1>>
+  let assert Ok(#(incoming.PubRec(43), <<1>>)) = incoming.decode_packet(data)
+
+  let data = <<6:4, 0:4, encode.varint(2):bits, 44:big-size(16)>>
+  let assert Ok(#(incoming.PubRel(44), <<>>)) = incoming.decode_packet(data)
+
+  let data = <<7:4, 0:4, encode.varint(2):bits, 45:big-size(16)>>
+  let assert Ok(#(incoming.PubComp(45), <<>>)) = incoming.decode_packet(data)
+}
+
+pub fn pub_xxx_decode_invalid_test() {
+  // Size is too long
+  let data = <<4:4, 0:4, encode.varint(3):bits, 42:big-size(16), 1>>
+  let assert Error(InvalidData) = incoming.decode_packet(data)
+
+  // flags are invalid
+  let data = <<5:4, 1:4, encode.varint(2):bits, 43:big-size(16)>>
+  let assert Error(InvalidData) = incoming.decode_packet(data)
 }

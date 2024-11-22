@@ -11,13 +11,9 @@ import spoke/internal/packet.{
 
 pub type DecodeError {
   DecodeNotImplemented
-  InvalidPacketIdentifier
+  InvalidPacketIdentifier(Int)
   DataTooShort
-  InvalidConnAckData
-  InvalidConnAckReturnCode
-  InvalidPublishData
-  InvalidPingRespData
-  InvalidSubAckData
+  InvalidData
   InvalidUTF8
   InvalidQoS
   VarIntTooLarge
@@ -35,7 +31,7 @@ pub fn connack(
       let result = construct(status)
       Ok(#(result, rest))
     }
-    _, _ -> Error(InvalidConnAckData)
+    _, _ -> Error(InvalidData)
   }
 }
 
@@ -54,7 +50,7 @@ pub fn publish(
         packet.PublishData(topic, rest, dup == 1, qos, retain == 1, None)
       Ok(#(construct(data), remainder))
     }
-    _ -> Error(InvalidPublishData)
+    _ -> Error(InvalidData)
   }
 }
 
@@ -66,7 +62,7 @@ pub fn pingresp(
   use #(data, rest) <- try(split_fixed_data(data, 1))
   case flags, data {
     <<0:4>>, <<0:8>> -> Ok(#(value, rest))
-    _, _ -> Error(InvalidPingRespData)
+    _, _ -> Error(InvalidData)
   }
 }
 
@@ -82,7 +78,25 @@ pub fn suback(
       use return_codes <- try(decode_suback_returns(rest, []))
       Ok(#(construct(packet_id, return_codes), remainder))
     }
-    _, _ -> Error(InvalidSubAckData)
+    _, _ -> Error(InvalidData)
+  }
+}
+
+/// Decodes any of PubAck, PubRec, PubRel or PubComp 
+pub fn pub_qos(
+  flags: BitArray,
+  data: BitArray,
+  construct: fn(Int) -> packet,
+) -> Result(#(packet, BitArray), DecodeError) {
+  case flags, data {
+    <<0:4>>, _ -> {
+      use #(data, remainder) <- try(split_var_data(data))
+      case data {
+        <<packet_id:big-size(16)>> -> Ok(#(construct(packet_id), remainder))
+        _ -> Error(InvalidData)
+      }
+    }
+    _, _ -> Error(InvalidData)
   }
 }
 
@@ -157,7 +171,7 @@ fn decode_connack_code(
     3 -> Ok(Error(packet.ServerUnavailable))
     4 -> Ok(Error(packet.BadUsernameOrPassword))
     5 -> Ok(Error(packet.NotAuthorized))
-    _ -> Error(InvalidConnAckReturnCode)
+    _ -> Error(InvalidData)
   }
 }
 
@@ -171,7 +185,7 @@ fn decode_suback_returns(
       use code <- try(decode_suback_return(val))
       rest |> decode_suback_returns([code, ..codes])
     }
-    _ -> Error(InvalidSubAckData)
+    _ -> Error(InvalidData)
   }
 }
 
@@ -181,7 +195,7 @@ fn decode_suback_return(val: Int) -> Result(SubscribeResult, DecodeError) {
     1 -> Ok(Ok(QoS1))
     2 -> Ok(Ok(QoS2))
     8 -> Ok(Error(Nil))
-    _ -> Error(InvalidSubAckData)
+    _ -> Error(InvalidData)
   }
 }
 
