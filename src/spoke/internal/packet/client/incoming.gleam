@@ -11,7 +11,7 @@ pub type Packet {
   PubRel(packet_id: Int)
   PubComp(packet_id: Int)
   SubAck(packet_id: Int, return_codes: List(SubscribeResult))
-  UnsubAck
+  UnsubAck(packet_id: Int)
   PingResp
 }
 
@@ -23,12 +23,12 @@ pub fn decode_packet(
       case id {
         2 -> decode.connack(flags, rest, ConnAck)
         3 -> decode.publish(flags, rest, Publish)
-        4 -> decode.pub_qos(flags, rest, PubAck)
-        5 -> decode.pub_qos(flags, rest, PubRec)
-        6 -> decode.pub_qos(flags, rest, PubRel)
-        7 -> decode.pub_qos(flags, rest, PubComp)
+        4 -> decode.only_packet_id(flags, rest, PubAck)
+        5 -> decode.only_packet_id(flags, rest, PubRec)
+        6 -> decode.only_packet_id(flags, rest, PubRel)
+        7 -> decode.only_packet_id(flags, rest, PubComp)
         9 -> decode.suback(flags, rest, SubAck)
-        11 -> todo as "unsuback"
+        11 -> decode.only_packet_id(flags, rest, UnsubAck)
         13 -> decode.pingresp(flags, rest, PingResp)
         _ -> Error(decode.InvalidPacketIdentifier(id))
       }

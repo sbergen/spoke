@@ -82,8 +82,8 @@ pub fn suback(
   }
 }
 
-/// Decodes any of PubAck, PubRec, PubRel or PubComp 
-pub fn pub_qos(
+/// Decodes any of PubAck, PubRec, PubRel, PubComp, UnsubAck etc... 
+pub fn only_packet_id(
   flags: BitArray,
   data: BitArray,
   construct: fn(Int) -> packet,

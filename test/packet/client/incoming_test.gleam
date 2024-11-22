@@ -165,3 +165,8 @@ pub fn pub_xxx_decode_invalid_test() {
   let data = <<5:4, 1:4, encode.varint(2):bits, 43:big-size(16)>>
   let assert Error(InvalidData) = incoming.decode_packet(data)
 }
+
+pub fn unsuback_decode_test() {
+  let data = <<11:4, 0:4, encode.varint(2):bits, 42:big-size(16)>>
+  let assert Ok(#(incoming.UnsubAck(42), <<>>)) = incoming.decode_packet(data)
+}
