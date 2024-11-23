@@ -372,7 +372,7 @@ fn handle_receive(
     }
     // Nothing to do, this is expected
     Error(transport.ChannelClosed) if state.conn_state == NotConnected -> Nil
-    Error(e) -> todo as { "Should disconnect" <> string.inspect(e) }
+    Error(e) -> todo as { "Should disconnect: " <> string.inspect(e) }
   }
 
   use channel <- if_connected(state)
@@ -409,8 +409,12 @@ fn handle_connack(
       let conn_state = Connected(channel, start_ping_timeout(state), None)
       actor.continue(ClientState(..state, conn_state: conn_state))
     }
-    Error(_) -> {
-      handle_disconnect(state)
+    Error(e) -> {
+      // If a server sends a CONNACK packet containing a non-zero return code
+      // it MUST then close the Network Connection
+      // => close channel just in case, but don't send any update on this,
+      // as we were never connected.
+      actor.continue(close_channel(state))
     }
   }
 }
@@ -499,9 +503,29 @@ fn handle_pingresp(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
 
 fn handle_disconnect(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
   case state.conn_state {
-    ConnectingToServer(channel, reply_to) -> {
-      channel.shutdown()
+    ConnectingToServer(_, reply_to) -> {
       process.send(reply_to, Error(DisconnectRequested))
+    }
+    Connected(channel, ..) -> {
+      // Do we care about errors here?
+      let assert Ok(_) = channel.send(outgoing.Disconnect)
+      Nil
+    }
+    _ -> Nil
+  }
+
+  let state = close_channel(state)
+  process.send(state.updates, Disconnected)
+  actor.continue(state)
+}
+
+/// Closes the channel and cancels any timeouts,
+/// does not send anything to client.
+/// NOTE: ConnectingToServer responses are NOT completed!
+fn close_channel(state: ClientState) -> ClientState {
+  case state.conn_state {
+    ConnectingToServer(channel, _) -> {
+      channel.shutdown()
     }
     Connected(channel, ping, disconnect) -> {
       process.cancel_timer(ping)
@@ -512,15 +536,12 @@ fn handle_disconnect(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
         None -> process.TimerNotFound
       }
 
-      // We don't really care about errors at this point any more?
-      let _ = channel.send(outgoing.Disconnect)
       channel.shutdown()
     }
     NotConnected -> Nil
   }
 
-  process.send(state.updates, Disconnected)
-  actor.continue(ClientState(..state, conn_state: NotConnected))
+  ClientState(..state, conn_state: NotConnected)
 }
 
 fn next_selector(

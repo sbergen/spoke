@@ -6,127 +6,98 @@ import spoke
 import spoke/internal/packet
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
+import spoke/internal/packet/server/incoming as server_in
 import spoke/internal/packet/server/outgoing as server_out
 import spoke/internal/transport
 import test_client
 
 pub fn connect_disconnect_test() {
-  let #(client, updates, state, received_data) =
-    fake_server.connect_specific(False, "test-client-id", 42)
+  let #(client, updates, state, received_data, result) =
+    fake_server.connect_specific(Ok(False), "test-client-id", 42)
 
+  result |> should.equal(Ok(False))
   received_data.client_id |> should.equal("test-client-id")
   received_data.keep_alive |> should.equal(42)
 
-  fake_server.disconnect(client, updates, state)
+  fake_server.disconnect(client, updates, state.socket)
 }
 
-pub fn connect_success_test() {
-  let keep_alive_s = 15
-  let #(client, sent_packets, receives, _, _) =
-    test_client.set_up_disconnected(keep_alive_s * 1000, server_timeout: 100)
+pub fn reconnect_after_rejected_connect_test() {
+  let #(client, updates, state, result) =
+    fake_server.connect_with_response(Error(packet.BadUsernameOrPassword))
 
-  let connect_task = task.async(fn() { spoke.connect(client, 1000) })
+  result |> should.equal(Error(spoke.BadUsernameOrPassword))
+  // There should be nothing to be done here,
+  // as the server should close the connection
 
-  // Connect request
-  let assert Ok(request) = process.receive(sent_packets, 10)
-  request
-  |> should.equal(outgoing.Connect(test_client.client_id, keep_alive_s))
+  let #(state, result) = fake_server.reconnect(client, state.listener, Ok(True))
+  result |> should.equal(Ok(True))
 
-  // Connect response
-  test_client.simulate_server_response(receives, incoming.ConnAck(Ok(False)))
-
-  let assert Ok(Ok(False)) = task.try_await(connect_task, 10)
-
-  spoke.disconnect(client)
-}
-
-pub fn disconnects_after_server_rejects_connect_test() {
-  let keep_alive_s = 15
-  let #(client, _, receives, disconnects, updates) =
-    test_client.set_up_disconnected(keep_alive_s * 1000, server_timeout: 100)
-
-  let connect_task = task.async(fn() { spoke.connect(client, 10) })
-
-  // Connect response
-  test_client.simulate_server_response(
-    receives,
-    incoming.ConnAck(Error(packet.BadUsernameOrPassword)),
-  )
-
-  let assert Ok(Error(spoke.BadUsernameOrPassword)) =
-    task.try_await(connect_task, 10)
-  let assert Ok(Nil) = process.receive(disconnects, 1)
-  let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
+  fake_server.disconnect(client, updates, state.socket)
 }
 
 pub fn aborted_connect_disconnects_with_correct_status_test() {
-  let #(client, _, receives, disconnects, updates) =
-    test_client.set_up_disconnected(1000, server_timeout: 100)
+  let #(listener, port) = fake_server.start_server()
+  let #(client, _updates) = fake_server.start_client_with_defaults(port)
 
-  let connect_task = task.async(fn() { spoke.connect(client, 10) })
-  // Open channel
-  let assert Ok(_) = process.receive(receives, 10)
-
+  let connect_task = task.async(fn() { spoke.connect(client, 100) })
+  let socket = fake_server.expect_connection_established(listener)
   spoke.disconnect(client)
 
   let assert Ok(Error(spoke.DisconnectRequested)) =
     task.try_await(connect_task, 10)
-  let assert Ok(Nil) = process.receive(disconnects, 1)
-  let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
+
+  fake_server.drop_incoming_data(socket)
+  fake_server.expect_connection_closed(socket)
 }
 
 pub fn timed_out_connect_disconnects_test() {
-  let #(client, _, _, disconnects, updates) =
-    test_client.set_up_disconnected(1000, server_timeout: 100)
+  let #(listener, port) = fake_server.start_server()
+  let #(client, updates) = fake_server.start_client_with_defaults(port)
 
   // The timeout used for connect is what matters (server timeout does not)
-  let assert Error(spoke.ConnectTimedOut) = spoke.connect(client, 2)
-  let assert Ok(Nil) = process.receive(disconnects, 1)
+  let connect_task = task.async(fn() { spoke.connect(client, 2) })
+  let socket = fake_server.expect_connection_established(listener)
+  let assert Error(spoke.ConnectTimedOut) = task.await(connect_task, 5)
+
   let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
+  fake_server.drop_incoming_data(socket)
+  fake_server.expect_connection_closed(socket)
 }
 
 pub fn connecting_when_already_connected_fails_test() {
-  let #(client, _, receives, _, _) =
-    test_client.set_up_disconnected(1000, server_timeout: 100)
+  let #(listener, port) = fake_server.start_server()
+  let #(client, updates) = fake_server.start_client_with_defaults(port)
 
-  let task_started = process.new_subject()
-  let initial_connect =
-    task.async(fn() {
-      process.send(task_started, Nil)
-      spoke.connect(client, 4)
-    })
+  // Start first connect
+  let initial_connect = task.async(fn() { spoke.connect(client, 100) })
+  let socket = fake_server.expect_connection_established(listener)
 
-  let assert Ok(Nil) = process.receive(task_started, 2)
-  let assert Error(spoke.AlreadyConnected) = spoke.connect(client, 4)
+  // Start overlapping connect
+  let assert Error(spoke.AlreadyConnected) = spoke.connect(client, 10)
 
-  // initial connect should still succeed
-  test_client.simulate_server_response(receives, incoming.ConnAck(Ok(False)))
+  // Finish initial connect
+  fake_server.drop_incoming_data(socket)
+  fake_server.send_response(socket, server_out.ConnAck(Ok(False)))
   let assert Ok(Ok(False)) = task.try_await(initial_connect, 10)
+
+  fake_server.disconnect(client, updates, socket)
 }
 
-pub fn channel_connect_error_fails_connect_test() {
-  let connect = fn() { Error(transport.ChannelClosed) }
-  let updates = process.new_subject()
-  let client = spoke.run("client-id", 1000, 100, connect, updates)
-
-  let assert Error(spoke.ConnectChannelError("ChannelClosed")) =
-    spoke.connect(client, 2)
+pub fn channel_error_on_connect_fails_connect_test() {
+  let #(client, _updates) = fake_server.start_client_with_defaults(9999)
+  let connect_task = task.async(fn() { spoke.connect(client, 100) })
+  let assert Error(spoke.ConnectChannelError("ConnectFailed(\"Econnrefused\")")) =
+    task.await(connect_task, 100)
 }
 
-pub fn channel_error_on_connect_packet_fails_connect_call_test() {
-  let shutdowns = process.new_subject()
-  let connect = fn() {
-    Ok(
-      transport.Channel(
-        send: fn(_) { Error(transport.ChannelClosed) },
-        selecting_next: fn(_) { process.new_selector() },
-        shutdown: fn() { process.send(shutdowns, Nil) },
-      ),
-    )
-  }
-  let updates = process.new_subject()
-  let client = spoke.run("client-id", 1000, 100, connect, updates)
+pub fn channel_error_after_establish_fails_connect_test() {
+  let #(listener, port) = fake_server.start_server()
+  let #(client, _updates) = fake_server.start_client_with_defaults(port)
 
-  let assert Error(spoke.ConnectChannelError("ChannelClosed")) =
-    spoke.connect(client, 2)
+  let connect_task = task.async(fn() { spoke.connect(client, 100) })
+  fake_server.reject_connection(listener)
+
+  let assert Error(spoke.ConnectChannelError("SendFailed(\"Closed\")")) =
+    task.await(connect_task, 100)
 }
