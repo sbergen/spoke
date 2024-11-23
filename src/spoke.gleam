@@ -391,7 +391,7 @@ fn handle_receive(
   }
 
   // TODO: Pending subscribes aren't handled in the error cases above.
-  // I'm wondering if we really need to make it synchronous or not?
+  // I'm wondering if we really need to make it blocking or not?
 
   use channel <- if_connected(state)
   actor.with_selector(
