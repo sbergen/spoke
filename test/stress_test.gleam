@@ -77,6 +77,7 @@ fn receive(
     True -> data
     False -> {
       let assert Ok(update) = process.receive(updates, 100)
+      let assert spoke.ReceivedMessage(..) = update
       receive(set.insert(data, update), updates)
     }
   }
