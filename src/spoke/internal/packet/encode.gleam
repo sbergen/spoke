@@ -9,8 +9,8 @@ import spoke/internal/packet.{type QoS, type SubscribeRequest, QoS0, QoS1, QoS2}
 const protocol_level: Int = 4
 
 pub type EncodeError {
-  EncodeNotImplemented
   EmptySubscribeList
+  EmptyUnsubscribeList
 }
 
 pub fn connect(client_id: String, keep_alive: Int) -> BytesTree {
@@ -72,12 +72,40 @@ pub fn subscribe(
   }
 }
 
+pub fn unsubscribe(
+  packet_id: Int,
+  topics: List(String),
+) -> Result(BytesTree, EncodeError) {
+  case topics {
+    [] -> Error(EmptyUnsubscribeList)
+    _ -> {
+      let header = <<packet_id:big-size(16)>>
+      let payload = {
+        use builder, topic <- list.fold(topics, bytes_tree.new())
+        builder
+        |> bytes_tree.append(string(topic))
+      }
+
+      Ok(encode_parts(10, <<2:4>>, header, payload))
+    }
+  }
+}
+
 pub fn disconnect() -> BytesTree {
   encode_parts(14, flags: <<0:4>>, header: <<>>, payload: bytes_tree.new())
 }
 
 pub fn ping_req() -> BytesTree {
   encode_parts(12, flags: <<0:4>>, header: <<>>, payload: bytes_tree.new())
+}
+
+pub fn only_packet_id(id: Int, packet_id: Int) -> BytesTree {
+  encode_parts(
+    id,
+    flags: <<0:4>>,
+    header: <<packet_id:big-size(16)>>,
+    payload: bytes_tree.new(),
+  )
 }
 
 fn encode_parts(

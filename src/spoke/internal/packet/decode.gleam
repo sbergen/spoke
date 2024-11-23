@@ -10,7 +10,6 @@ import spoke/internal/packet.{
 }
 
 pub type DecodeError {
-  DecodeNotImplemented
   InvalidPacketIdentifier(Int)
   DataTooShort
   InvalidData
