@@ -78,7 +78,7 @@ fn set_up_connected() -> #(spoke.Client, Subject(spoke.Update), Socket) {
 
   let updates = process.new_subject()
   let client =
-    spoke.start_with_sub_second_keep_alive(
+    spoke.start_with_ms_keep_alive(
       "ping-client",
       keep_alive,
       server_timeout,

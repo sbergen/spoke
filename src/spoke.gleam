@@ -106,11 +106,11 @@ pub fn start(
   transport_opts: TransportOptions,
   updates: Subject(Update),
 ) -> Client {
-  run(
+  start_with_ms_keep_alive(
     connect_opts.client_id,
     connect_opts.keep_alive_seconds * 1000,
     connect_opts.server_timeout_ms,
-    fn() { create_channel(transport_opts) },
+    transport_opts,
     updates,
   )
 }
@@ -187,34 +187,14 @@ fn call_or_disconnect(
 
 // allows specifying less than 1 second keep-alive for testing
 @internal
-pub fn start_with_sub_second_keep_alive(
+pub fn start_with_ms_keep_alive(
   client_id: String,
   keep_alive_ms: Int,
   server_timeout_ms: Int,
   transport_opts: TransportOptions,
   updates: Subject(Update),
 ) -> Client {
-  run(
-    client_id,
-    keep_alive_ms,
-    server_timeout_ms,
-    fn() { create_channel(transport_opts) },
-    updates,
-  )
-}
-
-// TODO: Remove this when all test have been migrated to use glisten
-// Internal for testability:
-// * EncodedChannel avoids having to encode packets we don't need to otherwise encode
-// * keep_alive: allow sub-second keep-alive for faster tests
-@internal
-pub fn run(
-  client_id: String,
-  keep_alive_ms: Int,
-  server_timeout_ms: Int,
-  connect: fn() -> ChannelResult(EncodedChannel),
-  updates: Subject(Update),
-) -> Client {
+  let connect = fn() { create_channel(transport_opts) }
   let config = Config(client_id, keep_alive_ms, server_timeout_ms, connect)
   let assert Ok(client) =
     actor.start_spec(actor.Spec(fn() { init(config, updates) }, 100, run_client))

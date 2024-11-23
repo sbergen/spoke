@@ -31,7 +31,7 @@ pub fn set_up_connected_client() -> #(
 
   let updates = process.new_subject()
   let client =
-    spoke.start_with_sub_second_keep_alive(
+    spoke.start_with_ms_keep_alive(
       "ping-client",
       15,
       100,
