@@ -310,8 +310,6 @@ fn do_connect(
 ) -> actor.Next(ClientMsg, ClientState) {
   case state.config.connect() {
     Ok(channel) -> {
-      let selector = next_selector(channel, <<>>, state.self)
-
       let state =
         ClientState(..state, conn_state: ConnectingToServer(channel, reply_to))
 
@@ -319,15 +317,18 @@ fn do_connect(
       let connect_packet =
         outgoing.Connect(config.client_id, config.keep_alive / 1000)
       case send_packet(state, connect_packet) {
-        Ok(state) -> actor.with_selector(actor.continue(state), selector)
+        Ok(state) -> {
+          let selector = next_selector(channel, <<>>, state.self)
+          actor.with_selector(actor.continue(state), selector)
+        }
         Error(e) -> {
           process.send(reply_to, Error(ConnectChannelError(string.inspect(e))))
-          handle_disconnect(state)
+          actor.continue(close_channel(state))
         }
       }
     }
     Error(e) -> {
-      // Channel connection failed, to change to state
+      // Channel connection failed, no change to state
       process.send(reply_to, Error(ConnectChannelError(string.inspect(e))))
       actor.continue(state)
     }
@@ -365,15 +366,31 @@ fn handle_receive(
   new_conn_state: BitArray,
   packets: ChannelResult(List(incoming.Packet)),
 ) -> actor.Next(ClientMsg, ClientState) {
-  case packets {
+  let state = case packets {
     Ok(packets) -> {
-      use packet <- list.each(packets)
-      process.send(state.self, ProcessReceived(packet))
+      list.each(packets, fn(packet) {
+        process.send(state.self, ProcessReceived(packet))
+      })
+      state
     }
-    // Nothing to do, this is expected
-    Error(transport.ChannelClosed) if state.conn_state == NotConnected -> Nil
-    Error(e) -> todo as { "Should disconnect: " <> string.inspect(e) }
+    Error(e) ->
+      case state.conn_state, e {
+        // This is expected, nothing to do
+        NotConnected, transport.ChannelClosed -> state
+        ConnectingToServer(_, reply_to), e -> {
+          let reply = Error(ConnectChannelError(string.inspect(e)))
+          process.send(reply_to, reply)
+          close_channel(state)
+        }
+        _, _ -> {
+          process.send(state.updates, Disconnected)
+          close_channel(state)
+        }
+      }
   }
+
+  // TODO: Pending subscribes aren't handled in the error cases above.
+  // I'm wondering if we really need to make it synchronous or not?
 
   use channel <- if_connected(state)
   actor.with_selector(
@@ -409,7 +426,7 @@ fn handle_connack(
       let conn_state = Connected(channel, start_ping_timeout(state), None)
       actor.continue(ClientState(..state, conn_state: conn_state))
     }
-    Error(e) -> {
+    Error(_) -> {
       // If a server sends a CONNACK packet containing a non-zero return code
       // it MUST then close the Network Connection
       // => close channel just in case, but don't send any update on this,

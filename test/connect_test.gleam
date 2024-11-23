@@ -98,6 +98,6 @@ pub fn channel_error_after_establish_fails_connect_test() {
   let connect_task = task.async(fn() { spoke.connect(client, 100) })
   fake_server.reject_connection(listener)
 
-  let assert Error(spoke.ConnectChannelError("SendFailed(\"Closed\")")) =
+  let assert Error(spoke.ConnectChannelError("ChannelClosed")) =
     task.await(connect_task, 100)
 }

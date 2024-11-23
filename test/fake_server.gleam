@@ -178,8 +178,7 @@ fn start_client_with(
       keep_alive_seconds: keep_alive,
       server_timeout_ms: default_timeout,
     )
-  let transport_opts =
-    spoke.TcpOptions("localhost", port, connect_timeout: default_timeout)
+  let transport_opts = spoke.TcpOptions("localhost", port, connect_timeout: 100)
   let updates = process.new_subject()
   let client = spoke.start(connect_opts, transport_opts, updates)
 
