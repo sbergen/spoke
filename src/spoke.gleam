@@ -365,10 +365,14 @@ fn handle_receive(
   new_conn_state: BitArray,
   packets: ChannelResult(List(incoming.Packet)),
 ) -> actor.Next(ClientMsg, ClientState) {
-  let assert Ok(packets) = packets
-  {
-    use packet <- list.each(packets)
-    process.send(state.self, ProcessReceived(packet))
+  case packets {
+    Ok(packets) -> {
+      use packet <- list.each(packets)
+      process.send(state.self, ProcessReceived(packet))
+    }
+    // Nothing to do, this is expected
+    Error(transport.ChannelClosed) if state.conn_state == NotConnected -> Nil
+    Error(e) -> todo as { "Should disconnect" <> string.inspect(e) }
   }
 
   use channel <- if_connected(state)
@@ -508,6 +512,8 @@ fn handle_disconnect(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
         None -> process.TimerNotFound
       }
 
+      // We don't really care about errors at this point any more?
+      let _ = channel.send(outgoing.Disconnect)
       channel.shutdown()
     }
     NotConnected -> Nil

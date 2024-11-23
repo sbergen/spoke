@@ -1,3 +1,4 @@
+import fake_server
 import gleam/erlang/process
 import gleam/otp/task
 import gleeunit/should
@@ -5,8 +6,19 @@ import spoke
 import spoke/internal/packet
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
+import spoke/internal/packet/server/outgoing as server_out
 import spoke/internal/transport
 import test_client
+
+pub fn connect_disconnect_test() {
+  let #(client, updates, state, received_data) =
+    fake_server.connect_specific(False, "test-client-id", 42)
+
+  received_data.client_id |> should.equal("test-client-id")
+  received_data.keep_alive |> should.equal(42)
+
+  fake_server.disconnect(client, updates, state)
+}
 
 pub fn connect_success_test() {
   let keep_alive_s = 15

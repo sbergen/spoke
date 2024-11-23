@@ -32,8 +32,10 @@ pub fn connect(
   // we should rather return more specific errors here.
   use #(name, rest) <- try(string(data))
   use _ <- try(name |> must_equal("MQTT"))
-  use #(version, rest) <- try(integer(rest))
-  use _ <- try(version |> must_equal(4))
+  use rest <- try(case rest {
+    <<4:8, rest:bits>> -> Ok(rest)
+    _ -> Error(InvalidData)
+  })
 
   // TODO: Use connect flags
   use #(_connect_flags, rest) <- try(split_fixed_data(rest, 1))
