@@ -176,7 +176,7 @@ fn call_or_disconnect(
   |> result.map_error(fn(e) {
     case e {
       process.CallTimeout -> {
-        process.send(client.subject, Disconnect)
+        process.send(client.subject, DropConnectionAndNotifyClient)
         timed_out_error
       }
       process.CalleeDown(_) -> killed_error
@@ -257,6 +257,7 @@ type ClientMsg {
   ProcessReceived(incoming.Packet)
   Ping
   Disconnect
+  DropConnectionAndNotifyClient
 }
 
 type ConnectionState {
@@ -307,6 +308,7 @@ fn run_client(
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
     Ping -> send_ping(state)
     Disconnect -> handle_disconnect(state)
+    DropConnectionAndNotifyClient -> drop_connection_and_notify(state)
   }
 }
 
@@ -550,9 +552,15 @@ fn handle_disconnect(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
     _ -> Nil
   }
 
-  let state = close_channel(state)
   process.send(state.updates, Disconnected)
-  actor.continue(state)
+  drop_connection_and_notify(state)
+}
+
+fn drop_connection_and_notify(
+  state: ClientState,
+) -> actor.Next(ClientMsg, ClientState) {
+  process.send(state.updates, Disconnected)
+  actor.continue(close_channel(state))
 }
 
 /// Closes the channel and cancels any timeouts,
