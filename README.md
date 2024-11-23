@@ -21,11 +21,11 @@ pub fn main() {
   let connect_opts =
     spoke.ConnectOptions(
       client_id,
-      keep_alive_seconds: 1,
+      keep_alive_seconds: 10,
       server_timeout_ms: 1000,
     )
   let transport_opts =
-    spoke.TcpOptions("test.mosquitto.org", 1883, connect_timeout: 1000)
+    spoke.TcpOptions("test.mosquitto.org", 1883, connect_timeout: 10_000)
 
   let updates = process.new_subject()
   let client = spoke.start(connect_opts, transport_opts, updates)
@@ -52,7 +52,8 @@ pub fn main() {
 }
 ```
 
-This should print
+This should print the following,
+assuming `test.mosquitto.org` is up (it's not rare for it to be down):
 ```
 Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ```
