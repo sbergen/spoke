@@ -1,15 +1,13 @@
-import gleam/erlang/process
+import fake_server
 import gleam/otp/task
 import gleeunit/should
 import spoke.{AtLeastOnce, AtMostOnce, ExactlyOnce}
 import spoke/internal/packet
-import spoke/internal/packet/client/incoming
-import spoke/internal/packet/client/outgoing
-import test_client
+import spoke/internal/packet/server/incoming as server_in
+import spoke/internal/packet/server/outgoing as server_out
 
 pub fn subscribe_success_test() {
-  let #(client, sent_packets, receives, _, _) =
-    test_client.set_up_connected(keep_alive: 1000, server_timeout: 100)
+  let #(client, updates, socket) = fake_server.set_up_connected_client()
 
   let topics = [
     spoke.SubscribeRequest("topic0", AtMostOnce),
@@ -23,16 +21,9 @@ pub fn subscribe_success_test() {
   ]
   let results = [Ok(packet.QoS0), Ok(packet.QoS1), Ok(packet.QoS2)]
 
-  let expected_id = 1
-
   let subscribe = task.async(fn() { spoke.subscribe(client, topics, 100) })
-
-  let assert Ok(result) = process.receive(sent_packets, 10)
-  result |> should.equal(outgoing.Subscribe(expected_id, request_payload))
-  test_client.simulate_server_response(
-    receives,
-    incoming.SubAck(expected_id, results),
-  )
+  fake_server.expect_packet(socket, server_in.Subscribe(1, request_payload))
+  fake_server.send_response(socket, server_out.SubAck(1, results))
 
   let assert Ok(Ok(results)) = task.try_await(subscribe, 10)
   results
@@ -42,5 +33,5 @@ pub fn subscribe_success_test() {
     spoke.SuccessfulSubscription("topic2", ExactlyOnce),
   ])
 
-  spoke.disconnect(client)
+  fake_server.disconnect(client, updates, socket)
 }

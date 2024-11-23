@@ -20,6 +20,29 @@ pub type ReceivedConnectData {
   ReceivedConnectData(client_id: String, keep_alive: Int)
 }
 
+/// Good default for most tests
+pub fn set_up_connected_client() -> #(
+  spoke.Client,
+  Subject(spoke.Update),
+  Socket,
+) {
+  let #(listener, port) = start_server()
+
+  let updates = process.new_subject()
+  let client =
+    spoke.start_with_sub_second_keep_alive(
+      "ping-client",
+      15,
+      100,
+      default_options(port),
+      updates,
+    )
+
+  let #(state, _, _) = connect_client(client, listener, Ok(False))
+
+  #(client, updates, state.socket)
+}
+
 pub fn start_server() -> #(ListenSocket, Int) {
   let assert Ok(listener) = tcp.listen(0, [ActiveMode(Passive)])
   let assert Ok(#(_, port)) = tcp.sockname(listener)

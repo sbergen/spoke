@@ -1,17 +1,16 @@
+import fake_server
 import gleam/erlang/process
 import gleam/option.{None}
 import spoke
 import spoke/internal/packet
-import spoke/internal/packet/client/incoming
-import test_client
+import spoke/internal/packet/server/outgoing as server_out
 
 pub fn receive_message_test() {
-  let #(client, _, receives, _, updates) =
-    test_client.set_up_connected(keep_alive: 1000, server_timeout: 100)
+  let #(client, updates, socket) = fake_server.set_up_connected_client()
 
   let data =
     packet.PublishData(
-      topic: "topic0",
+      topic: "topic",
       payload: <<"payload">>,
       dup: True,
       qos: packet.QoS0,
@@ -19,9 +18,10 @@ pub fn receive_message_test() {
       packet_id: None,
     )
 
-  test_client.simulate_server_response(receives, incoming.Publish(data))
+  fake_server.send_response(socket, server_out.Publish(data))
 
-  let assert Ok(spoke.ReceivedMessage(_, _, _)) = process.receive(updates, 10)
+  let assert Ok(spoke.ReceivedMessage("topic", <<"payload">>, False)) =
+    process.receive(updates, 10)
 
-  spoke.disconnect(client)
+  fake_server.disconnect(client, updates, socket)
 }
