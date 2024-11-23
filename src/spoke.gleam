@@ -185,6 +185,25 @@ fn call_or_disconnect(
   |> result.flatten
 }
 
+// allows specifying less than 1 second keep-alive for testing
+@internal
+pub fn start_with_sub_second_keep_alive(
+  client_id: String,
+  keep_alive_ms: Int,
+  server_timeout_ms: Int,
+  transport_opts: TransportOptions,
+  updates: Subject(Update),
+) -> Client {
+  run(
+    client_id,
+    keep_alive_ms,
+    server_timeout_ms,
+    fn() { create_channel(transport_opts) },
+    updates,
+  )
+}
+
+// TODO: Remove this when all test have been migrated to use glisten
 // Internal for testability:
 // * EncodedChannel avoids having to encode packets we don't need to otherwise encode
 // * keep_alive: allow sub-second keep-alive for faster tests

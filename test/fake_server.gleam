@@ -12,10 +12,6 @@ import spoke/internal/packet/server/outgoing
 
 const default_timeout = 100
 
-const default_client_id = "client-id"
-
-const default_keep_alive = 10
-
 pub type ConnectedState {
   ConnectedState(listener: ListenSocket, socket: Socket)
 }
@@ -24,50 +20,36 @@ pub type ReceivedConnectData {
   ReceivedConnectData(client_id: String, keep_alive: Int)
 }
 
-/// Connects with the given response, other details are defaults
-pub fn connect_with_response(
-  response: Result(Bool, packet.ConnectError),
-) -> #(
-  spoke.Client,
-  Subject(spoke.Update),
-  ConnectedState,
-  Result(Bool, spoke.ConnectError),
-) {
-  let #(client, updates, state, _, result) =
-    connect_specific(response, default_client_id, default_keep_alive)
-  #(client, updates, state, result)
-}
-
-/// The most customized way to connect
-pub fn connect_specific(
-  connect_response: Result(Bool, packet.ConnectError),
-  client_id: String,
-  keep_alive: Int,
-) -> #(
-  spoke.Client,
-  Subject(spoke.Update),
-  ConnectedState,
-  ReceivedConnectData,
-  Result(Bool, spoke.ConnectError),
-) {
-  let #(listener, port) = start_server()
-  let #(client, updates) = start_client_with(port, client_id, keep_alive)
-  let #(state, connect_result, details) =
-    do_connect_with_details(client, listener, connect_response)
-
-  #(client, updates, state, details, connect_result)
-}
-
 pub fn start_server() -> #(ListenSocket, Int) {
   let assert Ok(listener) = tcp.listen(0, [ActiveMode(Passive)])
   let assert Ok(#(_, port)) = tcp.sockname(listener)
   #(listener, port)
 }
 
-pub fn start_client_with_defaults(
-  port: Int,
-) -> #(spoke.Client, Subject(spoke.Update)) {
-  start_client_with(port, default_client_id, default_keep_alive)
+pub fn default_options(port: Int) {
+  spoke.TcpOptions("localhost", port, connect_timeout: 100)
+}
+
+/// Runs the full client connect process and returns the given response
+pub fn connect_client(
+  client: spoke.Client,
+  listener: ListenSocket,
+  response: Result(Bool, packet.ConnectError),
+) -> #(ConnectedState, Result(Bool, spoke.ConnectError), ReceivedConnectData) {
+  let connect_task = task.async(fn() { spoke.connect(client, default_timeout) })
+
+  let #(state, details) = expect_connect(listener)
+  send_response(state.socket, outgoing.ConnAck(response))
+
+  // If a server sends a CONNACK packet containing a non-zero return code
+  // it MUST then close the Network Connection
+  case result.is_error(response) {
+    True -> close_connection(state.socket)
+    False -> Nil
+  }
+
+  let assert Ok(connect_result) = task.try_await(connect_task, default_timeout)
+  #(state, connect_result, details)
 }
 
 pub fn reconnect(
@@ -75,7 +57,7 @@ pub fn reconnect(
   listener: ListenSocket,
   response: Result(Bool, packet.ConnectError),
 ) -> #(ConnectedState, Result(Bool, spoke.ConnectError)) {
-  let #(state, result, _) = do_connect_with_details(client, listener, response)
+  let #(state, result, _) = connect_client(client, listener, response)
   #(state, result)
 }
 
@@ -86,8 +68,36 @@ pub fn drop_incoming_data(socket: Socket) -> Nil {
   Nil
 }
 
+pub fn assert_no_incoming_data(socket: Socket) -> Nil {
+  let assert Error(socket.Timeout) = tcp.receive_timeout(socket, 0, 1)
+  Nil
+}
+
+pub fn expect_packet_matching(
+  socket: Socket,
+  predicate: fn(incoming.Packet) -> Bool,
+) -> Nil {
+  let received_packet = receive_packet(socket, default_timeout)
+  case predicate(received_packet) {
+    True -> Nil
+    False ->
+      panic as {
+        "Received packet did not match expectation: "
+        <> string.inspect(receive_packet)
+      }
+  }
+}
+
 pub fn expect_packet(socket: Socket, expected_packet: incoming.Packet) -> Nil {
-  let received_packet = receive_packet(socket)
+  expect_packet_timeout(socket, default_timeout, expected_packet)
+}
+
+pub fn expect_packet_timeout(
+  socket: Socket,
+  timeout: Int,
+  expected_packet: incoming.Packet,
+) -> Nil {
+  let received_packet = receive_packet(socket, timeout)
   case received_packet == expected_packet {
     True -> Nil
     False ->
@@ -144,49 +154,8 @@ pub fn disconnect(
   let assert Ok(_) = tcp.shutdown(socket)
 }
 
-/// Runs the full client connect process and returns the given response
-fn do_connect_with_details(
-  client: spoke.Client,
-  listener: ListenSocket,
-  response: Result(Bool, packet.ConnectError),
-) -> #(ConnectedState, Result(Bool, spoke.ConnectError), ReceivedConnectData) {
-  let connect_task = task.async(fn() { spoke.connect(client, default_timeout) })
-  let #(state, details) = expect_connect(listener)
-
-  send_response(state.socket, outgoing.ConnAck(response))
-
-  // If a server sends a CONNACK packet containing a non-zero return code
-  // it MUST then close the Network Connection
-  case result.is_error(response) {
-    True -> close_connection(state.socket)
-    False -> Nil
-  }
-
-  let assert Ok(connect_result) = task.try_await(connect_task, default_timeout)
-  #(state, connect_result, details)
-}
-
-/// Configures options and starts the client
-fn start_client_with(
-  port: Int,
-  client_id: String,
-  keep_alive: Int,
-) -> #(spoke.Client, Subject(spoke.Update)) {
-  let connect_opts =
-    spoke.ConnectOptions(
-      client_id,
-      keep_alive_seconds: keep_alive,
-      server_timeout_ms: default_timeout,
-    )
-  let transport_opts = spoke.TcpOptions("localhost", port, connect_timeout: 100)
-  let updates = process.new_subject()
-  let client = spoke.start(connect_opts, transport_opts, updates)
-
-  #(client, updates)
-}
-
-fn receive_packet(socket: Socket) -> incoming.Packet {
-  let assert Ok(data) = tcp.receive_timeout(socket, 0, default_timeout)
+fn receive_packet(socket: Socket, timeout: Int) -> incoming.Packet {
+  let assert Ok(data) = tcp.receive_timeout(socket, 0, timeout)
   let assert Ok(#(packet, <<>>)) = incoming.decode_packet(data)
   packet
 }
@@ -196,7 +165,7 @@ fn expect_connect(
   listener: ListenSocket,
 ) -> #(ConnectedState, ReceivedConnectData) {
   let socket = expect_connection_established(listener)
-  let packet = receive_packet(socket)
+  let packet = receive_packet(socket, default_timeout)
 
   case packet {
     incoming.Connect(client_id, keep_alive) -> #(

@@ -1,8 +1,9 @@
-import gleam/erlang/process
+import fake_server
+import gleam/erlang/process.{type Subject}
+import glisten/socket.{type Socket}
 import spoke.{AtMostOnce}
-import spoke/internal/packet/client/incoming
-import spoke/internal/packet/client/outgoing
-import test_client
+import spoke/internal/packet/server/incoming as server_in
+import spoke/internal/packet/server/outgoing as server_out
 
 // The ping tests might be a bit flaky, as we are dealing with time.
 // I couldn't find any easy way to fake time,
@@ -11,48 +12,81 @@ import test_client
 // Note that keep_alive, has to be significantly longer than server_timeout,
 // otherwise things get really racy.
 // TODO: Add validation of user-passed arguments to these
+const keep_alive = 50
+
+const server_timeout = 10
 
 pub fn pings_are_sent_when_no_other_activity_test() {
-  let #(client, sent_packets, receives, _, _) =
-    test_client.set_up_connected(keep_alive: 4, server_timeout: 2)
+  let #(client, updates, socket) = set_up_connected()
 
-  let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
-  test_client.simulate_server_response(receives, incoming.PingResp)
+  fake_server.expect_packet_timeout(socket, keep_alive + 2, server_in.PingReq)
+  fake_server.send_response(socket, server_out.PingResp)
 
-  let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
-  test_client.simulate_server_response(receives, incoming.PingResp)
+  fake_server.expect_packet_timeout(socket, keep_alive + 2, server_in.PingReq)
+  fake_server.send_response(socket, server_out.PingResp)
 
-  spoke.disconnect(client)
+  fake_server.expect_packet_timeout(socket, keep_alive + 2, server_in.PingReq)
+  fake_server.send_response(socket, server_out.PingResp)
+
+  fake_server.disconnect(client, updates, socket)
 }
 
 pub fn pings_are_not_sent_when_has_other_activity_test() {
-  let #(client, sent_packets, _, _, _) =
-    test_client.set_up_connected(keep_alive: 4, server_timeout: 100)
+  let #(client, updates, socket) = set_up_connected()
 
   let publish_data = spoke.PublishData("topic", <<>>, AtMostOnce, False)
 
-  // Send data at intevals less than the keep-alive
+  let is_publish = fn(packet: server_in.Packet) {
+    case packet {
+      server_in.Publish(_) -> True
+      _ -> False
+    }
+  }
+
+  // Send data at intervals less than the keep-alive
   let assert Ok(_) = spoke.publish(client, publish_data, 10)
-  let assert Ok(outgoing.Publish(_)) = process.receive(sent_packets, 10)
-  process.sleep(2)
+  fake_server.expect_packet_matching(socket, is_publish)
+  process.sleep(keep_alive / 2)
+
   let assert Ok(_) = spoke.publish(client, publish_data, 10)
-  let assert Ok(outgoing.Publish(_)) = process.receive(sent_packets, 10)
-  process.sleep(2)
+  fake_server.expect_packet_matching(socket, is_publish)
+  process.sleep(keep_alive / 2)
+
   let assert Ok(_) = spoke.publish(client, publish_data, 10)
-  let assert Ok(outgoing.Publish(_)) = process.receive(sent_packets, 10)
+  fake_server.expect_packet_matching(socket, is_publish)
 
   // The ping should be delayed
-  let assert Error(_) = process.receive(sent_packets, 2)
-  let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 4)
+  process.sleep(keep_alive / 2)
+  fake_server.assert_no_incoming_data(socket)
+  fake_server.expect_packet_timeout(socket, keep_alive, server_in.PingReq)
 
-  spoke.disconnect(client)
+  fake_server.disconnect(client, updates, socket)
 }
 
 pub fn connection_is_shut_down_if_no_pingresp_within_server_timeout_test() {
-  let #(_, sent_packets, _, disconnects, updates) =
-    test_client.set_up_connected(keep_alive: 4, server_timeout: 2)
+  let #(_client, updates, socket) = set_up_connected()
+  fake_server.expect_packet_timeout(socket, keep_alive + 2, server_in.PingReq)
+  process.sleep(server_timeout)
 
-  let assert Ok(outgoing.PingReq) = process.receive(sent_packets, 6)
-  let assert Ok(Nil) = process.receive(disconnects, 3)
+  fake_server.drop_incoming_data(socket)
+  fake_server.expect_connection_closed(socket)
   let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
+}
+
+fn set_up_connected() -> #(spoke.Client, Subject(spoke.Update), Socket) {
+  let #(listener, port) = fake_server.start_server()
+
+  let updates = process.new_subject()
+  let client =
+    spoke.start_with_sub_second_keep_alive(
+      "ping-client",
+      keep_alive,
+      server_timeout,
+      fake_server.default_options(port),
+      updates,
+    )
+
+  let #(state, _, _) = fake_server.connect_client(client, listener, Ok(False))
+
+  #(client, updates, state.socket)
 }
