@@ -1,3 +1,4 @@
+import gleam/bytes_tree.{type BytesTree}
 import gleam/erlang/process.{type Subject}
 import gleam/otp/task
 import gleam/result
@@ -139,6 +140,11 @@ pub fn send_response(socket: Socket, packet: outgoing.Packet) -> Nil {
   Nil
 }
 
+pub fn send_raw_response(socket: Socket, data: BytesTree) -> Nil {
+  let assert Ok(_) = tcp.send(socket, data)
+  Nil
+}
+
 pub fn expect_connection_established(listener: ListenSocket) -> Socket {
   let assert Ok(socket) = tcp.accept_timeout(listener, default_timeout)
   socket
@@ -167,7 +173,7 @@ pub fn disconnect(
   client: spoke.Client,
   updates: Subject(spoke.Update),
   socket: Socket,
-) {
+) -> Nil {
   spoke.disconnect(client)
 
   // TODO: This is not ideal, should we make disconnect use send instead of call?
@@ -175,6 +181,7 @@ pub fn disconnect(
 
   expect_packet(socket, incoming.Disconnect)
   let assert Ok(_) = tcp.shutdown(socket)
+  Nil
 }
 
 fn receive_packet(socket: Socket, timeout: Int) -> incoming.Packet {
