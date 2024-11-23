@@ -5,8 +5,8 @@ import gleam/list
 import gleam/option.{None}
 import gleam/result.{try}
 import spoke/internal/packet.{
-  type ConnAckResult, type PublishData, type QoS, type SubscribeResult, QoS0,
-  QoS1, QoS2,
+  type ConnAckResult, type PublishData, type QoS, type SubscribeRequest,
+  type SubscribeResult, QoS0, QoS1, QoS2, SubscribeRequest,
 }
 
 pub type DecodeError {
@@ -16,6 +16,34 @@ pub type DecodeError {
   InvalidUTF8
   InvalidQoS
   VarIntTooLarge
+}
+
+pub fn connect(
+  flags: BitArray,
+  data: BitArray,
+  construct: fn(String, Int) -> packet,
+) -> Result(#(packet, BitArray), DecodeError) {
+  // Constant header
+  use _ <- try(flags |> must_equal(<<0:4>>))
+  use #(data, remainder) <- try(split_var_data(data))
+
+  // Variable header:
+  // If this were to be used in an actual server,
+  // we should rather return more specific errors here.
+  use #(name, rest) <- try(string(data))
+  use _ <- try(name |> must_equal("MQTT"))
+  use #(version, rest) <- try(integer(rest))
+  use _ <- try(version |> must_equal(4))
+
+  // TODO: Use connect flags
+  use #(_connect_flags, rest) <- try(split_fixed_data(rest, 1))
+  use #(keep_alive, rest) <- try(integer(rest))
+
+  // Payload:
+  // TODO, read other fields based on flags
+  use #(client_id, _rest) <- try(string(rest))
+
+  Ok(#(construct(client_id, keep_alive), remainder))
 }
 
 pub fn connack(
@@ -32,6 +60,42 @@ pub fn connack(
     }
     _, _ -> Error(InvalidData)
   }
+}
+
+pub fn subscribe(
+  flags: BitArray,
+  data: BitArray,
+  construct: fn(Int, List(SubscribeRequest)) -> packet,
+) -> Result(#(packet, BitArray), DecodeError) {
+  // Constant header
+  use _ <- try(flags |> must_equal(<<2:4>>))
+  use #(data, remainder) <- try(split_var_data(data))
+
+  // Variable header:
+  use #(packet_id, rest) <- try(integer(data))
+
+  // Payload:
+  use requests <- try(subscribe_requests(rest, []))
+
+  Ok(#(construct(packet_id, requests), remainder))
+}
+
+pub fn unsubscribe(
+  flags: BitArray,
+  data: BitArray,
+  construct: fn(Int, List(String)) -> packet,
+) -> Result(#(packet, BitArray), DecodeError) {
+  // Constant header
+  use _ <- try(flags |> must_equal(<<2:4>>))
+  use #(data, remainder) <- try(split_var_data(data))
+
+  // Variable header:
+  use #(packet_id, rest) <- try(integer(data))
+
+  // Payload:
+  use topics <- try(strings(rest, []))
+
+  Ok(#(construct(packet_id, topics), remainder))
 }
 
 pub fn publish(
@@ -53,7 +117,9 @@ pub fn publish(
   }
 }
 
-pub fn pingresp(
+/// Checks that flags and length are zero,
+/// no variable header or payload
+pub fn zero_length(
   flags: BitArray,
   data: BitArray,
   value: packet,
@@ -96,6 +162,20 @@ pub fn only_packet_id(
       }
     }
     _, _ -> Error(InvalidData)
+  }
+}
+
+/// Decode a list of strings in a fixed-length context
+pub fn strings(
+  bits: BitArray,
+  results: List(String),
+) -> Result(List(String), DecodeError) {
+  case bits {
+    <<>> -> Ok(list.reverse(results))
+    bits -> {
+      use #(str, rest) <- try({ string(bits) |> must_be_long_enough })
+      rest |> strings([str, ..results])
+    }
   }
 }
 
@@ -159,6 +239,21 @@ fn split_var_data(bytes: BitArray) -> Result(#(BitArray, BitArray), DecodeError)
   split_fixed_data(rest, len)
 }
 
+fn must_equal(input: a, expected: a) -> Result(Nil, DecodeError) {
+  case input == expected {
+    True -> Ok(Nil)
+    False -> Error(InvalidData)
+  }
+}
+
+fn must_be_long_enough(result: Result(a, DecodeError)) -> Result(a, DecodeError) {
+  case result {
+    Ok(val) -> Ok(val)
+    Error(DataTooShort) -> Error(InvalidData)
+    Error(e) -> Error(e)
+  }
+}
+
 fn decode_connack_code(
   session_present: Int,
   code: Int,
@@ -194,6 +289,33 @@ fn decode_suback_return(val: Int) -> Result(SubscribeResult, DecodeError) {
     1 -> Ok(Ok(QoS1))
     2 -> Ok(Ok(QoS2))
     0x80 -> Ok(Error(Nil))
+    _ -> Error(InvalidData)
+  }
+}
+
+fn subscribe_requests(
+  bytes: BitArray,
+  requests: List(SubscribeRequest),
+) -> Result(List(SubscribeRequest), DecodeError) {
+  case bytes {
+    <<>> -> Ok(list.reverse(requests))
+    bytes -> {
+      use #(request, rest) <- try(subscribe_request(bytes))
+      rest |> subscribe_requests([request, ..requests])
+    }
+  }
+}
+
+fn subscribe_request(
+  bytes: BitArray,
+) -> Result(#(SubscribeRequest, BitArray), DecodeError) {
+  use #(topic_filter, rest) <- try(string(bytes))
+  case rest {
+    <<qos:8, rest:bytes>> -> {
+      use qos <- try(decode_qos(qos))
+      Ok(#(SubscribeRequest(topic_filter, qos), rest))
+    }
+    // This is used only in a fixed-length context!
     _ -> Error(InvalidData)
   }
 }

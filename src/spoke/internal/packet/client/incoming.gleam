@@ -31,7 +31,7 @@ pub fn decode_packet(
         7 -> decode.only_packet_id(flags, rest, PubComp)
         9 -> decode.suback(flags, rest, SubAck)
         11 -> decode.only_packet_id(flags, rest, UnsubAck)
-        13 -> decode.pingresp(flags, rest, PingResp)
+        13 -> decode.zero_length(flags, rest, PingResp)
         _ -> Error(decode.InvalidPacketIdentifier(id))
       }
     _ -> Error(decode.DataTooShort)
