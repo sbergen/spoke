@@ -99,7 +99,7 @@ pub fn encode_pub_xxx_test() {
   let assert <<5:4, 0:4, 2:8, 43:big-size(16)>> = bytes_tree.to_bit_array(bytes)
 
   let assert Ok(bytes) = outgoing.encode_packet(outgoing.PubRel(44))
-  let assert <<6:4, 0:4, 2:8, 44:big-size(16)>> = bytes_tree.to_bit_array(bytes)
+  let assert <<6:4, 2:4, 2:8, 44:big-size(16)>> = bytes_tree.to_bit_array(bytes)
 
   let assert Ok(bytes) = outgoing.encode_packet(outgoing.PubComp(45))
   let assert <<7:4, 0:4, 2:8, 45:big-size(16)>> = bytes_tree.to_bit_array(bytes)

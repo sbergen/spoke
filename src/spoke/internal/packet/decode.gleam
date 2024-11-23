@@ -193,7 +193,7 @@ fn decode_suback_return(val: Int) -> Result(SubscribeResult, DecodeError) {
     0 -> Ok(Ok(QoS0))
     1 -> Ok(Ok(QoS1))
     2 -> Ok(Ok(QoS2))
-    8 -> Ok(Error(Nil))
+    0x80 -> Ok(Error(Nil))
     _ -> Error(InvalidData)
   }
 }

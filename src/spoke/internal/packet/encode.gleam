@@ -4,7 +4,9 @@ import gleam/bit_array
 import gleam/bool
 import gleam/bytes_tree.{type BytesTree}
 import gleam/list
-import spoke/internal/packet.{type QoS, type SubscribeRequest, QoS0, QoS1, QoS2}
+import spoke/internal/packet.{
+  type QoS, type SubscribeRequest, type SubscribeResult, QoS0, QoS1, QoS2,
+}
 
 const protocol_level: Int = 4
 
@@ -72,6 +74,25 @@ pub fn subscribe(
   }
 }
 
+pub fn suback(
+  packet_id: Int,
+  results: List(SubscribeResult),
+) -> Result(BytesTree, EncodeError) {
+  case results {
+    [] -> Error(EmptySubscribeList)
+    _ -> {
+      let header = <<packet_id:big-size(16)>>
+      let payload = {
+        use builder, result <- list.fold(results, bytes_tree.new())
+        builder
+        |> bytes_tree.append(<<encode_suback_result(result):8>>)
+      }
+
+      Ok(encode_parts(9, <<0:4>>, header, payload))
+    }
+  }
+}
+
 pub fn unsubscribe(
   packet_id: Int,
   topics: List(String),
@@ -91,21 +112,47 @@ pub fn unsubscribe(
   }
 }
 
-pub fn disconnect() -> BytesTree {
-  encode_parts(14, flags: <<0:4>>, header: <<>>, payload: bytes_tree.new())
+pub fn connack(result: packet.ConnAckResult) -> BytesTree {
+  let header = case result {
+    Ok(True) -> <<1, 0>>
+    Ok(False) -> <<0, 0>>
+    Error(e) -> <<0, encode_connack_error(e):8>>
+  }
+  encode_parts(2, flags: <<0:4>>, header: header, payload: bytes_tree.new())
 }
 
-pub fn ping_req() -> BytesTree {
-  encode_parts(12, flags: <<0:4>>, header: <<>>, payload: bytes_tree.new())
+pub fn only_packet_type(type_id: Int) -> BytesTree {
+  encode_parts(type_id, flags: <<0:4>>, header: <<>>, payload: bytes_tree.new())
 }
 
-pub fn only_packet_id(id: Int, packet_id: Int) -> BytesTree {
+pub fn only_packet_id(type_id: Int, flags: Int, packet_id: Int) -> BytesTree {
   encode_parts(
-    id,
-    flags: <<0:4>>,
+    type_id,
+    flags: <<flags:4>>,
     header: <<packet_id:big-size(16)>>,
     payload: bytes_tree.new(),
   )
+}
+
+pub fn string(str: String) -> BitArray {
+  let data = bit_array.from_string(str)
+  let len = <<bit_array.byte_size(data):big-size(16)>>
+  bit_array.concat([len, data])
+}
+
+pub fn varint(i: Int) -> BitArray {
+  // TODO: Do we care about the max value (4 bytes)?
+  <<>> |> build_varint(i)
+}
+
+fn build_varint(bits: BitArray, i: Int) -> BitArray {
+  case i < 128 {
+    True -> <<bits:bits, i:8>>
+    False -> {
+      let remainder = i % 128
+      <<bits:bits, 1:1, remainder:7>> |> build_varint(i / 128)
+    }
+  }
 }
 
 fn encode_parts(
@@ -130,23 +177,19 @@ fn encode_qos(qos: QoS) -> Int {
   }
 }
 
-pub fn string(str: String) -> BitArray {
-  let data = bit_array.from_string(str)
-  let len = <<bit_array.byte_size(data):big-size(16)>>
-  bit_array.concat([len, data])
+fn encode_suback_result(result: SubscribeResult) -> Int {
+  case result {
+    Ok(qos) -> encode_qos(qos)
+    Error(_) -> 0x80
+  }
 }
 
-pub fn varint(i: Int) -> BitArray {
-  // TODO: Do we care about the max value (4 bytes)?
-  <<>> |> build_varint(i)
-}
-
-fn build_varint(bits: BitArray, i: Int) -> BitArray {
-  case i < 128 {
-    True -> <<bits:bits, i:8>>
-    False -> {
-      let remainder = i % 128
-      <<bits:bits, 1:1, remainder:7>> |> build_varint(i / 128)
-    }
+fn encode_connack_error(code: packet.ConnectError) -> Int {
+  case code {
+    packet.UnacceptableProtocolVersion -> 1
+    packet.IdentifierRefused -> 2
+    packet.ServerUnavailable -> 3
+    packet.BadUsernameOrPassword -> 4
+    packet.NotAuthorized -> 5
   }
 }

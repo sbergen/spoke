@@ -1,3 +1,5 @@
+//// Incoming packets for a MQTT client
+
 import spoke/internal/packet.{
   type ConnAckResult, type PublishData, type SubscribeResult,
 }

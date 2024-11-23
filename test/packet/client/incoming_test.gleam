@@ -81,7 +81,7 @@ pub fn suback_decode_test() {
     0:8,
     1:8,
     2:8,
-    8:8,
+    0x80:8,
     42:8,
   >>
 
