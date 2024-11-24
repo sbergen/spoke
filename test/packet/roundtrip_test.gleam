@@ -72,6 +72,16 @@ pub fn pingreq_roundtrip_test() {
   let assert server_in.PingReq = roundtrip_out(outgoing.PingReq)
 }
 
+pub fn pingresp_roundtrip_test() {
+  let assert incoming.PingResp = roundtrip_in(server_out.PingResp)
+}
+
+pub fn unsuback_roundtrip_test() {
+  use id <- qcheck.given(generators.packet_id())
+  let assert incoming.UnsubAck(rcv_id) = roundtrip_in(server_out.UnsubAck(id))
+  rcv_id == id
+}
+
 pub fn puback_out_roundtrip_test() {
   use packet_id <- qcheck.given(generators.packet_id())
   let assert server_in.PubAck(received_id) =

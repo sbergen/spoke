@@ -1,6 +1,4 @@
-import gleam/option.{None}
 import gleeunit/should
-import spoke/internal/packet.{QoS0, QoS1, QoS2}
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/decode.{InvalidData}
 import spoke/internal/packet/encode
@@ -35,13 +33,6 @@ pub fn connack_decode_invalid_return_code_test() {
   |> should.equal(Error(decode.InvalidData))
 }
 
-pub fn ping_resp_decode_test() {
-  let assert Ok(#(packet, rest)) =
-    incoming.decode_packet(<<13:4, 0:4, 0:8, 1:8>>)
-  rest |> should.equal(<<1:8>>)
-  packet |> should.equal(incoming.PingResp)
-}
-
 pub fn ping_resp_too_short_test() {
   let assert Error(decode.DataTooShort) = incoming.decode_packet(<<13:4, 0:4>>)
 }
@@ -59,9 +50,4 @@ pub fn pub_xxx_decode_invalid_test() {
   // flags are invalid
   let data = <<5:4, 1:4, encode.varint(2):bits, 43:big-size(16)>>
   let assert Error(InvalidData) = incoming.decode_packet(data)
-}
-
-pub fn unsuback_decode_test() {
-  let data = <<11:4, 0:4, encode.varint(2):bits, 42:big-size(16)>>
-  let assert Ok(#(incoming.UnsubAck(42), <<>>)) = incoming.decode_packet(data)
 }
