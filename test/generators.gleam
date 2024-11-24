@@ -1,8 +1,9 @@
 import gleam/bit_array
-import qcheck
+import gleam/list
+import qcheck.{type Generator}
 import spoke/internal/packet
 
-pub fn connect_data() -> qcheck.Generator(packet.ConnectOptions) {
+pub fn connect_data() -> Generator(packet.ConnectOptions) {
   qcheck.return({
     use clean_session <- qcheck.parameter
     use client_id <- qcheck.parameter
@@ -24,7 +25,29 @@ pub fn connect_data() -> qcheck.Generator(packet.ConnectOptions) {
   |> qcheck.apply(qcheck.option(message_data()))
 }
 
-pub fn auth_options() -> qcheck.Generator(packet.AuthOptions) {
+pub fn connack_result() -> Generator(packet.ConnAckResult) {
+  use success <- qcheck.bind(qcheck.bool())
+  case success {
+    True -> {
+      use session_present <- qcheck.map(qcheck.bool())
+      Ok(session_present)
+    }
+    False -> {
+      use error <- qcheck.map(
+        from_list([
+          packet.UnacceptableProtocolVersion,
+          packet.IdentifierRefused,
+          packet.ServerUnavailable,
+          packet.BadUsernameOrPassword,
+          packet.NotAuthorized,
+        ]),
+      )
+      Error(error)
+    }
+  }
+}
+
+fn auth_options() -> Generator(packet.AuthOptions) {
   qcheck.return({
     use username <- qcheck.parameter
     use password <- qcheck.parameter
@@ -34,7 +57,7 @@ pub fn auth_options() -> qcheck.Generator(packet.AuthOptions) {
   |> qcheck.apply(qcheck.option(bit_array()))
 }
 
-pub fn message_data() -> qcheck.Generator(packet.MessageData) {
+fn message_data() -> Generator(packet.MessageData) {
   qcheck.return({
     use topic <- qcheck.parameter
     use payload <- qcheck.parameter
@@ -48,21 +71,24 @@ pub fn message_data() -> qcheck.Generator(packet.MessageData) {
   |> qcheck.apply(qcheck.bool())
 }
 
-pub fn qos() -> qcheck.Generator(packet.QoS) {
-  use i <- qcheck.map(qcheck.int_uniform_inclusive(0, 2))
-  case i {
-    0 -> packet.QoS0
-    1 -> packet.QoS1
-    2 -> packet.QoS2
-    _ -> panic as "qcheck returned invalid value!"
-  }
+fn qos() -> Generator(packet.QoS) {
+  from_list([packet.QoS0, packet.QoS1, packet.QoS2])
 }
 
-pub fn bit_array() -> qcheck.Generator(BitArray) {
+fn bit_array() -> Generator(BitArray) {
   use str <- qcheck.map(qcheck.string())
   bit_array.from_string(str)
 }
 
-fn mqtt_int() -> qcheck.Generator(Int) {
+fn mqtt_int() -> Generator(Int) {
   qcheck.int_uniform_inclusive(0, 65_535)
+}
+
+fn from_list(values: List(a)) -> Generator(a) {
+  let max_index = list.length(values) - 1
+  use i <- qcheck.map(qcheck.int_uniform_inclusive(0, max_index))
+  case list.drop(values, i) {
+    [val, ..] -> val
+    [] -> panic as "qcheck returned invalid value!"
+  }
 }

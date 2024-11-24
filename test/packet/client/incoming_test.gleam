@@ -15,13 +15,6 @@ pub fn decode_invalid_id_test() {
   |> should.equal(Error(decode.InvalidPacketIdentifier(0)))
 }
 
-pub fn connack_decode_test() {
-  let assert Ok(#(packet, rest)) =
-    incoming.decode_packet(<<2:4, 0:4, 2:8, 0:16, 1:8>>)
-  rest |> should.equal(<<1:8>>)
-  packet |> should.equal(incoming.ConnAck(Ok(False)))
-}
-
 pub fn connack_decode_invalid_length_test() {
   incoming.decode_packet(<<2:4, 0:4, 3:8, 0:32>>)
   |> should.equal(Error(decode.InvalidData))
@@ -40,18 +33,6 @@ pub fn connack_decode_invalid_flags_test() {
 pub fn connack_decode_invalid_return_code_test() {
   incoming.decode_packet(<<2:4, 0:4, 2:8, 0:8, 6:8>>)
   |> should.equal(Error(decode.InvalidData))
-}
-
-pub fn connack_session_should_be_present_test() {
-  let assert Ok(#(packet, _)) =
-    incoming.decode_packet(<<2:4, 0:4, 2:8, 1:8, 0:8>>)
-  packet |> should.equal(incoming.ConnAck(Ok(True)))
-}
-
-pub fn connack_return_code_should_be_id_refused_test() {
-  let assert Ok(#(packet, _)) =
-    incoming.decode_packet(<<2:4, 0:4, 2:8, 0:8, 2:8>>)
-  packet |> should.equal(incoming.ConnAck(Error(packet.IdentifierRefused)))
 }
 
 pub fn ping_resp_decode_test() {

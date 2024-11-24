@@ -255,14 +255,3 @@ fn encode_or_zero(option: Option(a), map: fn(a) -> Int) -> Int {
     None -> 0
   }
 }
-
-fn append_option(
-  tree: BytesTree,
-  val: Option(a),
-  encode: fn(a) -> BitArray,
-) -> BytesTree {
-  case val {
-    Some(val) -> tree |> bytes_tree.append(encode(val))
-    None -> tree
-  }
-}
