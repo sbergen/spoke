@@ -2,11 +2,13 @@
 //// Note that these are currently used only for testing,
 //// but I might split the packets into a separate packages at some point.
 
-import spoke/internal/packet.{type PublishData, type SubscribeRequest}
+import spoke/internal/packet.{
+  type ConnectOptions, type PublishData, type SubscribeRequest,
+}
 import spoke/internal/packet/decode.{type DecodeError}
 
 pub type Packet {
-  Connect(client_id: String, keep_alive: Int)
+  Connect(ConnectOptions)
   Publish(PublishData)
   PubAck(packet_id: Int)
   PubRec(packet_id: Int)

@@ -198,9 +198,9 @@ fn expect_connect(
   let packet = receive_packet(socket, default_timeout)
 
   case packet {
-    incoming.Connect(client_id, keep_alive) -> #(
+    incoming.Connect(options) -> #(
       ConnectedState(listener, socket),
-      ReceivedConnectData(client_id, keep_alive),
+      ReceivedConnectData(options.client_id, options.keep_alive_seconds),
     )
     _ -> panic as { "expected Connect, got: " <> string.inspect(packet) }
   }

@@ -1,11 +1,13 @@
 //// Outgoing packets for a MQTT client
 
 import gleam/bytes_tree.{type BytesTree}
-import spoke/internal/packet.{type PublishData, type SubscribeRequest}
+import spoke/internal/packet.{
+  type ConnectOptions, type PublishData, type SubscribeRequest,
+}
 import spoke/internal/packet/encode.{type EncodeError}
 
 pub type Packet {
-  Connect(client_id: String, keep_alive: Int)
+  Connect(ConnectOptions)
   Publish(PublishData)
   PubAck(packet_id: Int)
   PubRec(packet_id: Int)
@@ -19,7 +21,7 @@ pub type Packet {
 
 pub fn encode_packet(packet: Packet) -> Result(BytesTree, EncodeError) {
   case packet {
-    Connect(client_id, keep_alive) -> Ok(encode.connect(client_id, keep_alive))
+    Connect(data) -> Ok(encode.connect(data))
     Publish(data) -> Ok(encode.publish(data))
     PubAck(packet_id) -> Ok(encode.only_packet_id(4, 0, packet_id))
     PubRec(packet_id) -> Ok(encode.only_packet_id(5, 0, packet_id))

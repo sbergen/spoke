@@ -6,26 +6,6 @@ import spoke/internal/packet.{QoS0, QoS1, QoS2}
 import spoke/internal/packet/client/outgoing
 import spoke/internal/packet/decode
 
-pub fn encode_connect_test() {
-  let assert Ok(builder) =
-    outgoing.encode_packet(outgoing.Connect("test-client-id", 15))
-
-  let assert <<1:4, 0:4, rest:bits>> = bytes_tree.to_bit_array(builder)
-  let rest = validate_remaining_len(rest)
-  let assert Ok(#("MQTT", rest)) = decode.string(rest)
-
-  // Protocol level
-  let assert <<4:8, rest:bits>> = rest
-
-  // Connect flags, we always just set clean session for now
-  let assert <<0b10:8, rest:bits>> = rest
-
-  // Keep-alive
-  let assert <<15:big-size(16), rest:bits>> = rest
-
-  let assert Ok(#("test-client-id", <<>>)) = decode.string(rest)
-}
-
 pub fn encode_subscribe_test() {
   let assert Ok(builder) =
     outgoing.encode_packet(

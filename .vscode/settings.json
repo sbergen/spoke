@@ -1,10 +1,11 @@
 {
     "cSpell.words": [
-        "unsub",
         "connack",
-        "suback",
         "MQTT",
         "pingresp",
+        "qcheck",
+        "suback",
+        "unsub",
         "varint"
     ]
 }

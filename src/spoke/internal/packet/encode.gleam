@@ -4,8 +4,11 @@ import gleam/bit_array
 import gleam/bool
 import gleam/bytes_tree.{type BytesTree}
 import gleam/list
+import gleam/option.{type Option, None, Some}
+import gleam/string
 import spoke/internal/packet.{
-  type QoS, type SubscribeRequest, type SubscribeResult, QoS0, QoS1, QoS2,
+  type ConnectOptions, type QoS, type SubscribeRequest, type SubscribeResult,
+  QoS0, QoS1, QoS2,
 }
 
 const protocol_level: Int = 4
@@ -15,30 +18,65 @@ pub type EncodeError {
   EmptyUnsubscribeList
 }
 
-pub fn connect(client_id: String, keep_alive: Int) -> BytesTree {
-  let user_name = 0
-  let password = 0
-  let will_retain = 0
-  let will_qos = 0
-  let will_flag = 0
-  let clean_session = 1
+pub fn connect(options: ConnectOptions) -> BytesTree {
+  // TODO what to do with this?
+  // The Server MUST allow ClientIds which are between 1 and 23 UTF-8 encoded bytes in length,
+  // and that contain only the characters
+  // "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  // The Server MAY allow ClientId’s that contain more than 23 encoded bytes.
+  // The Server MAY allow ClientId’s that contain characters not included in the list given above.
+
+  let password = option.then(options.auth, fn(a) { a.password })
+  let will_retain = option.map(options.will, fn(w) { w.retain })
+  let will_qos = option.map(options.will, fn(w) { w.qos })
 
   let header = <<
     string("MQTT"):bits,
     protocol_level:8,
-    user_name:1,
-    password:1,
-    will_retain:1,
-    will_qos:2,
-    will_flag:1,
-    clean_session:1,
+    option_to_flag(options.auth):1,
+    option_to_flag(password):1,
+    encode_or_zero(will_retain, encode_bool):1,
+    encode_or_zero(will_qos, encode_qos):2,
+    option_to_flag(options.will):1,
+    encode_bool(options.clean_session):1,
     0:1,
-    keep_alive:big-size(16),
+    options.keep_alive_seconds:big-size(16),
   >>
 
   let payload =
     bytes_tree.new()
-    |> bytes_tree.append(string(client_id))
+    |> bytes_tree.append(string(options.client_id))
+
+  let payload = case options.will {
+    Some(will) -> {
+      let size = bit_array.byte_size(will.payload)
+      payload
+      |> bytes_tree.append(string(will.topic))
+      |> bytes_tree.append(<<size:big-size(16)>>)
+      |> bytes_tree.append(will.payload)
+    }
+    None -> payload
+  }
+
+  let payload = case options.auth {
+    Some(auth) -> {
+      let payload =
+        payload
+        |> bytes_tree.append(string(auth.user_name))
+
+      case auth.password {
+        Some(password) -> {
+          let len = bit_array.byte_size(password)
+          payload
+          |> bytes_tree.append(<<len:big-size(16)>>)
+          |> bytes_tree.append(password)
+        }
+        None -> payload
+      }
+    }
+    None -> payload
+  }
+
   // More strings to be added here
 
   encode_parts(1, <<0:4>>, header, payload)
@@ -194,5 +232,37 @@ fn encode_connack_error(code: packet.ConnectError) -> Int {
     packet.ServerUnavailable -> 3
     packet.BadUsernameOrPassword -> 4
     packet.NotAuthorized -> 5
+  }
+}
+
+fn option_to_flag(option: Option(a)) -> Int {
+  case option {
+    Some(_) -> 1
+    None -> 0
+  }
+}
+
+fn encode_bool(val: Bool) -> Int {
+  case val {
+    True -> 1
+    False -> 0
+  }
+}
+
+fn encode_or_zero(option: Option(a), map: fn(a) -> Int) -> Int {
+  case option {
+    Some(x) -> map(x)
+    None -> 0
+  }
+}
+
+fn append_option(
+  tree: BytesTree,
+  val: Option(a),
+  encode: fn(a) -> BitArray,
+) -> BytesTree {
+  case val {
+    Some(val) -> tree |> bytes_tree.append(encode(val))
+    None -> tree
   }
 }

@@ -315,9 +315,15 @@ fn do_connect(
         ClientState(..state, conn_state: ConnectingToServer(channel, reply_to))
 
       let config = state.config
-      let connect_packet =
-        outgoing.Connect(config.client_id, config.keep_alive / 1000)
-      case send_packet(state, connect_packet) {
+      let options =
+        packet.ConnectOptions(
+          clean_session: True,
+          client_id: config.client_id,
+          keep_alive_seconds: config.keep_alive / 1000,
+          auth: None,
+          will: None,
+        )
+      case send_packet(state, outgoing.Connect(options)) {
         Ok(state) -> {
           let selector = next_selector(channel, <<>>, state.self)
           actor.with_selector(actor.continue(state), selector)

@@ -2,11 +2,12 @@
 
 import gleam/bit_array
 import gleam/list
-import gleam/option.{None}
+import gleam/option.{type Option, None, Some}
 import gleam/result.{try}
 import spoke/internal/packet.{
-  type ConnAckResult, type PublishData, type QoS, type SubscribeRequest,
-  type SubscribeResult, QoS0, QoS1, QoS2, SubscribeRequest,
+  type ConnAckResult, type ConnectOptions, type PublishData, type QoS,
+  type SubscribeRequest, type SubscribeResult, QoS0, QoS1, QoS2,
+  SubscribeRequest,
 }
 
 pub type DecodeError {
@@ -21,7 +22,7 @@ pub type DecodeError {
 pub fn connect(
   flags: BitArray,
   data: BitArray,
-  construct: fn(String, Int) -> packet,
+  construct: fn(ConnectOptions) -> packet,
 ) -> Result(#(packet, BitArray), DecodeError) {
   // Constant header
   use _ <- try(flags |> must_equal(<<0:4>>))
@@ -37,15 +38,65 @@ pub fn connect(
     _ -> Error(InvalidData)
   })
 
-  // TODO: Use connect flags
-  use #(_connect_flags, rest) <- try(split_fixed_data(rest, 1))
+  use #(connect_flags, rest) <- try(split_fixed_data(rest, 1))
   use #(keep_alive, rest) <- try(integer(rest))
 
-  // Payload:
-  // TODO, read other fields based on flags
-  use #(client_id, _rest) <- try(string(rest))
+  case connect_flags {
+    <<
+      uname_flag:1,
+      pw_flag:1,
+      will_retain:1,
+      will_qos:2,
+      will_flag:1,
+      clean_session:1,
+      0:1,
+    >> -> {
+      // Payload:
+      // TODO, read other fields based on flags
+      use #(client_id, rest) <- try(string(rest))
 
-  Ok(#(construct(client_id, keep_alive), remainder))
+      // Will
+      use #(will, rest) <- try(case will_flag {
+        1 -> {
+          use #(topic, rest) <- try(string(rest))
+          use #(payload_len, rest) <- try(integer(rest))
+          use #(payload, rest) <- try(split_fixed_data(rest, payload_len))
+          use qos <- try(decode_qos(will_qos))
+
+          let will = packet.MessageData(topic, payload, qos, will_retain == 1)
+          Ok(#(Some(will), rest))
+        }
+        _ -> {
+          use _ <- try(will_retain |> must_equal(0))
+          use _ <- try(will_qos |> must_equal(0))
+          Ok(#(None, rest))
+        }
+      })
+
+      // Auth
+      use #(auth, rest) <- try(case uname_flag {
+        1 -> auth_options(rest, pw_flag == 1)
+        _ -> {
+          use _ <- try(pw_flag |> must_equal(0))
+          Ok(#(None, rest))
+        }
+      })
+
+      use _ <- try(rest |> must_equal(<<>>))
+
+      let options =
+        packet.ConnectOptions(
+          clean_session == 1,
+          client_id,
+          keep_alive,
+          auth,
+          will,
+        )
+
+      Ok(#(construct(options), remainder))
+    }
+    _ -> Error(InvalidData)
+  }
 }
 
 pub fn connack(
@@ -159,7 +210,8 @@ pub fn only_packet_id(
     <<0:4>>, _ -> {
       use #(data, remainder) <- try(split_var_data(data))
       case data {
-        <<packet_id:big-size(16)>> -> Ok(#(construct(packet_id), remainder))
+        <<packet_id:big-unsigned-size(16)>> ->
+          Ok(#(construct(packet_id), remainder))
         _ -> Error(InvalidData)
       }
     }
@@ -183,7 +235,7 @@ pub fn strings(
 
 pub fn string(bits: BitArray) -> Result(#(String, BitArray), DecodeError) {
   case bits {
-    <<len:big-size(16), bytes:bytes-size(len), rest:bits>> -> {
+    <<len:big-unsigned-size(16), bytes:bytes-size(len), rest:bits>> -> {
       use str <- try(
         bit_array.to_string(bytes)
         |> result.map_error(fn(_) { InvalidUTF8 }),
@@ -197,7 +249,7 @@ pub fn string(bits: BitArray) -> Result(#(String, BitArray), DecodeError) {
 /// Standard MQTT big-endian 16-bit int
 pub fn integer(bits: BitArray) -> Result(#(Int, BitArray), DecodeError) {
   case bits {
-    <<val:big-size(16), rest:bytes>> -> Ok(#(val, rest))
+    <<val:big-unsigned-size(16), rest:bytes>> -> Ok(#(val, rest))
     _ -> Error(DataTooShort)
   }
 }
@@ -320,6 +372,26 @@ fn subscribe_request(
     // This is used only in a fixed-length context!
     _ -> Error(InvalidData)
   }
+}
+
+fn auth_options(
+  bytes: BitArray,
+  has_password: Bool,
+) -> Result(#(Option(packet.AuthOptions), BitArray), DecodeError) {
+  use #(username, rest) <- try(string(bytes))
+  use #(password, rest) <- try(case has_password {
+    True -> {
+      use #(len, rest) <- try(integer(rest))
+      case rest {
+        <<password:bytes-size(len), rest:bits>> -> Ok(#(Some(password), rest))
+        _ -> Error(InvalidData)
+      }
+    }
+    False -> Ok(#(None, rest))
+  })
+
+  let auth = packet.AuthOptions(username, password)
+  Ok(#(Some(auth), rest))
 }
 
 fn decode_qos(val: Int) -> Result(QoS, DecodeError) {
