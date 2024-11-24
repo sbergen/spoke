@@ -1,5 +1,6 @@
 import gleam/bit_array
 import gleam/list
+import gleam/option.{None, Some}
 import qcheck.{type Generator}
 import spoke/internal/packet
 
@@ -69,6 +70,36 @@ pub fn suback() -> Generator(#(Int, List(packet.SubscribeResult))) {
   qcheck.tuple2(packet_id(), qcheck.list_generic(one_subscribe_result(), 1, 5))
 }
 
+pub fn valid_publish_data() -> Generator(packet.PublishData) {
+  use message <- qcheck.bind(message_data())
+  case message.qos {
+    packet.QoS0 -> qcheck.return(packet.PublishData(message, False, None))
+    _ -> {
+      qcheck.return({
+        use dup <- qcheck.parameter
+        use id <- qcheck.parameter
+        packet.PublishData(message, dup, Some(id))
+      })
+      |> qcheck.apply(qcheck.bool())
+      |> qcheck.apply(packet_id())
+    }
+  }
+}
+
+fn message_data() -> Generator(packet.MessageData) {
+  qcheck.return({
+    use topic <- qcheck.parameter
+    use payload <- qcheck.parameter
+    use qos <- qcheck.parameter
+    use retain <- qcheck.parameter
+    packet.MessageData(topic, payload, qos, retain)
+  })
+  |> qcheck.apply(qcheck.string_non_empty())
+  |> qcheck.apply(bit_array())
+  |> qcheck.apply(qos())
+  |> qcheck.apply(qcheck.bool())
+}
+
 fn one_subscribe_request() -> Generator(packet.SubscribeRequest) {
   qcheck.return({
     use filter <- qcheck.parameter
@@ -98,20 +129,6 @@ fn auth_options() -> Generator(packet.AuthOptions) {
   })
   |> qcheck.apply(qcheck.string())
   |> qcheck.apply(qcheck.option(bit_array()))
-}
-
-fn message_data() -> Generator(packet.MessageData) {
-  qcheck.return({
-    use topic <- qcheck.parameter
-    use payload <- qcheck.parameter
-    use qos <- qcheck.parameter
-    use retain <- qcheck.parameter
-    packet.MessageData(topic, payload, qos, retain)
-  })
-  |> qcheck.apply(qcheck.string_non_empty())
-  |> qcheck.apply(bit_array())
-  |> qcheck.apply(qos())
-  |> qcheck.apply(qcheck.bool())
 }
 
 fn qos() -> Generator(packet.QoS) {

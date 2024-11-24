@@ -83,14 +83,24 @@ pub fn connect(options: ConnectOptions) -> BytesTree {
 }
 
 pub fn publish(data: packet.PublishData) -> BytesTree {
-  // TODO validate dup and packet id against QoS
+  // TODO validate dup against QoS
 
   let message = data.message
   let dup = bool.to_int(data.dup)
   let retain = bool.to_int(message.retain)
   let flags = <<dup:1, encode_qos(message.qos):2, retain:1>>
-  // TODO packet id for QoS > 0
   let header = string(message.topic)
+
+  // Packet id, if QoS > 0
+  let header = case message.qos {
+    QoS0 -> header
+    _ ->
+      case data.packet_id {
+        Some(id) -> bit_array.append(header, <<id:big-size(16)>>)
+        None -> todo as "we need to return an error if this happens"
+      }
+  }
+
   let payload = bytes_tree.from_bit_array(message.payload)
   encode_parts(3, flags, header, payload)
 }

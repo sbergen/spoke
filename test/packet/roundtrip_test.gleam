@@ -46,11 +46,22 @@ pub fn suback_roundtrip_test() {
 
 pub fn unsubscribe_roundtrip_test() {
   use #(id, requests) <- qcheck.given(generators.unsubscribe_request())
-
   let assert server_in.Unsubscribe(rcv_id, rcv_requests) =
     roundtrip_out(outgoing.Unsubscribe(id, requests))
 
   id == rcv_id && requests == rcv_requests
+}
+
+pub fn publish_out_roundtrip_test() {
+  use data <- qcheck.given(generators.valid_publish_data())
+  let assert server_in.Publish(rcv_data) = roundtrip_out(outgoing.Publish(data))
+  rcv_data == data
+}
+
+pub fn publish_in_roundtrip_test() {
+  use data <- qcheck.given(generators.valid_publish_data())
+  let assert incoming.Publish(rcv_data) = roundtrip_in(server_out.Publish(data))
+  rcv_data == data
 }
 
 pub fn disconnect_roundtrip_test() {

@@ -157,10 +157,22 @@ pub fn publish(
     <<dup:1, qos:2, retain:1>> -> {
       use qos <- try(decode_qos(qos))
       use #(data, remainder) <- try(split_var_data(data))
-      // TODO: Packet id for QoS > 0
+
       use #(topic, rest) <- try(string(data))
+
+      // Packet id, if QoS > 0
+      use #(packet_id, rest) <- try(case qos {
+        QoS0 -> Ok(#(None, rest))
+        _ ->
+          case rest {
+            <<packet_id:big-unsigned-size(16), rest:bits>> ->
+              Ok(#(Some(packet_id), rest))
+            _ -> Error(InvalidData)
+          }
+      })
+
       let msg_data = packet.MessageData(topic, rest, qos, retain == 1)
-      let data = packet.PublishData(msg_data, dup == 1, None)
+      let data = packet.PublishData(msg_data, dup == 1, packet_id)
       Ok(#(construct(data), remainder))
     }
     _ -> Error(InvalidData)
