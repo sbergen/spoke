@@ -25,12 +25,12 @@ pub fn decode_packet(
       case id {
         2 -> decode.connack(flags, rest, ConnAck)
         3 -> decode.publish(flags, rest, Publish)
-        4 -> decode.only_packet_id(flags, rest, PubAck)
-        5 -> decode.only_packet_id(flags, rest, PubRec)
-        6 -> decode.only_packet_id(flags, rest, PubRel)
-        7 -> decode.only_packet_id(flags, rest, PubComp)
+        4 -> decode.only_packet_id(flags, rest, 0, PubAck)
+        5 -> decode.only_packet_id(flags, rest, 0, PubRec)
+        6 -> decode.only_packet_id(flags, rest, 2, PubRel)
+        7 -> decode.only_packet_id(flags, rest, 0, PubComp)
         9 -> decode.suback(flags, rest, SubAck)
-        11 -> decode.only_packet_id(flags, rest, UnsubAck)
+        11 -> decode.only_packet_id(flags, rest, 0, UnsubAck)
         13 -> decode.zero_length(flags, rest, PingResp)
         _ -> Error(decode.InvalidPacketIdentifier(id))
       }

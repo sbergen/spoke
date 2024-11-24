@@ -2,7 +2,12 @@
     "cSpell.words": [
         "connack",
         "MQTT",
+        "pingreq",
         "pingresp",
+        "puback",
+        "pubcomp",
+        "pubrec",
+        "pubrel",
         "qcheck",
         "suback",
         "unsub",

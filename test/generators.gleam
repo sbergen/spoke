@@ -2,7 +2,6 @@ import gleam/bit_array
 import gleam/list
 import qcheck.{type Generator}
 import spoke/internal/packet
-import spoke/internal/packet/client/outgoing
 
 pub fn connect_data() -> Generator(packet.ConnectOptions) {
   qcheck.return({
@@ -58,6 +57,18 @@ pub fn subscribe_request() -> Generator(#(Int, List(packet.SubscribeRequest))) {
   |> qcheck.apply(qcheck.list_generic(one_subscribe_request(), 1, 5))
 }
 
+pub fn packet_id() -> Generator(Int) {
+  qcheck.int_uniform_inclusive(1, 65_535)
+}
+
+pub fn unsubscribe_request() -> Generator(#(Int, List(String))) {
+  qcheck.tuple2(packet_id(), qcheck.list_generic(qcheck.string(), 1, 5))
+}
+
+pub fn suback() -> Generator(#(Int, List(packet.SubscribeResult))) {
+  qcheck.tuple2(packet_id(), qcheck.list_generic(one_subscribe_result(), 1, 5))
+}
+
 fn one_subscribe_request() -> Generator(packet.SubscribeRequest) {
   qcheck.return({
     use filter <- qcheck.parameter
@@ -66,6 +77,17 @@ fn one_subscribe_request() -> Generator(packet.SubscribeRequest) {
   })
   |> qcheck.apply(qcheck.string())
   |> qcheck.apply(qos())
+}
+
+fn one_subscribe_result() -> Generator(packet.SubscribeResult) {
+  use success <- qcheck.bind(qcheck.bool())
+  case success {
+    True -> {
+      use qos <- qcheck.map(qos())
+      Ok(qos)
+    }
+    False -> qcheck.return(Error(Nil))
+  }
 }
 
 fn auth_options() -> Generator(packet.AuthOptions) {
@@ -103,10 +125,6 @@ fn bit_array() -> Generator(BitArray) {
 
 fn mqtt_int() -> Generator(Int) {
   qcheck.int_uniform_inclusive(0, 65_535)
-}
-
-fn packet_id() -> Generator(Int) {
-  qcheck.int_uniform_inclusive(1, 65_535)
 }
 
 fn from_list(values: List(a)) -> Generator(a) {

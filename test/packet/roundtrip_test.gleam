@@ -20,29 +20,115 @@ pub fn connect_roundtrip_test() {
   received_data == expected_data
 }
 
-pub fn subscribe_roundtrip_test() {
-  use #(id, requests) <- qcheck.given(generators.subscribe_request())
-
-  let assert server_in.Subscribe(rcv_id, rcv_requests) =
-    roundtrip_out(outgoing.Subscribe(id, requests))
-
-  id == rcv_id && requests == rcv_requests
-}
-
 pub fn connack_roundtrip_test() {
   use expected_result <- qcheck.given(generators.connack_result())
-
-  let assert Ok(bytes) =
-    server_out.encode_packet(server_out.ConnAck(expected_result))
-  let assert Ok(#(incoming.ConnAck(received_result), <<>>)) =
-    incoming.decode_packet(bytes_tree.to_bit_array(bytes))
+  let assert incoming.ConnAck(received_result) =
+    roundtrip_in(server_out.ConnAck(expected_result))
 
   received_result == expected_result
 }
 
+pub fn subscribe_roundtrip_test() {
+  use #(id, requests) <- qcheck.given(generators.subscribe_request())
+  let assert server_in.Subscribe(rcv_id, rcv_requests) =
+    roundtrip_out(outgoing.Subscribe(id, requests))
+
+  rcv_id == id && rcv_requests == requests
+}
+
+pub fn suback_roundtrip_test() {
+  use #(id, results) <- qcheck.given(generators.suback())
+  let assert incoming.SubAck(rcv_id, rcv_results) =
+    roundtrip_in(server_out.SubAck(id, results))
+
+  rcv_id == id && rcv_results == results
+}
+
+pub fn unsubscribe_roundtrip_test() {
+  use #(id, requests) <- qcheck.given(generators.unsubscribe_request())
+
+  let assert server_in.Unsubscribe(rcv_id, rcv_requests) =
+    roundtrip_out(outgoing.Unsubscribe(id, requests))
+
+  id == rcv_id && requests == rcv_requests
+}
+
+pub fn disconnect_roundtrip_test() {
+  let assert server_in.Disconnect = roundtrip_out(outgoing.Disconnect)
+}
+
+pub fn pingreq_roundtrip_test() {
+  let assert server_in.PingReq = roundtrip_out(outgoing.PingReq)
+}
+
+pub fn puback_out_roundtrip_test() {
+  use packet_id <- qcheck.given(generators.packet_id())
+  let assert server_in.PubAck(received_id) =
+    roundtrip_out(outgoing.PubAck(packet_id))
+  received_id == packet_id
+}
+
+pub fn pubrec_out_roundtrip_test() {
+  use packet_id <- qcheck.given(generators.packet_id())
+  let assert server_in.PubRec(received_id) =
+    roundtrip_out(outgoing.PubRec(packet_id))
+  received_id == packet_id
+}
+
+pub fn pubrel_out_roundtrip_test() {
+  use packet_id <- qcheck.given(generators.packet_id())
+  let assert server_in.PubRel(received_id) =
+    roundtrip_out(outgoing.PubRel(packet_id))
+  received_id == packet_id
+}
+
+pub fn pubcomp_out_roundtrip_test() {
+  use packet_id <- qcheck.given(generators.packet_id())
+  let assert server_in.PubComp(received_id) =
+    roundtrip_out(outgoing.PubComp(packet_id))
+  received_id == packet_id
+}
+
+pub fn puback_in_roundtrip_test() {
+  use packet_id <- qcheck.given(generators.packet_id())
+  let assert incoming.PubAck(received_id) =
+    roundtrip_in(server_out.PubAck(packet_id))
+  received_id == packet_id
+}
+
+pub fn pubrec_in_roundtrip_test() {
+  use packet_id <- qcheck.given(generators.packet_id())
+  let assert incoming.PubRec(received_id) =
+    roundtrip_in(server_out.PubRec(packet_id))
+  received_id == packet_id
+}
+
+pub fn pubrel_in_roundtrip_test() {
+  use packet_id <- qcheck.given(generators.packet_id())
+  let assert incoming.PubRel(received_id) =
+    roundtrip_in(server_out.PubRel(packet_id))
+  received_id == packet_id
+}
+
+pub fn pubcomp_in_roundtrip_test() {
+  use packet_id <- qcheck.given(generators.packet_id())
+  let assert incoming.PubComp(received_id) =
+    roundtrip_in(server_out.PubComp(packet_id))
+  received_id == packet_id
+}
+
+/// Encodes outgoing packet, and decodes it as incoming server packet
 fn roundtrip_out(out: outgoing.Packet) -> server_in.Packet {
   let assert Ok(bytes) = outgoing.encode_packet(out)
   let assert Ok(#(packet, <<>>)) =
     server_in.decode_packet(bytes_tree.to_bit_array(bytes))
+  packet
+}
+
+/// Encodes server outgoing packet, and decodes it as incoming packet
+fn roundtrip_in(out: server_out.Packet) -> incoming.Packet {
+  let assert Ok(bytes) = server_out.encode_packet(out)
+  let assert Ok(#(packet, <<>>)) =
+    incoming.decode_packet(bytes_tree.to_bit_array(bytes))
   packet
 }

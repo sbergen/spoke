@@ -201,10 +201,12 @@ pub fn suback(
 pub fn only_packet_id(
   flags: BitArray,
   data: BitArray,
+  expected_flags: Int,
   construct: fn(Int) -> packet,
 ) -> Result(#(packet, BitArray), DecodeError) {
-  case flags, data {
-    <<0:4>>, _ -> {
+  case flags {
+    <<received_flags:4>> -> {
+      use _ <- try(received_flags |> must_equal(expected_flags))
       use #(data, remainder) <- try(split_var_data(data))
       case data {
         <<packet_id:big-unsigned-size(16)>> ->
@@ -212,7 +214,7 @@ pub fn only_packet_id(
         _ -> Error(InvalidData)
       }
     }
-    _, _ -> Error(InvalidData)
+    _ -> Error(InvalidData)
   }
 }
 
