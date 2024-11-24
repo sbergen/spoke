@@ -2,7 +2,7 @@
 
 import gleam/bit_array
 import gleam/list
-import gleam/option.{type Option, None, Some}
+import gleam/option.{None, Some}
 import gleam/result.{try}
 import spoke/internal/packet.{
   type ConnAckResult, type ConnectOptions, type PublishData, type QoS,
@@ -51,19 +51,13 @@ pub fn connect(
       clean_session:1,
       0:1,
     >> -> {
-      // Payload:
-      // TODO, read other fields based on flags
+      // Client id
       use #(client_id, rest) <- try(string(rest))
 
       // Will
       use #(will, rest) <- try(case will_flag {
         1 -> {
-          use #(topic, rest) <- try(string(rest))
-          use #(payload_len, rest) <- try(integer(rest))
-          use #(payload, rest) <- try(split_fixed_data(rest, payload_len))
-          use qos <- try(decode_qos(will_qos))
-
-          let will = packet.MessageData(topic, payload, qos, will_retain == 1)
+          use #(will, rest) <- try(will(rest, will_qos, will_retain))
           Ok(#(Some(will), rest))
         }
         _ -> {
@@ -75,7 +69,10 @@ pub fn connect(
 
       // Auth
       use #(auth, rest) <- try(case uname_flag {
-        1 -> auth_options(rest, pw_flag == 1)
+        1 -> {
+          use #(auth, rest) <- try(auth_options(rest, pw_flag == 1))
+          Ok(#(Some(auth), rest))
+        }
         _ -> {
           use _ <- try(pw_flag |> must_equal(0))
           Ok(#(None, rest))
@@ -374,10 +371,24 @@ fn subscribe_request(
   }
 }
 
+fn will(
+  bytes: BitArray,
+  qos_int: Int,
+  retain: Int,
+) -> Result(#(packet.MessageData, BitArray), DecodeError) {
+  use #(topic, rest) <- try(string(bytes))
+  use #(payload_len, rest) <- try(integer(rest))
+  use #(payload, rest) <- try(split_fixed_data(rest, payload_len))
+  use qos <- try(decode_qos(qos_int))
+
+  let will = packet.MessageData(topic, payload, qos, retain == 1)
+  Ok(#(will, rest))
+}
+
 fn auth_options(
   bytes: BitArray,
   has_password: Bool,
-) -> Result(#(Option(packet.AuthOptions), BitArray), DecodeError) {
+) -> Result(#(packet.AuthOptions, BitArray), DecodeError) {
   use #(username, rest) <- try(string(bytes))
   use #(password, rest) <- try(case has_password {
     True -> {
@@ -391,7 +402,7 @@ fn auth_options(
   })
 
   let auth = packet.AuthOptions(username, password)
-  Ok(#(Some(auth), rest))
+  Ok(#(auth, rest))
 }
 
 fn decode_qos(val: Int) -> Result(QoS, DecodeError) {
