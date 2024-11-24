@@ -2,35 +2,9 @@ import gleam/bit_array
 import gleam/bytes_tree
 import gleam/option.{None}
 import gleeunit/should
-import spoke/internal/packet.{QoS0, QoS1, QoS2}
+import spoke/internal/packet.{QoS0}
 import spoke/internal/packet/client/outgoing
 import spoke/internal/packet/decode
-
-pub fn encode_subscribe_test() {
-  let assert Ok(builder) =
-    outgoing.encode_packet(
-      outgoing.Subscribe(42, [
-        packet.SubscribeRequest("topic0", QoS0),
-        packet.SubscribeRequest("topic1", QoS1),
-        packet.SubscribeRequest("topic2", QoS2),
-      ]),
-    )
-
-  // flags are reserved
-  let assert <<8:4, 2:4, rest:bits>> = bytes_tree.to_bit_array(builder)
-  let rest = validate_remaining_len(rest)
-
-  let assert <<42:big-size(16), rest:bits>> = rest
-
-  let assert Ok(#("topic0", rest)) = decode.string(rest)
-  let assert <<0:8, rest:bits>> = rest
-
-  let assert Ok(#("topic1", rest)) = decode.string(rest)
-  let assert <<1:8, rest:bits>> = rest
-
-  let assert Ok(#("topic2", rest)) = decode.string(rest)
-  let assert <<2:8>> = rest
-}
 
 pub fn encode_unsubscribe_test() {
   let assert Ok(bytes) =

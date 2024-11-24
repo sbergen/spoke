@@ -14,12 +14,19 @@ import spoke/internal/packet/server/outgoing as server_out
 
 pub fn connect_roundtrip_test() {
   use expected_data <- qcheck.given(generators.connect_data())
-
-  let assert Ok(bytes) = outgoing.encode_packet(outgoing.Connect(expected_data))
-  let assert Ok(#(server_in.Connect(received_data), <<>>)) =
-    server_in.decode_packet(bytes_tree.to_bit_array(bytes))
+  let assert server_in.Connect(received_data) =
+    roundtrip_out(outgoing.Connect(expected_data))
 
   received_data == expected_data
+}
+
+pub fn subscribe_roundtrip_test() {
+  use #(id, requests) <- qcheck.given(generators.subscribe_request())
+
+  let assert server_in.Subscribe(rcv_id, rcv_requests) =
+    roundtrip_out(outgoing.Subscribe(id, requests))
+
+  id == rcv_id && requests == rcv_requests
 }
 
 pub fn connack_roundtrip_test() {
@@ -31,4 +38,11 @@ pub fn connack_roundtrip_test() {
     incoming.decode_packet(bytes_tree.to_bit_array(bytes))
 
   received_result == expected_result
+}
+
+fn roundtrip_out(out: outgoing.Packet) -> server_in.Packet {
+  let assert Ok(bytes) = outgoing.encode_packet(out)
+  let assert Ok(#(packet, <<>>)) =
+    server_in.decode_packet(bytes_tree.to_bit_array(bytes))
+  packet
 }

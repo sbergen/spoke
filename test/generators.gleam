@@ -2,6 +2,7 @@ import gleam/bit_array
 import gleam/list
 import qcheck.{type Generator}
 import spoke/internal/packet
+import spoke/internal/packet/client/outgoing
 
 pub fn connect_data() -> Generator(packet.ConnectOptions) {
   qcheck.return({
@@ -47,6 +48,26 @@ pub fn connack_result() -> Generator(packet.ConnAckResult) {
   }
 }
 
+pub fn subscribe_request() -> Generator(#(Int, List(packet.SubscribeRequest))) {
+  qcheck.return({
+    use packet_id <- qcheck.parameter
+    use requests <- qcheck.parameter
+    #(packet_id, requests)
+  })
+  |> qcheck.apply(packet_id())
+  |> qcheck.apply(qcheck.list_generic(one_subscribe_request(), 1, 5))
+}
+
+fn one_subscribe_request() -> Generator(packet.SubscribeRequest) {
+  qcheck.return({
+    use filter <- qcheck.parameter
+    use qos <- qcheck.parameter
+    packet.SubscribeRequest(filter, qos)
+  })
+  |> qcheck.apply(qcheck.string())
+  |> qcheck.apply(qos())
+}
+
 fn auth_options() -> Generator(packet.AuthOptions) {
   qcheck.return({
     use username <- qcheck.parameter
@@ -82,6 +103,10 @@ fn bit_array() -> Generator(BitArray) {
 
 fn mqtt_int() -> Generator(Int) {
   qcheck.int_uniform_inclusive(0, 65_535)
+}
+
+fn packet_id() -> Generator(Int) {
+  qcheck.int_uniform_inclusive(1, 65_535)
 }
 
 fn from_list(values: List(a)) -> Generator(a) {
