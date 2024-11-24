@@ -506,20 +506,35 @@ fn send_ping(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
     // Just ignore the ping if we are not fully connected.
     NotConnected | ConnectingToServer(_, _) -> actor.continue(state)
     Connected(channel, ping, disconnect) -> {
-      // We should not be waiting for a ping
-      let assert None = disconnect
-      // ..and also no longer scheduling a ping
+      // Since this should only happen as a result of the timeout,
+      // the timer should no longer be active.
       let assert process.TimerNotFound = process.cancel_timer(ping)
 
-      let assert Ok(state) = send_packet(state, outgoing.PingReq)
-      let disconnect =
-        process.send_after(state.self, state.config.server_timeout, Disconnect)
-      actor.continue(
-        ClientState(
-          ..state,
-          conn_state: Connected(channel, ping, Some(disconnect)),
-        ),
-      )
+      // We should also not be waiting for a ping response,
+      // but in case scheduling is delayed (or we have short timeouts in tests),
+      // this might still happen.
+      // In this case, just keep waiting for the current disconnect timeout,
+      // and skip this send.
+      case disconnect {
+        Some(_) -> actor.continue(state)
+        None -> {
+          // The let assert here isn't nice, but I'm planning on refactoring
+          // the connection into its own actor soon anyway...
+          let assert Ok(state) = send_packet(state, outgoing.PingReq)
+          let disconnect =
+            process.send_after(
+              state.self,
+              state.config.server_timeout,
+              Disconnect,
+            )
+          actor.continue(
+            ClientState(
+              ..state,
+              conn_state: Connected(channel, ping, Some(disconnect)),
+            ),
+          )
+        }
+      }
     }
   }
 }
