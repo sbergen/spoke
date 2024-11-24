@@ -8,15 +8,14 @@ import spoke/internal/packet/server/outgoing as server_out
 pub fn receive_message_test() {
   let #(client, updates, socket) = fake_server.set_up_connected_client()
 
-  let data =
-    packet.PublishData(
+  let msg =
+    packet.MessageData(
       topic: "topic",
       payload: <<"payload">>,
-      dup: True,
       qos: packet.QoS0,
       retain: False,
-      packet_id: None,
     )
+  let data = packet.PublishData(msg, dup: True, packet_id: None)
 
   fake_server.send_response(socket, server_out.Publish(data))
 

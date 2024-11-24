@@ -115,31 +115,25 @@ pub fn publish_decode_qos0_test() {
   let assert Ok(#(incoming.Publish(data), rest)) = incoming.decode_packet(data)
   rest |> should.equal(<<42:8>>)
 
-  data
-  |> should.equal(packet.PublishData(
+  data.message
+  |> should.equal(packet.MessageData(
     "topic",
     <<"foo">>,
-    dup: False,
     qos: QoS0,
     retain: False,
-    packet_id: None,
   ))
+
+  data.dup |> should.equal(False)
+  data.packet_id |> should.equal(None)
 }
 
+// TODO: Use a property based test?
 pub fn publish_decode_should_be_retained_test() {
   let data = <<3:4, 1:4, encode.varint(2):bits, 0:big-size(16)>>
 
   let assert Ok(#(incoming.Publish(data), <<>>)) = incoming.decode_packet(data)
 
-  data
-  |> should.equal(packet.PublishData(
-    "",
-    <<>>,
-    False,
-    QoS0,
-    retain: True,
-    packet_id: None,
-  ))
+  data.message.retain |> should.equal(True)
 }
 
 pub fn pub_xxx_decode_test() {

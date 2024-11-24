@@ -11,14 +11,13 @@ pub fn publish_qos0_test() {
   let data = spoke.PublishData("topic", <<"payload">>, AtMostOnce, False)
   let assert Ok(_) = spoke.publish(client, data, 10)
 
+  let expected_msg =
+    packet.MessageData("topic", <<"payload">>, packet.QoS0, retain: False)
   let expected =
     server_in.Publish(packet.PublishData(
-      "topic",
-      <<"payload">>,
-      False,
-      packet.QoS0,
-      False,
-      None,
+      expected_msg,
+      dup: False,
+      packet_id: None,
     ))
   fake_server.expect_packet(socket, expected)
 

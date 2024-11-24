@@ -341,13 +341,17 @@ fn handle_outgoing_publish(
   data: PublishData,
   reply_to: Subject(Result(Nil, PublishError)),
 ) -> actor.Next(ClientMsg, ClientState) {
-  let packet =
-    outgoing.Publish(packet.PublishData(
+  let message =
+    packet.MessageData(
       topic: data.topic,
       payload: data.payload,
-      dup: False,
       qos: to_packet_qos(data.qos),
       retain: data.retain,
+    )
+  let packet =
+    outgoing.Publish(packet.PublishData(
+      message: message,
+      dup: False,
       packet_id: None,
     ))
   case send_packet(state, packet) {
@@ -482,7 +486,8 @@ fn handle_incoming_publish(
   state: ClientState,
   data: packet.PublishData,
 ) -> actor.Next(ClientMsg, ClientState) {
-  let update = ReceivedMessage(data.topic, data.payload, data.retain)
+  let msg = data.message
+  let update = ReceivedMessage(msg.topic, msg.payload, msg.retain)
   process.send(state.updates, update)
   actor.continue(state)
 }

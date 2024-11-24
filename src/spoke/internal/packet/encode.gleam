@@ -45,12 +45,15 @@ pub fn connect(client_id: String, keep_alive: Int) -> BytesTree {
 }
 
 pub fn publish(data: packet.PublishData) -> BytesTree {
+  // TODO validate dup and packet id against QoS
+
+  let message = data.message
   let dup = bool.to_int(data.dup)
-  let retain = bool.to_int(data.retain)
-  let flags = <<dup:1, encode_qos(data.qos):2, retain:1>>
+  let retain = bool.to_int(message.retain)
+  let flags = <<dup:1, encode_qos(message.qos):2, retain:1>>
   // TODO packet id for QoS > 0
-  let header = string(data.topic)
-  let payload = bytes_tree.from_bit_array(data.payload)
+  let header = string(message.topic)
+  let payload = bytes_tree.from_bit_array(message.payload)
   encode_parts(3, flags, header, payload)
 }
 

@@ -9,15 +9,25 @@ pub type QoS {
   QoS2
 }
 
-pub type PublishData {
-  PublishData(
-    topic: String,
-    payload: BitArray,
-    dup: Bool,
-    qos: QoS,
-    retain: Bool,
-    packet_id: Option(Int),
+/// The core data of a message,
+/// which is not dependent on the session state.
+pub type MessageData {
+  MessageData(topic: String, payload: BitArray, qos: QoS, retain: Bool)
+}
+
+pub type ConnectOptions {
+  ConnectOptions(
+    clean_session: Bool,
+    client_id: String,
+    keep_alive_seconds: Int,
+    user_name: Option(String),
+    password: Option(String),
+    will: Option(MessageData),
   )
+}
+
+pub type PublishData {
+  PublishData(message: MessageData, dup: Bool, packet_id: Option(Int))
 }
 
 pub type SubscribeRequest {

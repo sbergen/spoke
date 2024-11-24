@@ -75,15 +75,10 @@ pub fn encode_ping_req_test() {
 }
 
 pub fn encode_publish_test() {
-  let data =
-    packet.PublishData(
-      "topic",
-      <<"payload">>,
-      dup: False,
-      qos: QoS0,
-      retain: False,
-      packet_id: None,
-    )
+  let message =
+    packet.MessageData("topic", <<"payload">>, qos: QoS0, retain: False)
+  let data = packet.PublishData(message: message, dup: False, packet_id: None)
+
   let assert Ok(builder) = outgoing.encode_packet(outgoing.Publish(data))
   let assert <<3:4, 0:4, rest:bits>> = bytes_tree.to_bit_array(builder)
   let rest = validate_remaining_len(rest)

@@ -111,8 +111,8 @@ pub fn publish(
       use #(data, remainder) <- try(split_var_data(data))
       // TODO: Packet id for QoS > 0
       use #(topic, rest) <- try(string(data))
-      let data =
-        packet.PublishData(topic, rest, dup == 1, qos, retain == 1, None)
+      let msg_data = packet.MessageData(topic, rest, qos, retain == 1)
+      let data = packet.PublishData(msg_data, dup == 1, None)
       Ok(#(construct(data), remainder))
     }
     _ -> Error(InvalidData)
