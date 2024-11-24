@@ -1,6 +1,5 @@
 import fake_server
 import gleam/erlang/process
-import gleam/option.{None}
 import spoke.{AtMostOnce}
 import spoke/internal/packet
 import spoke/internal/packet/server/incoming as server_in
@@ -11,14 +10,8 @@ pub fn publish_qos0_test() {
   let data = spoke.PublishData("topic", <<"payload">>, AtMostOnce, False)
   let assert Ok(_) = spoke.publish(client, data, 10)
 
-  let expected_msg =
-    packet.MessageData("topic", <<"payload">>, packet.QoS0, retain: False)
-  let expected =
-    server_in.Publish(packet.PublishData(
-      expected_msg,
-      dup: False,
-      packet_id: None,
-    ))
+  let expected_msg = packet.MessageData("topic", <<"payload">>, retain: False)
+  let expected = server_in.Publish(packet.PublishDataQoS0(expected_msg))
   fake_server.expect_packet(socket, expected)
 
   fake_server.disconnect(client, updates, socket)

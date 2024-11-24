@@ -10,9 +10,9 @@ pub type QoS {
 }
 
 /// The core data of a message,
-/// which is not dependent on the session state.
+/// which is not dependent on the session state or QoS.
 pub type MessageData {
-  MessageData(topic: String, payload: BitArray, qos: QoS, retain: Bool)
+  MessageData(topic: String, payload: BitArray, retain: Bool)
 }
 
 // MQTT does not allow using only a password
@@ -26,12 +26,17 @@ pub type ConnectOptions {
     client_id: String,
     keep_alive_seconds: Int,
     auth: Option(AuthOptions),
-    will: Option(MessageData),
+    will: Option(#(MessageData, QoS)),
   )
 }
 
+/// Data for a published message.
+/// QoS0 can never have dup of packet id, thus the variants.
+/// This is slightly clunky, but safe.
 pub type PublishData {
-  PublishData(message: MessageData, dup: Bool, packet_id: Option(Int))
+  PublishDataQoS0(MessageData)
+  PublishDataQoS1(message: MessageData, dup: Bool, packet_id: Int)
+  PublishDataQoS2(message: MessageData, dup: Bool, packet_id: Int)
 }
 
 pub type SubscribeRequest {

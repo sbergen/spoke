@@ -1,7 +1,6 @@
 import fake_server
 import gleam/bytes_tree
 import gleam/erlang/process
-import gleam/option.{None}
 import spoke
 import spoke/internal/packet
 import spoke/internal/packet/server/outgoing as server_out
@@ -40,15 +39,6 @@ pub fn split_packets_test() {
 
 fn default_publish() -> server_out.Packet {
   let message =
-    packet.MessageData(
-      topic: "topic",
-      payload: <<"payload">>,
-      qos: packet.QoS0,
-      retain: False,
-    )
-  server_out.Publish(packet.PublishData(
-    message: message,
-    dup: True,
-    packet_id: None,
-  ))
+    packet.MessageData(topic: "topic", payload: <<"payload">>, retain: False)
+  server_out.Publish(packet.PublishDataQoS0(message))
 }

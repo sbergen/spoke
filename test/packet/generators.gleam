@@ -1,32 +1,30 @@
 import gleam/bit_array
 import gleam/list
-import gleam/option.{None, Some}
 import qcheck.{type Generator}
-import spoke/internal/packet
+import spoke/internal/packet.{
+  type AuthOptions, type ConnAckResult, type ConnectOptions, type MessageData,
+  type PublishData, type QoS, type SubscribeRequest, type SubscribeResult,
+  AuthOptions, ConnectOptions, MessageData, PublishDataQoS0, PublishDataQoS1,
+  PublishDataQoS2, QoS0, QoS1, QoS2, SubscribeRequest,
+}
 
-pub fn connect_data() -> Generator(packet.ConnectOptions) {
+pub fn connect_data() -> Generator(ConnectOptions) {
   qcheck.return({
     use clean_session <- qcheck.parameter
     use client_id <- qcheck.parameter
     use keep_alive_seconds <- qcheck.parameter
     use auth <- qcheck.parameter
     use will <- qcheck.parameter
-    packet.ConnectOptions(
-      clean_session,
-      client_id,
-      keep_alive_seconds,
-      auth,
-      will,
-    )
+    ConnectOptions(clean_session, client_id, keep_alive_seconds, auth, will)
   })
   |> qcheck.apply(qcheck.bool())
   |> qcheck.apply(qcheck.string_non_empty())
   |> qcheck.apply(mqtt_int())
   |> qcheck.apply(qcheck.option(auth_options()))
-  |> qcheck.apply(qcheck.option(message_data()))
+  |> qcheck.apply(qcheck.option(will()))
 }
 
-pub fn connack_result() -> Generator(packet.ConnAckResult) {
+pub fn connack_result() -> Generator(ConnAckResult) {
   use success <- qcheck.bind(qcheck.bool())
   case success {
     True -> {
@@ -48,7 +46,7 @@ pub fn connack_result() -> Generator(packet.ConnAckResult) {
   }
 }
 
-pub fn subscribe_request() -> Generator(#(Int, List(packet.SubscribeRequest))) {
+pub fn subscribe_request() -> Generator(#(Int, List(SubscribeRequest))) {
   qcheck.return({
     use packet_id <- qcheck.parameter
     use requests <- qcheck.parameter
@@ -66,51 +64,60 @@ pub fn unsubscribe_request() -> Generator(#(Int, List(String))) {
   qcheck.tuple2(packet_id(), qcheck.list_generic(qcheck.string(), 1, 5))
 }
 
-pub fn suback() -> Generator(#(Int, List(packet.SubscribeResult))) {
+pub fn suback() -> Generator(#(Int, List(SubscribeResult))) {
   qcheck.tuple2(packet_id(), qcheck.list_generic(one_subscribe_result(), 1, 5))
 }
 
-pub fn valid_publish_data() -> Generator(packet.PublishData) {
+pub fn valid_publish_data() -> Generator(PublishData) {
   use message <- qcheck.bind(message_data())
-  case message.qos {
-    packet.QoS0 -> qcheck.return(packet.PublishData(message, False, None))
-    _ -> {
-      qcheck.return({
-        use dup <- qcheck.parameter
-        use id <- qcheck.parameter
-        packet.PublishData(message, dup, Some(id))
-      })
-      |> qcheck.apply(qcheck.bool())
-      |> qcheck.apply(packet_id())
-    }
+  use qos <- qcheck.bind(qos())
+  case qos {
+    QoS0 -> qcheck.return(PublishDataQoS0(message))
+    QoS1 -> high_qos_publish_data(message, PublishDataQoS1)
+    QoS2 -> high_qos_publish_data(message, PublishDataQoS2)
   }
 }
 
-fn message_data() -> Generator(packet.MessageData) {
+fn high_qos_publish_data(
+  message: MessageData,
+  construct: fn(MessageData, Bool, Int) -> PublishData,
+) -> Generator(PublishData) {
+  qcheck.return({
+    use dup <- qcheck.parameter
+    use id <- qcheck.parameter
+    construct(message, dup, id)
+  })
+  |> qcheck.apply(qcheck.bool())
+  |> qcheck.apply(packet_id())
+}
+
+fn will() -> Generator(#(MessageData, QoS)) {
+  qcheck.tuple2(message_data(), qos())
+}
+
+fn message_data() -> Generator(MessageData) {
   qcheck.return({
     use topic <- qcheck.parameter
     use payload <- qcheck.parameter
-    use qos <- qcheck.parameter
     use retain <- qcheck.parameter
-    packet.MessageData(topic, payload, qos, retain)
+    MessageData(topic, payload, retain)
   })
   |> qcheck.apply(qcheck.string_non_empty())
   |> qcheck.apply(bit_array())
-  |> qcheck.apply(qos())
   |> qcheck.apply(qcheck.bool())
 }
 
-fn one_subscribe_request() -> Generator(packet.SubscribeRequest) {
+fn one_subscribe_request() -> Generator(SubscribeRequest) {
   qcheck.return({
     use filter <- qcheck.parameter
     use qos <- qcheck.parameter
-    packet.SubscribeRequest(filter, qos)
+    SubscribeRequest(filter, qos)
   })
   |> qcheck.apply(qcheck.string())
   |> qcheck.apply(qos())
 }
 
-fn one_subscribe_result() -> Generator(packet.SubscribeResult) {
+fn one_subscribe_result() -> Generator(SubscribeResult) {
   use success <- qcheck.bind(qcheck.bool())
   case success {
     True -> {
@@ -121,18 +128,18 @@ fn one_subscribe_result() -> Generator(packet.SubscribeResult) {
   }
 }
 
-fn auth_options() -> Generator(packet.AuthOptions) {
+fn auth_options() -> Generator(AuthOptions) {
   qcheck.return({
     use username <- qcheck.parameter
     use password <- qcheck.parameter
-    packet.AuthOptions(username, password)
+    AuthOptions(username, password)
   })
   |> qcheck.apply(qcheck.string())
   |> qcheck.apply(qcheck.option(bit_array()))
 }
 
-fn qos() -> Generator(packet.QoS) {
-  from_list([packet.QoS0, packet.QoS1, packet.QoS2])
+fn qos() -> Generator(QoS) {
+  from_list([QoS0, QoS1, QoS2])
 }
 
 fn bit_array() -> Generator(BitArray) {

@@ -1,21 +1,15 @@
 import fake_server
 import gleam/erlang/process
-import gleam/option.{None}
 import spoke
 import spoke/internal/packet
 import spoke/internal/packet/server/outgoing as server_out
 
-pub fn receive_message_test() {
+pub fn receive_message_qos0_test() {
   let #(client, updates, socket) = fake_server.set_up_connected_client()
 
   let msg =
-    packet.MessageData(
-      topic: "topic",
-      payload: <<"payload">>,
-      qos: packet.QoS0,
-      retain: False,
-    )
-  let data = packet.PublishData(msg, dup: True, packet_id: None)
+    packet.MessageData(topic: "topic", payload: <<"payload">>, retain: False)
+  let data = packet.PublishDataQoS0(msg)
 
   fake_server.send_response(socket, server_out.Publish(data))
 

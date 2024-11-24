@@ -26,8 +26,8 @@ pub fn connect(options: ConnectOptions) -> BytesTree {
   // The Server MAY allow ClientId’s that contain characters not included in the list given above.
 
   let password = option.then(options.auth, fn(a) { a.password })
-  let will_retain = option.map(options.will, fn(w) { w.retain })
-  let will_qos = option.map(options.will, fn(w) { w.qos })
+  let will_retain = option.map(options.will, fn(w) { { w.0 }.retain })
+  let will_qos = option.map(options.will, fn(w) { w.1 })
 
   let header = <<
     string("MQTT"):bits,
@@ -47,7 +47,7 @@ pub fn connect(options: ConnectOptions) -> BytesTree {
     |> bytes_tree.append(string(options.client_id))
 
   let payload = case options.will {
-    Some(will) -> {
+    Some(#(will, _)) -> {
       let size = bit_array.byte_size(will.payload)
       payload
       |> bytes_tree.append(string(will.topic))
@@ -82,25 +82,18 @@ pub fn connect(options: ConnectOptions) -> BytesTree {
 }
 
 pub fn publish(data: packet.PublishData) -> BytesTree {
-  // TODO validate dup against QoS
-
-  let message = data.message
-  let dup = bool.to_int(data.dup)
-  let retain = bool.to_int(message.retain)
-  let flags = <<dup:1, encode_qos(message.qos):2, retain:1>>
-  let header = string(message.topic)
-
-  // Packet id, if QoS > 0
-  let header = case message.qos {
-    QoS0 -> header
-    _ ->
-      case data.packet_id {
-        Some(id) -> bit_array.append(header, <<id:big-size(16)>>)
-        None -> todo as "we need to return an error if this happens"
-      }
+  let #(msg, dup, packet_id, qos) = case data {
+    packet.PublishDataQoS0(msg) -> #(msg, False, <<>>, QoS0)
+    packet.PublishDataQoS1(msg, dup, id) -> #(msg, dup, integer(id), QoS1)
+    packet.PublishDataQoS2(msg, dup, id) -> #(msg, dup, integer(id), QoS2)
   }
 
-  let payload = bytes_tree.from_bit_array(message.payload)
+  let dup = bool.to_int(dup)
+  let retain = bool.to_int(msg.retain)
+  let flags = <<dup:1, encode_qos(qos):2, retain:1>>
+  let header = <<string(msg.topic):bits, packet_id:bits>>
+
+  let payload = bytes_tree.from_bit_array(msg.payload)
   encode_parts(3, flags, header, payload)
 }
 
@@ -256,6 +249,10 @@ fn encode_bool(val: Bool) -> Int {
     True -> 1
     False -> 0
   }
+}
+
+fn integer(val: Int) -> BitArray {
+  <<val:big-size(16)>>
 }
 
 fn encode_or_zero(option: Option(a), map: fn(a) -> Int) -> Int {

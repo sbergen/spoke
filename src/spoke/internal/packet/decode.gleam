@@ -57,8 +57,9 @@ pub fn connect(
       // Will
       use #(will, rest) <- try(case will_flag {
         1 -> {
-          use #(will, rest) <- try(will(rest, will_qos, will_retain))
-          Ok(#(Some(will), rest))
+          use qos <- try(decode_qos(will_qos))
+          use #(will, rest) <- try(will(rest, will_retain))
+          Ok(#(Some(#(will, qos)), rest))
         }
         _ -> {
           use _ <- try(will_retain |> must_equal(0))
@@ -157,23 +158,28 @@ pub fn publish(
     <<dup:1, qos:2, retain:1>> -> {
       use qos <- try(decode_qos(qos))
       use #(data, remainder) <- try(split_var_data(data))
+      use #(topic, data) <- try(string(data))
 
-      use #(topic, rest) <- try(string(data))
-
-      // Packet id, if QoS > 0
-      use #(packet_id, rest) <- try(case qos {
-        QoS0 -> Ok(#(None, rest))
-        _ ->
-          case rest {
-            <<packet_id:big-unsigned-size(16), rest:bits>> ->
-              Ok(#(Some(packet_id), rest))
-            _ -> Error(InvalidData)
-          }
+      // This can't be reordered, as it consumes data,
+      // so this needs to return a function
+      use #(make_data, data) <- try(case qos {
+        QoS0 -> {
+          use _ <- try(dup |> must_equal(0))
+          Ok(#(packet.PublishDataQoS0(_), data))
+        }
+        QoS1 -> {
+          use #(id, data) <- try(integer(data))
+          Ok(#(packet.PublishDataQoS1(_, dup == 1, id), data))
+        }
+        QoS2 -> {
+          use #(id, data) <- try(integer(data))
+          Ok(#(packet.PublishDataQoS2(_, dup == 1, id), data))
+        }
       })
 
-      let msg_data = packet.MessageData(topic, rest, qos, retain == 1)
-      let data = packet.PublishData(msg_data, dup == 1, packet_id)
-      Ok(#(construct(data), remainder))
+      let msg_data = packet.MessageData(topic, data, retain == 1)
+
+      Ok(#(construct(make_data(msg_data)), remainder))
     }
     _ -> Error(InvalidData)
   }
@@ -387,15 +393,13 @@ fn subscribe_request(
 
 fn will(
   bytes: BitArray,
-  qos_int: Int,
   retain: Int,
 ) -> Result(#(packet.MessageData, BitArray), DecodeError) {
   use #(topic, rest) <- try(string(bytes))
   use #(payload_len, rest) <- try(integer(rest))
   use #(payload, rest) <- try(split_fixed_data(rest, payload_len))
-  use qos <- try(decode_qos(qos_int))
 
-  let will = packet.MessageData(topic, payload, qos, retain == 1)
+  let will = packet.MessageData(topic, payload, retain == 1)
   Ok(#(will, rest))
 }
 

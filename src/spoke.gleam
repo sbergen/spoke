@@ -351,15 +351,10 @@ fn handle_outgoing_publish(
     packet.MessageData(
       topic: data.topic,
       payload: data.payload,
-      qos: to_packet_qos(data.qos),
       retain: data.retain,
     )
-  let packet =
-    outgoing.Publish(packet.PublishData(
-      message: message,
-      dup: False,
-      packet_id: None,
-    ))
+  // TODO: QoS > 0
+  let packet = outgoing.Publish(packet.PublishDataQoS0(message))
   case send_packet(state, packet) {
     Ok(new_state) -> {
       process.send(reply_to, Ok(Nil))
@@ -420,7 +415,7 @@ fn process_packet(
     incoming.SubAck(id, results) -> handle_suback(state, id, results)
     incoming.Publish(data) -> handle_incoming_publish(state, data)
     incoming.PingResp -> handle_pingresp(state)
-    _ -> todo as "Packet type not handled"
+    _ -> panic as "Packet type not handled"
   }
 }
 
@@ -492,7 +487,14 @@ fn handle_incoming_publish(
   state: ClientState,
   data: packet.PublishData,
 ) -> actor.Next(ClientMsg, ClientState) {
-  let msg = data.message
+  // TODO QoS > 0
+  // We should have different paths in the future,
+  // so not making a function to extract the message.
+  let msg = case data {
+    packet.PublishDataQoS0(msg) -> msg
+    packet.PublishDataQoS1(msg, ..) -> msg
+    packet.PublishDataQoS2(msg, ..) -> msg
+  }
   let update = ReceivedMessage(msg.topic, msg.payload, msg.retain)
   process.send(state.updates, update)
   actor.continue(state)
