@@ -4,8 +4,8 @@
 //// as much as I would trust manually written tests.
 //// This is sort of like double-entry bookkeeping.
 
-import generators
 import gleam/bytes_tree
+import packet/generators
 import qcheck
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing

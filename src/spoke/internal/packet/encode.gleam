@@ -5,7 +5,6 @@ import gleam/bool
 import gleam/bytes_tree.{type BytesTree}
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/string
 import spoke/internal/packet.{
   type ConnectOptions, type QoS, type SubscribeRequest, type SubscribeResult,
   QoS0, QoS1, QoS2,
