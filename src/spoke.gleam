@@ -290,17 +290,23 @@ fn handle_connection_drop(
   state: State,
   reason: connection.Disconnect,
 ) -> actor.Next(Message, State) {
-  case reason {
-    connection.AbnormalDisconnect(reason) ->
+  let disconnect = case reason {
+    connection.AbnormalDisconnect(reason) -> {
       process.send(state.updates, DisconnectedUnexpectedly(reason))
-    connection.GracefulDisconnect ->
+      True
+    }
+    connection.GracefulDisconnect -> {
       process.send(state.updates, DisconnectedExpectedly)
-    connection.UnexpectedProcessExit -> Nil
+      True
+    }
     // TODO: Why am I getting these?
-    // panic as "Unexpected child process exit encountered"
+    connection.UnexpectedProcessExit -> False
   }
 
-  actor.continue(State(..state, connection: None))
+  case disconnect {
+    True -> actor.continue(State(..state, connection: None))
+    False -> actor.continue(state)
+  }
 }
 
 fn handle_connect(
