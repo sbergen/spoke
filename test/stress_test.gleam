@@ -24,11 +24,11 @@ pub fn main() {
     )
   let transport_opts = spoke.TcpOptions("localhost", 1883, connect_timeout: 100)
 
-  io.println("Connecting...")
+  io.println("Connecting & subscribing..")
   let updates = process.new_subject()
   let client = spoke.start(connect_opts, transport_opts, updates)
-  let assert Ok(_) = spoke.connect(client, timeout: 1000)
-  io.println("Connected!")
+  let assert Ok(_) = spoke.connect(client, timeout: 100)
+  let assert Ok(spoke.Connected(_)) = process.receive(updates, 100)
 
   let assert Ok(_) =
     spoke.subscribe(
@@ -36,8 +36,6 @@ pub fn main() {
       [spoke.SubscribeRequest("#", spoke.AtMostOnce)],
       100,
     )
-
-  io.println("Subscribed, starting to publish...")
 
   let tasks = total_messages / messages_per_task
   list.range(1, tasks)
@@ -76,7 +74,7 @@ fn receive(
   case set.size(data) == total_messages {
     True -> data
     False -> {
-      let assert Ok(update) = process.receive(updates, 100)
+      let assert Ok(update) = process.receive(updates, 500)
       let assert spoke.ReceivedMessage(..) = update
       receive(set.insert(data, update), updates)
     }

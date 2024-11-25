@@ -15,7 +15,7 @@ import gleam/string
 import spoke
 
 pub fn main() {
-  let client_id = "spoke-" <> string.inspect(int.random(999_999_999))
+  let client_id = "spoke" <> string.inspect(int.random(999_999_999))
   let topic = "spoke-test"
 
   let connect_opts =
@@ -47,8 +47,12 @@ pub fn main() {
     )
   let assert Ok(_) = spoke.publish(client, message, 1000)
 
-  let update = process.receive(updates, 1000)
-  io.debug(update)
+  let assert Ok(spoke.Connected(_)) = process.receive(updates, 1000)
+  let message = process.receive(updates, 1000)
+  io.debug(message)
+  io.println(string.inspect(message))
+
+  spoke.disconnect(client)
 }
 ```
 
