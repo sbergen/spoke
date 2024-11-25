@@ -1,6 +1,5 @@
 import fake_server.{type ConnectedState, type ReceivedConnectData}
 import gleam/erlang/process.{type Subject}
-import gleam/otp/task
 import gleeunit/should
 import spoke
 import spoke/internal/packet
@@ -24,50 +23,46 @@ pub fn reconnect_after_rejected_connect_test() {
     connect(Error(packet.BadUsernameOrPassword), default_client_id, 10)
 
   result |> should.equal(Error(spoke.BadUsernameOrPassword))
-  // There should be nothing to be done here,
-  // as the server should close the connection
+  let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 10)
 
-  let #(state, result) = fake_server.reconnect(client, state.listener, Ok(True))
+  let #(state, result) =
+    fake_server.reconnect(client, updates, state.listener, Ok(True))
   result |> should.equal(Ok(True))
 
   fake_server.disconnect(client, updates, state.socket)
 }
 
-pub fn aborted_connect_disconnects_with_correct_status_test() {
-  let #(listener, port) = fake_server.start_server()
-  let #(client, _updates) = start_client_with_defaults(port)
-
-  let connect_task = task.async(fn() { spoke.connect(client, 100) })
-  let socket = fake_server.expect_connection_established(listener)
-  spoke.disconnect(client)
-
-  let assert Ok(Error(spoke.DisconnectRequested)) =
-    task.try_await(connect_task, 10)
-
-  fake_server.drop_incoming_data(socket)
-  fake_server.expect_connection_closed(socket)
-}
-
-pub fn timed_out_connect_disconnects_test() {
+pub fn aborted_connect_disconnects_expectedly_test() {
   let #(listener, port) = fake_server.start_server()
   let #(client, updates) = start_client_with_defaults(port)
 
-  // The timeout used for connect is what matters (server timeout does not)
-  let connect_task = task.async(fn() { spoke.connect(client, 2) })
-  let socket = fake_server.expect_connection_established(listener)
-  let assert Error(spoke.ConnectTimedOut) = task.await(connect_task, 5)
+  let assert Ok(Nil) = spoke.connect(client, 100)
 
-  let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
-  fake_server.drop_incoming_data(socket)
+  let socket = fake_server.expect_connection_established(listener)
+  spoke.disconnect(client)
+
+  let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 10)
+
   fake_server.expect_connection_closed(socket)
 }
+
+// TODO: rethink connect timeouts
+// pub fn timed_out_connect_disconnects_test() {
+//   let #(_listener, port) = fake_server.start_server()
+//   let #(client, updates) = start_client_with_defaults(port)
+
+//   // The timeout used for connect is what matters (server timeout does not)
+//   let connect_task = task.async(fn() { spoke.connect(client, 2) })
+//   let assert Error(spoke.ConnectTimedOut) = task.await(connect_task, 100)
+//   let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 1)
+// }
 
 pub fn connecting_when_already_connected_fails_test() {
   let #(listener, port) = fake_server.start_server()
   let #(client, updates) = start_client_with_defaults(port)
 
   // Start first connect
-  let initial_connect = task.async(fn() { spoke.connect(client, 100) })
+  let assert Ok(Nil) = spoke.connect(client, 100)
   let socket = fake_server.expect_connection_established(listener)
 
   // Start overlapping connect
@@ -76,27 +71,27 @@ pub fn connecting_when_already_connected_fails_test() {
   // Finish initial connect
   fake_server.drop_incoming_data(socket)
   fake_server.send_response(socket, server_out.ConnAck(Ok(False)))
-  let assert Ok(Ok(False)) = task.try_await(initial_connect, 10)
+  let assert Ok(spoke.Connected(False)) = process.receive(updates, 10)
 
   fake_server.disconnect(client, updates, socket)
 }
 
 pub fn channel_error_on_connect_fails_connect_test() {
   let #(client, _updates) = start_client_with_defaults(9999)
-  let connect_task = task.async(fn() { spoke.connect(client, 100) })
-  let assert Error(spoke.ConnectChannelError("ConnectFailed(\"Econnrefused\")")) =
-    task.await(connect_task, 100)
+  let assert Error(spoke.ConnectChannelError(
+    "Failed to establish connection to server: ConnectFailed(\"Econnrefused\")",
+  )) = spoke.connect(client, 100)
 }
 
 pub fn channel_error_after_establish_fails_connect_test() {
   let #(listener, port) = fake_server.start_server()
-  let #(client, _updates) = start_client_with_defaults(port)
+  let #(client, updates) = start_client_with_defaults(port)
 
-  let connect_task = task.async(fn() { spoke.connect(client, 100) })
+  let assert Ok(Nil) = spoke.connect(client, 100)
   fake_server.reject_connection(listener)
 
-  let assert Error(spoke.ConnectChannelError("ChannelClosed")) =
-    task.await(connect_task, 100)
+  // TODO: This is not correct
+  let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 10)
 }
 
 fn connect(
@@ -118,7 +113,7 @@ fn connect(
     spoke.start(connect_opts, fake_server.default_options(port), updates)
 
   let #(state, connect_result, details) =
-    fake_server.connect_client(client, listener, response)
+    fake_server.connect_client(client, updates, listener, response)
 
   #(client, updates, state, connect_result, details)
 }

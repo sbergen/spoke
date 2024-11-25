@@ -66,7 +66,7 @@ pub fn main() {
   )
 
   spoke.disconnect(client)
-  let assert Ok(spoke.Disconnected) = process.receive(updates, 10)
+  let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 10)
 }
 
 fn receive(

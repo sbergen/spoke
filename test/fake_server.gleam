@@ -1,8 +1,8 @@
 import gleam/bytes_tree.{type BytesTree}
 import gleam/erlang/process.{type Subject}
-import gleam/otp/task
 import gleam/result
 import gleam/string
+import gleeunit/should
 import glisten/socket.{type ListenSocket, type Socket}
 import glisten/socket/options.{ActiveMode, Passive}
 import glisten/tcp
@@ -39,7 +39,7 @@ pub fn set_up_connected_client() -> #(
       updates,
     )
 
-  let #(state, _, _) = connect_client(client, listener, Ok(False))
+  let #(state, _, _) = connect_client(client, updates, listener, Ok(False))
 
   #(client, updates, state.socket)
 }
@@ -57,10 +57,11 @@ pub fn default_options(port: Int) {
 /// Runs the full client connect process and returns the given response
 pub fn connect_client(
   client: spoke.Client,
+  updates: Subject(spoke.Update),
   listener: ListenSocket,
   response: Result(Bool, packet.ConnectError),
 ) -> #(ConnectedState, Result(Bool, spoke.ConnectError), ReceivedConnectData) {
-  let connect_task = task.async(fn() { spoke.connect(client, default_timeout) })
+  let assert Ok(Nil) = spoke.connect(client, default_timeout)
 
   let #(state, details) = expect_connect(listener)
   send_response(state.socket, outgoing.ConnAck(response))
@@ -72,23 +73,29 @@ pub fn connect_client(
     False -> Nil
   }
 
-  let assert Ok(connect_result) = task.try_await(connect_task, default_timeout)
+  let assert Ok(update) = process.receive(updates, default_timeout)
+  let connect_result = case update {
+    spoke.Connected(session_present) -> Ok(session_present)
+    spoke.ConnectionFailed(e) -> Error(e)
+    _ -> panic as "Unexpected update while connecting"
+  }
+
   #(state, connect_result, details)
 }
 
 pub fn reconnect(
   client: spoke.Client,
+  updates: Subject(spoke.Update),
   listener: ListenSocket,
   response: Result(Bool, packet.ConnectError),
 ) -> #(ConnectedState, Result(Bool, spoke.ConnectError)) {
-  let #(state, result, _) = connect_client(client, listener, response)
+  let #(state, result, _) = connect_client(client, updates, listener, response)
   #(state, result)
 }
 
 // Receives whatever is available, and drops the data
 pub fn drop_incoming_data(socket: Socket) -> Nil {
-  // Short timeout here, let's see if it's stable...
-  let _ = tcp.receive_timeout(socket, 0, 1)
+  let _ = tcp.receive_timeout(socket, 0, default_timeout)
   Nil
 }
 
@@ -163,9 +170,19 @@ pub fn close_connection(socket: Socket) -> Nil {
 }
 
 pub fn expect_connection_closed(socket: Socket) -> Nil {
-  let assert Error(socket.Closed) =
-    tcp.receive_timeout(socket, 0, default_timeout)
-  Nil
+  expect_connection_closed_with_limit(10, socket)
+}
+
+fn expect_connection_closed_with_limit(try_index: Int, socket: Socket) -> Nil {
+  case try_index {
+    0 ->
+      panic as "Too many incoming packets when expecting connection to be closed"
+    _ ->
+      case tcp.receive_timeout(socket, 0, default_timeout) {
+        Ok(_) -> expect_connection_closed_with_limit(try_index - 1, socket)
+        Error(e) -> e |> should.equal(socket.Closed)
+      }
+  }
 }
 
 /// Runs a clean disconnect on the client
@@ -176,8 +193,8 @@ pub fn disconnect(
 ) -> Nil {
   spoke.disconnect(client)
 
-  // TODO: This is not ideal, should we make disconnect use send instead of call?
-  let assert Ok(spoke.Disconnected) = process.receive(updates, default_timeout)
+  let assert Ok(spoke.DisconnectedExpectedly) =
+    process.receive(updates, default_timeout)
 
   expect_packet(socket, incoming.Disconnect)
   let assert Ok(_) = tcp.shutdown(socket)

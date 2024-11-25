@@ -6,15 +6,15 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
+import spoke/internal/connection.{type Connection}
 import spoke/internal/packet.{type SubscribeResult}
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
-import spoke/internal/transport.{type ChannelError, type ChannelResult}
-import spoke/internal/transport/channel.{type EncodedChannel}
+import spoke/internal/transport.{type ByteChannel, type ChannelResult}
 import spoke/internal/transport/tcp
 
 pub opaque type Client {
-  Client(subject: Subject(ClientMsg))
+  Client(subject: Subject(Message))
 }
 
 pub type TransportOptions {
@@ -34,7 +34,10 @@ pub type ConnectOptions {
 
 pub type Update {
   ReceivedMessage(topic: String, payload: BitArray, retained: Bool)
-  Disconnected
+  Connected(session_present: Bool)
+  ConnectionFailed(ConnectError)
+  DisconnectedUnexpectedly(reason: String)
+  DisconnectedExpectedly
 }
 
 pub type PublishData {
@@ -42,6 +45,7 @@ pub type PublishData {
 }
 
 pub type PublishError {
+  NotConnectedDuringPublish
   PublishTimedOut
   PublishChannelError(String)
   KilledDuringPublish
@@ -73,6 +77,22 @@ pub type QoS {
   ExactlyOnce
 }
 
+/// Error happened during establishing a connection
+pub type ConnectionEstablishError {
+  /// A disconnect was requested while connecting
+  DisconnectRequested
+  /// The connection timed out
+  ConnectTimedOut
+  /// The MQTT process was killed during a connect call
+  KilledDuringConnect
+  /// There was a transport channel error during connecting
+  ConnectChannelError(String)
+  /// A connect is already established, or being established
+  AlreadyConnected
+}
+
+/// Error code from the server -
+/// we got a response, but 
 pub type ConnectError {
   /// The MQTT server doesn't support MQTT 3.1.1
   UnacceptableProtocolVersion
@@ -84,16 +104,6 @@ pub type ConnectError {
   BadUsernameOrPassword
   /// The Client is not authorized to connect
   NotAuthorized
-  /// A disconnect was requested while connecting
-  DisconnectRequested
-  /// The connection timed out
-  ConnectTimedOut
-  /// The MQTT process was killed during a connect call
-  KilledDuringConnect
-  /// There was a transport channel error during connecting
-  ConnectChannelError(String)
-  /// A connect is already established, or being established
-  AlreadyConnected
 }
 
 pub type SubscribeRequest {
@@ -116,19 +126,23 @@ pub fn start(
 }
 
 /// Connects to the MQTT server.
-/// Will disconnect if the connect times out,
-/// and send the `Disconnect` update.
+/// The connection state will be published as an update.
+/// Note that MQTT allows sending data to the transport channel
+/// already before receiving a connection acknowledgement.
+/// If establishing a connection or sending the connect packet
+/// fails, this will return an error.
 pub fn connect(
   client: Client,
   timeout timeout: Int,
-) -> Result(Bool, ConnectError) {
-  call_or_disconnect(
-    client,
-    Connect(_),
-    timeout,
-    KilledDuringConnect,
-    ConnectTimedOut,
-  )
+) -> Result(Nil, ConnectionEstablishError) {
+  process.try_call(client.subject, Connect, timeout)
+  |> result.map_error(fn(e) {
+    case e {
+      process.CallTimeout -> ConnectTimedOut
+      process.CalleeDown(_) -> KilledDuringConnect
+    }
+  })
+  |> result.flatten
 }
 
 pub fn disconnect(client: Client) {
@@ -167,7 +181,7 @@ pub fn subscribe(
 
 fn call_or_disconnect(
   client: Client,
-  make_request: fn(Subject(Result(result, error))) -> ClientMsg,
+  make_request: fn(Subject(Result(result, error))) -> Message,
   timeout: Int,
   killed_error: error,
   timed_out_error: error,
@@ -201,12 +215,11 @@ pub fn start_with_ms_keep_alive(
   Client(client)
 }
 
-fn create_channel(options: TransportOptions) -> ChannelResult(EncodedChannel) {
+fn create_channel(options: TransportOptions) -> ChannelResult(ByteChannel) {
   case options {
     TcpOptions(host, port, connect_timeout) ->
       tcp.connect(host, port, connect_timeout)
   }
-  |> result.map(channel.as_encoded)
 }
 
 type Config {
@@ -214,43 +227,29 @@ type Config {
     client_id: String,
     keep_alive: Int,
     server_timeout: Int,
-    connect: fn() -> ChannelResult(EncodedChannel),
+    connect: fn() -> ChannelResult(ByteChannel),
   )
 }
 
-type ClientState {
-  ClientState(
-    self: Subject(ClientMsg),
+type State {
+  State(
+    self: Subject(Message),
     config: Config,
     updates: Subject(Update),
-    conn_state: ConnectionState,
+    connection: Option(Connection),
     packet_id: Int,
     pending_subs: Dict(Int, PendingSubscription),
   )
 }
 
-type ClientMsg {
-  Connect(Subject(Result(Bool, ConnectError)))
+type Message {
+  Connect(Subject(Result(Nil, ConnectionEstablishError)))
   Publish(PublishData, Subject(Result(Nil, PublishError)))
   Subscribe(List(SubscribeRequest), Subject(List(Subscription)))
-  Received(#(BitArray, ChannelResult(List(incoming.Packet))))
   ProcessReceived(incoming.Packet)
-  Ping
+  ConnectionDropped(connection.Disconnect)
   Disconnect
   DropConnectionAndNotifyClient
-}
-
-type ConnectionState {
-  NotConnected
-  ConnectingToServer(
-    channel: EncodedChannel,
-    reply_to: Subject(Result(Bool, ConnectError)),
-  )
-  Connected(
-    channel: EncodedChannel,
-    ping_timer: process.Timer,
-    disconnect_timer: Option(process.Timer),
-  )
 }
 
 type PendingSubscription {
@@ -263,10 +262,10 @@ type PendingSubscription {
 fn init(
   config: Config,
   updates: Subject(Update),
-) -> actor.InitResult(ClientState, ClientMsg) {
+) -> actor.InitResult(State, Message) {
   let self = process.new_subject()
 
-  let state = ClientState(self, config, updates, NotConnected, 1, dict.new())
+  let state = State(self, config, updates, None, 1, dict.new())
 
   let selector =
     process.new_selector()
@@ -275,178 +274,147 @@ fn init(
   actor.Ready(state, selector)
 }
 
-fn run_client(
-  msg: ClientMsg,
-  state: ClientState,
-) -> actor.Next(ClientMsg, ClientState) {
-  case msg {
+fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
+  case message {
     Connect(reply_to) -> handle_connect(state, reply_to)
-    Received(#(new_chan_state, packets)) ->
-      handle_receive(state, new_chan_state, packets)
     ProcessReceived(packet) -> process_packet(state, packet)
     Publish(data, reply_to) -> handle_outgoing_publish(state, data, reply_to)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
-    Ping -> send_ping(state)
+    ConnectionDropped(reason) -> handle_connection_drop(state, reason)
     Disconnect -> handle_disconnect(state)
     DropConnectionAndNotifyClient -> drop_connection_and_notify(state)
   }
 }
 
+fn handle_connection_drop(
+  state: State,
+  reason: connection.Disconnect,
+) -> actor.Next(Message, State) {
+  case reason {
+    connection.AbnormalDisconnect(reason) ->
+      process.send(state.updates, DisconnectedUnexpectedly(reason))
+    connection.GracefulDisconnect ->
+      process.send(state.updates, DisconnectedExpectedly)
+    connection.UnexpectedProcessExit -> Nil
+    // TODO: Why am I getting these?
+    // panic as "Unexpected child process exit encountered"
+  }
+
+  actor.continue(State(..state, connection: None))
+}
+
 fn handle_connect(
-  state: ClientState,
-  reply_to: Subject(Result(Bool, ConnectError)),
-) -> actor.Next(ClientMsg, ClientState) {
-  case state.conn_state {
-    NotConnected -> do_connect(state, reply_to)
-    _ -> {
+  state: State,
+  reply_to: Subject(Result(Nil, ConnectionEstablishError)),
+) -> actor.Next(Message, State) {
+  case state.connection {
+    Some(_) -> {
       process.send(reply_to, Error(AlreadyConnected))
       actor.continue(state)
     }
+    None -> do_connect(state, reply_to)
   }
 }
 
 fn do_connect(
-  state: ClientState,
-  reply_to: Subject(Result(Bool, ConnectError)),
-) -> actor.Next(ClientMsg, ClientState) {
-  case state.config.connect() {
-    Ok(channel) -> {
-      let state =
-        ClientState(..state, conn_state: ConnectingToServer(channel, reply_to))
+  state: State,
+  reply_to: Subject(Result(Nil, ConnectionEstablishError)),
+) -> actor.Next(Message, State) {
+  let config = state.config
+  let incoming = process.new_subject()
+  let connection =
+    connection.connect(
+      config.connect,
+      incoming,
+      config.client_id,
+      config.keep_alive,
+      config.server_timeout,
+    )
 
-      let config = state.config
-      let options =
-        packet.ConnectOptions(
-          clean_session: True,
-          client_id: config.client_id,
-          keep_alive_seconds: config.keep_alive / 1000,
-          auth: None,
-          will: None,
+  let result =
+    connection
+    |> result.map(fn(_) { Nil })
+    |> result.map_error(ConnectChannelError)
+  process.send(reply_to, result)
+
+  case connection {
+    Ok(connection) -> {
+      let selector =
+        process.new_selector()
+        |> process.selecting(incoming, ProcessReceived)
+        |> process.selecting(state.self, function.identity)
+        |> process.merge_selector(
+          connection.selecting_disconnects(connection)
+          |> process.map_selector(ConnectionDropped),
         )
-      case send_packet(state, outgoing.Connect(options)) {
-        Ok(state) -> {
-          let selector = next_selector(channel, <<>>, state.self)
-          actor.with_selector(actor.continue(state), selector)
-        }
-        Error(e) -> {
-          process.send(reply_to, Error(ConnectChannelError(string.inspect(e))))
-          actor.continue(close_channel(state))
-        }
-      }
+
+      let next = actor.continue(State(..state, connection: Some(connection)))
+      actor.with_selector(next, selector)
     }
-    Error(e) -> {
-      // Channel connection failed, no change to state
-      process.send(reply_to, Error(ConnectChannelError(string.inspect(e))))
-      actor.continue(state)
+    Error(_) -> {
+      actor.continue(State(..state, connection: None))
     }
   }
 }
 
 fn handle_outgoing_publish(
-  state: ClientState,
+  state: State,
   data: PublishData,
   reply_to: Subject(Result(Nil, PublishError)),
-) -> actor.Next(ClientMsg, ClientState) {
-  let message =
-    packet.MessageData(
-      topic: data.topic,
-      payload: data.payload,
-      retain: data.retain,
-    )
-  // TODO: QoS > 0
-  let packet = outgoing.Publish(packet.PublishDataQoS0(message))
-  case send_packet(state, packet) {
-    Ok(new_state) -> {
+) -> actor.Next(Message, State) {
+  // TODO: When should we reply with QoS0?
+  // Does it even matter?
+
+  case state.connection {
+    Some(connection) -> {
+      let message =
+        packet.MessageData(
+          topic: data.topic,
+          payload: data.payload,
+          retain: data.retain,
+        )
+      // TODO: QoS > 0
+      let packet = outgoing.Publish(packet.PublishDataQoS0(message))
+      connection.send(connection, packet)
       process.send(reply_to, Ok(Nil))
-      actor.continue(new_state)
     }
-    Error(e) -> {
-      process.send(reply_to, Error(PublishChannelError(string.inspect(e))))
-      actor.continue(state)
+    None -> {
+      process.send(reply_to, Error(NotConnectedDuringPublish))
     }
   }
-}
 
-fn handle_receive(
-  state: ClientState,
-  new_conn_state: BitArray,
-  packets: ChannelResult(List(incoming.Packet)),
-) -> actor.Next(ClientMsg, ClientState) {
-  let state = case packets {
-    Ok(packets) -> {
-      list.each(packets, fn(packet) {
-        process.send(state.self, ProcessReceived(packet))
-      })
-      state
-    }
-    Error(e) ->
-      case state.conn_state, e {
-        // This is expected, nothing to do
-        NotConnected, transport.ChannelClosed -> state
-        ConnectingToServer(_, reply_to), e -> {
-          let reply = Error(ConnectChannelError(string.inspect(e)))
-          process.send(reply_to, reply)
-          close_channel(state)
-        }
-        _, _ -> {
-          process.send(state.updates, Disconnected)
-          close_channel(state)
-        }
-      }
-  }
-
-  // TODO: Pending subscribes aren't handled in the error cases above.
-  // I'm wondering if we really need to make it blocking or not?
-
-  use channel <- if_connected(state)
-  actor.with_selector(
-    actor.continue(state),
-    next_selector(channel, new_conn_state, state.self),
-  )
+  actor.continue(state)
 }
 
 fn process_packet(
-  state: ClientState,
+  state: State,
   packet: incoming.Packet,
-) -> actor.Next(ClientMsg, ClientState) {
-  use _ <- if_connected(state)
+) -> actor.Next(Message, State) {
   case packet {
-    incoming.ConnAck(status) -> handle_connack(state, status)
-    incoming.SubAck(id, results) -> handle_suback(state, id, results)
+    incoming.ConnAck(result) -> handle_connack(state, result)
     incoming.Publish(data) -> handle_incoming_publish(state, data)
-    incoming.PingResp -> handle_pingresp(state)
-    _ -> panic as "Packet type not handled"
+    incoming.SubAck(id, results) -> handle_suback(state, id, results)
+    _ -> panic as { "Packet type not handled" <> string.inspect(packet) }
   }
 }
 
 fn handle_connack(
-  state: ClientState,
-  status: packet.ConnAckResult,
-) -> actor.Next(ClientMsg, ClientState) {
-  let assert ConnectingToServer(channel, reply_to) = state.conn_state
-
-  process.send(reply_to, result.map_error(status, from_packet_connect_error))
-
-  case status {
-    Ok(_session_present) -> {
-      let conn_state = Connected(channel, start_ping_timeout(state), None)
-      actor.continue(ClientState(..state, conn_state: conn_state))
-    }
-    Error(_) -> {
-      // If a server sends a CONNACK packet containing a non-zero return code
-      // it MUST then close the Network Connection
-      // => close channel just in case, but don't send any update on this,
-      // as we were never connected.
-      actor.continue(close_channel(state))
-    }
+  state: State,
+  result: packet.ConnAckResult,
+) -> actor.Next(Message, State) {
+  let update = case result {
+    Ok(session_present) -> Connected(session_present)
+    Error(e) -> ConnectionFailed(from_packet_connect_error(e))
   }
+  process.send(state.updates, update)
+  actor.continue(state)
 }
 
 fn handle_suback(
-  state: ClientState,
+  state: State,
   id: Int,
   results: List(SubscribeResult),
-) -> actor.Next(ClientMsg, ClientState) {
+) -> actor.Next(Message, State) {
   let subs = state.pending_subs
   let assert Ok(pending_sub) = dict.get(subs, id)
   let result = {
@@ -462,14 +430,14 @@ fn handle_suback(
   }
 
   process.send(pending_sub.reply_to, result)
-  actor.continue(ClientState(..state, pending_subs: dict.delete(subs, id)))
+  actor.continue(State(..state, pending_subs: dict.delete(subs, id)))
 }
 
 fn handle_subscribe(
-  state: ClientState,
+  state: State,
   topics: List(SubscribeRequest),
   reply_to: Subject(List(Subscription)),
-) -> actor.Next(ClientMsg, ClientState) {
+) -> actor.Next(Message, State) {
   let #(state, id) = reserve_packet_id(state)
   let pending_sub = PendingSubscription(topics, reply_to)
   let pending_subs = state.pending_subs |> dict.insert(id, pending_sub)
@@ -478,15 +446,18 @@ fn handle_subscribe(
     use topic <- list.map(topics)
     packet.SubscribeRequest(topic.filter, to_packet_qos(topic.qos))
   }
-  let assert Ok(_) = send_packet(state, outgoing.Subscribe(id, topics))
 
-  actor.continue(ClientState(..state, pending_subs: pending_subs))
+  // TODO: handle not connected
+  let assert Some(connection) = state.connection
+  connection.send(connection, outgoing.Subscribe(id, topics))
+
+  actor.continue(State(..state, pending_subs: pending_subs))
 }
 
 fn handle_incoming_publish(
-  state: ClientState,
+  state: State,
   data: packet.PublishData,
-) -> actor.Next(ClientMsg, ClientState) {
+) -> actor.Next(Message, State) {
   // TODO QoS > 0
   // We should have different paths in the future,
   // so not making a function to extract the message.
@@ -500,163 +471,32 @@ fn handle_incoming_publish(
   actor.continue(state)
 }
 
-fn send_ping(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
-  case state.conn_state {
-    // There can be some race conditions here, especially with our test values.
-    // Just ignore the ping if we are not fully connected.
-    NotConnected | ConnectingToServer(_, _) -> actor.continue(state)
-    Connected(channel, ping, disconnect) -> {
-      // Since this should only happen as a result of the timeout,
-      // the timer should no longer be active.
-      let assert process.TimerNotFound = process.cancel_timer(ping)
-
-      // We should also not be waiting for a ping response,
-      // but in case scheduling is delayed (or we have short timeouts in tests),
-      // this might still happen.
-      // In this case, just keep waiting for the current disconnect timeout,
-      // and skip this send.
-      case disconnect {
-        Some(_) -> actor.continue(state)
-        None -> {
-          // The let assert here isn't nice, but I'm planning on refactoring
-          // the connection into its own actor soon anyway...
-          let assert Ok(state) = send_packet(state, outgoing.PingReq)
-          let disconnect =
-            process.send_after(
-              state.self,
-              state.config.server_timeout,
-              Disconnect,
-            )
-          actor.continue(
-            ClientState(
-              ..state,
-              conn_state: Connected(channel, ping, Some(disconnect)),
-            ),
-          )
-        }
-      }
+fn handle_disconnect(state: State) -> actor.Next(Message, State) {
+  case state.connection {
+    Some(connection) -> {
+      connection.send(connection, outgoing.Disconnect)
+      drop_connection_and_notify(state)
     }
+    None -> actor.continue(state)
   }
 }
 
-fn handle_pingresp(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
-  let assert Connected(channel, ping, Some(disconnect)) = state.conn_state
-  process.cancel_timer(disconnect)
-  actor.continue(
-    ClientState(..state, conn_state: Connected(channel, ping, None)),
-  )
-}
-
-fn handle_disconnect(state: ClientState) -> actor.Next(ClientMsg, ClientState) {
-  case state.conn_state {
-    ConnectingToServer(_, reply_to) -> {
-      process.send(reply_to, Error(DisconnectRequested))
+fn drop_connection_and_notify(state: State) -> actor.Next(Message, State) {
+  case state.connection {
+    Some(connection) -> {
+      connection.shutdown(connection)
+      // TODO: This is not expected, improve it
+      process.send(state.updates, DisconnectedExpectedly)
+      actor.continue(State(..state, connection: None))
     }
-    Connected(channel, ..) -> {
-      // Do we care about errors here?
-      let assert Ok(_) = channel.send(outgoing.Disconnect)
-      Nil
-    }
-    _ -> Nil
-  }
-
-  process.send(state.updates, Disconnected)
-  drop_connection_and_notify(state)
-}
-
-fn drop_connection_and_notify(
-  state: ClientState,
-) -> actor.Next(ClientMsg, ClientState) {
-  process.send(state.updates, Disconnected)
-  actor.continue(close_channel(state))
-}
-
-/// Closes the channel and cancels any timeouts,
-/// does not send anything to client.
-/// NOTE: ConnectingToServer responses are NOT completed!
-fn close_channel(state: ClientState) -> ClientState {
-  case state.conn_state {
-    ConnectingToServer(channel, _) -> {
-      channel.shutdown()
-    }
-    Connected(channel, ping, disconnect) -> {
-      process.cancel_timer(ping)
-
-      // Play it safe:
-      case disconnect {
-        Some(disconnect) -> process.cancel_timer(disconnect)
-        None -> process.TimerNotFound
-      }
-
-      channel.shutdown()
-    }
-    NotConnected -> Nil
-  }
-
-  ClientState(..state, conn_state: NotConnected)
-}
-
-fn next_selector(
-  channel: EncodedChannel,
-  channel_state: BitArray,
-  self: Subject(ClientMsg),
-) -> process.Selector(ClientMsg) {
-  process.map_selector(channel.selecting_next(channel_state), Received(_))
-  |> process.selecting(self, function.identity)
-}
-
-// Clients are allowed to send further Control Packets immediately after sending a CONNECT Packet;
-// Clients need not wait for a CONNACK Packet to arrive from the Server.
-// If the Server rejects the CONNECT, it MUST NOT process any data sent by the Client after the CONNECT Packet
-//
-// Non normative comment
-// Clients typically wait for a CONNACK Packet, However,
-// if the Client exploits its freedom to send Control Packets before it receives a CONNACK,
-// it might simplify the Client implementation as it does not have to police the connected state.
-// The Client accepts that any data that it sends before it receives a CONNACK packet from the Server
-// will not be processed if the Server rejects the connection.
-fn send_packet(
-  state: ClientState,
-  packet: outgoing.Packet,
-) -> Result(ClientState, ChannelError) {
-  case state.conn_state {
-    ConnectingToServer(channel, _) -> {
-      // Don't start ping if connection has not yet finished
-      use _ <- result.try(channel.send(packet))
-      Ok(state)
-    }
-    Connected(channel, ping, disconnect) -> {
-      use _ <- result.try(channel.send(packet))
-      process.cancel_timer(ping)
-      let ping = start_ping_timeout(state)
-      Ok(ClientState(..state, conn_state: Connected(channel, ping, disconnect)))
-    }
-    _ ->
-      panic as {
-        "Not connecting or connected when trying to send packet: "
-        <> string.inspect(packet)
-      }
+    None -> actor.continue(state)
   }
 }
 
-fn start_ping_timeout(state: ClientState) -> process.Timer {
-  process.send_after(state.self, state.config.keep_alive, Ping)
-}
-
-fn reserve_packet_id(state: ClientState) -> #(ClientState, Int) {
+fn reserve_packet_id(state: State) -> #(State, Int) {
   let id = state.packet_id
-  let state = ClientState(..state, packet_id: id + 1)
+  let state = State(..state, packet_id: id + 1)
   #(state, id)
-}
-
-fn if_connected(
-  state: ClientState,
-  do: fn(channel.EncodedChannel) -> actor.Next(ClientMsg, ClientState),
-) -> actor.Next(ClientMsg, ClientState) {
-  case state.conn_state {
-    NotConnected -> actor.continue(state)
-    Connected(channel, _, _) | ConnectingToServer(channel, _) -> do(channel)
-  }
 }
 
 // The below conversion are _mostly_ required because we can't re-export constructors

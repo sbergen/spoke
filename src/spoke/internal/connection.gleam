@@ -5,6 +5,7 @@
 //// - `Connect` and `ConnAck`
 //// - `PinReq` and `PingResp`
 //// as these don't interact with the session.
+//// `ConnAck` is also sent to the session as a FYI on the status.
 //// 
 //// Killing the connection actor on protocol violations
 //// simplifies handling e.g. invalid packets,
@@ -21,20 +22,26 @@ import gleam/string
 import spoke/internal/packet
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
-import spoke/internal/transport.{type ChannelResult}
+import spoke/internal/transport.{type ByteChannel, type ChannelResult}
 import spoke/internal/transport/channel.{type EncodedChannel}
 
 pub opaque type Connection {
   Connection(subject: Subject(Message))
 }
 
+pub type Disconnect {
+  GracefulDisconnect
+  AbnormalDisconnect(String)
+  UnexpectedProcessExit
+}
+
 // TODO: Add auth, will, etc
 /// Starts the connection.
 /// The connection will be alive until there is a channel error,
 /// protocol violation, or explicitly disconnected.
-/// Returns the connection handle and a subject for supervision on success.
+/// The ConnAck packet will be sent to `incoming` connected.
 pub fn connect(
-  create_channel: fn() -> transport.ByteChannel,
+  create_channel: fn() -> ChannelResult(transport.ByteChannel),
   incoming: Subject(incoming.Packet),
   client_id: String,
   keep_alive_ms: Int,
@@ -59,11 +66,31 @@ pub fn connect(
       actor.InitCrashed(_) -> "Connection process crashed while starting"
       actor.InitFailed(e) ->
         case e {
-          process.Abnormal(e) -> "Failed to connect" <> e
+          process.Abnormal(e) -> e
           process.Killed -> "Process killed while connecting"
           process.Normal -> "Process start aborted (?)"
         }
       actor.InitTimeout -> "Establishing connection timed out"
+    }
+  })
+}
+
+pub fn selecting_disconnects(
+  connection: Connection,
+) -> process.Selector(Disconnect) {
+  process.trap_exits(True)
+
+  let own_pid = process.subject_owner(connection.subject)
+  process.new_selector()
+  |> process.selecting_trapped_exits(fn(exit) {
+    case exit {
+      process.ExitMessage(pid, reason) if pid == own_pid ->
+        case reason {
+          process.Abnormal(message) -> AbnormalDisconnect(message)
+          process.Killed -> AbnormalDisconnect("Killed")
+          process.Normal -> GracefulDisconnect
+        }
+      _ -> UnexpectedProcessExit
     }
   })
 }
@@ -109,14 +136,14 @@ type ConnectionState {
 }
 
 fn init(
-  create_channel: fn() -> transport.ByteChannel,
+  create_channel: fn() -> ChannelResult(ByteChannel),
   incoming: Subject(incoming.Packet),
   client_id: String,
   keep_alive_ms: Int,
   server_timeout_ms: Int,
 ) -> actor.InitResult(State, Message) {
   let self = process.new_subject()
-  let channel = channel.as_encoded(create_channel())
+  use channel <- connect_channel_or_fail(create_channel)
   let connection_state = ConnectingToServer(channel)
   let state =
     State(self, keep_alive_ms, server_timeout_ms, incoming, connection_state)
@@ -133,9 +160,22 @@ fn init(
   case send_packet(state, outgoing.Connect(connect_options)) {
     Ok(state) -> actor.Ready(state, next_selector(channel, <<>>, state.self))
     Error(e) ->
-      actor.Failed({
-        "Error sending connect packet to server: " <> string.inspect(e)
-      })
+      actor.Failed(
+        "Error sending connect packet to server: " <> string.inspect(e),
+      )
+  }
+}
+
+fn connect_channel_or_fail(
+  create_channel: fn() -> ChannelResult(ByteChannel),
+  continue: fn(EncodedChannel) -> actor.InitResult(State, Message),
+) -> actor.InitResult(State, Message) {
+  case create_channel() {
+    Ok(channel) -> continue(channel.as_encoded(channel))
+    Error(e) ->
+      actor.Failed(
+        "Failed to establish connection to server: " <> string.inspect(e),
+      )
   }
 }
 
@@ -215,8 +255,8 @@ fn handle_connack(
 ) -> actor.Next(Message, State) {
   case state.connection_state {
     ConnectingToServer(channel) -> {
-      // TODO send connected update
-      // process.send(reply_to, result.map_error(status, from_packet_connect_error))
+      // Send the connack to the session, so that it knows the result
+      process.send(state.incoming, incoming.ConnAck(status))
 
       case status {
         Ok(_session_present) -> {

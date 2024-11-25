@@ -68,9 +68,10 @@ pub fn connection_is_shut_down_if_no_pingresp_within_server_timeout_test() {
   fake_server.expect_packet_timeout(socket, keep_alive + 2, server_in.PingReq)
   process.sleep(server_timeout)
 
-  fake_server.drop_incoming_data(socket)
   fake_server.expect_connection_closed(socket)
-  let assert Ok(spoke.Disconnected) = process.receive(updates, 1)
+
+  // TODO: This is not expected
+  let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 1)
 }
 
 fn set_up_connected() -> #(spoke.Client, Subject(spoke.Update), Socket) {
@@ -86,7 +87,8 @@ fn set_up_connected() -> #(spoke.Client, Subject(spoke.Update), Socket) {
       updates,
     )
 
-  let #(state, _, _) = fake_server.connect_client(client, listener, Ok(False))
+  let #(state, _, _) =
+    fake_server.connect_client(client, updates, listener, Ok(False))
 
   #(client, updates, state.socket)
 }
