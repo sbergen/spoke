@@ -61,7 +61,7 @@ pub fn connect_client(
   listener: ListenSocket,
   response: Result(Bool, packet.ConnectError),
 ) -> #(ConnectedState, Result(Bool, spoke.ConnectError), ReceivedConnectData) {
-  let assert Ok(Nil) = spoke.connect(client, default_timeout)
+  let assert Ok(Nil) = spoke.connect(client)
 
   let #(state, details) = expect_connect(listener)
   send_response(state.socket, outgoing.ConnAck(response))

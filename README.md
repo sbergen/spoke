@@ -29,7 +29,7 @@ pub fn main() {
 
   let updates = process.new_subject()
   let client = spoke.start(connect_opts, transport_opts, updates)
-  let assert Ok(_) = spoke.connect(client, timeout: 1000)
+  let assert Ok(_) = spoke.connect(client)
 
   let assert Ok(_) =
     spoke.subscribe(
@@ -49,7 +49,6 @@ pub fn main() {
 
   let assert Ok(spoke.Connected(_)) = process.receive(updates, 1000)
   let message = process.receive(updates, 1000)
-  io.debug(message)
   io.println(string.inspect(message))
 
   spoke.disconnect(client)

@@ -27,7 +27,7 @@ pub fn main() {
   io.println("Connecting & subscribing..")
   let updates = process.new_subject()
   let client = spoke.start(connect_opts, transport_opts, updates)
-  let assert Ok(_) = spoke.connect(client, timeout: 100)
+  let assert Ok(_) = spoke.connect(client)
   let assert Ok(spoke.Connected(_)) = process.receive(updates, 100)
 
   let assert Ok(_) =

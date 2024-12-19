@@ -14,7 +14,7 @@ import spoke/internal/transport.{type ByteChannel, type ChannelResult}
 import spoke/internal/transport/tcp
 
 pub opaque type Client {
-  Client(subject: Subject(Message))
+  Client(subject: Subject(Message), config: Config)
 }
 
 pub type TransportOptions {
@@ -85,8 +85,8 @@ pub type ConnectionEstablishError {
   ConnectTimedOut
   /// The MQTT process was killed during a connect call
   KilledDuringConnect
-  /// There was a transport channel error during connecting
-  ConnectChannelError(String)
+  /// Starting the connection process failed
+  FailedToStartConnection(String)
   /// A connect is already established, or being established
   AlreadyConnected
 }
@@ -131,11 +131,8 @@ pub fn start(
 /// already before receiving a connection acknowledgement.
 /// If establishing a connection or sending the connect packet
 /// fails, this will return an error.
-pub fn connect(
-  client: Client,
-  timeout timeout: Int,
-) -> Result(Nil, ConnectionEstablishError) {
-  process.try_call(client.subject, Connect, timeout)
+pub fn connect(client: Client) -> Result(Nil, ConnectionEstablishError) {
+  process.try_call(client.subject, Connect, client.config.server_timeout)
   |> result.map_error(fn(e) {
     case e {
       process.CallTimeout -> ConnectTimedOut
@@ -212,7 +209,7 @@ pub fn start_with_ms_keep_alive(
   let config = Config(client_id, keep_alive_ms, server_timeout_ms, connect)
   let assert Ok(client) =
     actor.start_spec(actor.Spec(fn() { init(config, updates) }, 100, run_client))
-  Client(client)
+  Client(client, config)
 }
 
 fn create_channel(options: TransportOptions) -> ChannelResult(ByteChannel) {
@@ -336,7 +333,7 @@ fn do_connect(
   let result =
     connection
     |> result.map(fn(_) { Nil })
-    |> result.map_error(ConnectChannelError)
+    |> result.map_error(FailedToStartConnection)
   process.send(reply_to, result)
 
   case connection {

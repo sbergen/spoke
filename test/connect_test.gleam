@@ -36,7 +36,7 @@ pub fn aborted_connect_disconnects_expectedly_test() {
   let #(listener, port) = fake_server.start_server()
   let #(client, updates) = start_client_with_defaults(port)
 
-  let assert Ok(Nil) = spoke.connect(client, 100)
+  let assert Ok(Nil) = spoke.connect(client)
 
   let socket = fake_server.expect_connection_established(listener)
   spoke.disconnect(client)
@@ -62,11 +62,11 @@ pub fn connecting_when_already_connected_fails_test() {
   let #(client, updates) = start_client_with_defaults(port)
 
   // Start first connect
-  let assert Ok(Nil) = spoke.connect(client, 100)
+  let assert Ok(Nil) = spoke.connect(client)
   let socket = fake_server.expect_connection_established(listener)
 
   // Start overlapping connect
-  let assert Error(spoke.AlreadyConnected) = spoke.connect(client, 10)
+  let assert Error(spoke.AlreadyConnected) = spoke.connect(client)
 
   // Finish initial connect
   fake_server.drop_incoming_data(socket)
@@ -79,8 +79,7 @@ pub fn connecting_when_already_connected_fails_test() {
 pub fn channel_error_on_connect_fails_connect_test() {
   let #(client, updates) = start_client_with_defaults(9999)
 
-  // TODO: rethink the return value and timeout here
-  let _ = spoke.connect(client, 100)
+  let _ = spoke.connect(client)
 
   let assert Ok(spoke.DisconnectedUnexpectedly(_)) =
     process.receive(updates, 10)
@@ -90,7 +89,7 @@ pub fn channel_error_after_establish_fails_connect_test() {
   let #(listener, port) = fake_server.start_server()
   let #(client, updates) = start_client_with_defaults(port)
 
-  let assert Ok(Nil) = spoke.connect(client, 100)
+  let assert Ok(Nil) = spoke.connect(client)
   fake_server.reject_connection(listener)
 
   let assert Ok(spoke.DisconnectedUnexpectedly(_)) =

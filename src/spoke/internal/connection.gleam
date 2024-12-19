@@ -71,7 +71,10 @@ pub fn connect(
 
   use #(messages, connect) <- result.try(
     process.receive(ack_subject, server_timeout_ms)
-    |> result.map_error(fn(_) { "Failed to start connection process" }),
+    |> result.map_error(fn(_) {
+      process.kill(child)
+      "Starting connection process timed out"
+    }),
   )
 
   process.send(connect, config)
@@ -198,10 +201,7 @@ fn ok_or_exit(
 ) -> b {
   case result {
     Ok(a) -> continuation(a)
-    Error(e) -> {
-      process.send_abnormal_exit(process.self(), make_reason(e))
-      panic as "We should have died by now"
-    }
+    Error(e) -> stop_abnormal(make_reason(e))
   }
 }
 
@@ -395,7 +395,7 @@ fn get_channel(state: State) -> EncodedChannel {
   }
 }
 
-fn stop_abnormal(description: String) -> State {
+fn stop_abnormal(description: String) -> anything {
   process.send_abnormal_exit(process.self(), description)
   panic as "We should be dead by now"
 }
