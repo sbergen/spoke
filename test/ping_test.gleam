@@ -71,6 +71,7 @@ pub fn connection_is_shut_down_if_no_pingresp_within_server_timeout_test() {
   fake_server.expect_connection_closed(socket)
 
   // TODO: This is not expected
+  // See https://github.com/gleam-lang/otp/pull/88
   let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 1)
 }
 

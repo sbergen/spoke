@@ -81,8 +81,6 @@ pub type QoS {
 pub type ConnectionEstablishError {
   /// A disconnect was requested while connecting
   DisconnectRequested
-  /// The connection timed out
-  ConnectTimedOut
   /// The MQTT process was killed during a connect call
   KilledDuringConnect
   /// Starting the connection process failed
@@ -135,7 +133,7 @@ pub fn connect(client: Client) -> Result(Nil, ConnectionEstablishError) {
   process.try_call(client.subject, Connect, client.config.server_timeout)
   |> result.map_error(fn(e) {
     case e {
-      process.CallTimeout -> ConnectTimedOut
+      process.CallTimeout -> FailedToStartConnection("Timed out")
       process.CalleeDown(_) -> KilledDuringConnect
     }
   })
@@ -322,7 +320,7 @@ fn do_connect(
   reply_to: Subject(Result(Nil, ConnectionEstablishError)),
 ) -> actor.Next(Message, State) {
   let config = state.config
-  let connection =
+  let conn =
     connection.connect(
       config.connect,
       config.client_id,
@@ -331,15 +329,15 @@ fn do_connect(
     )
 
   let result =
-    connection
+    conn
     |> result.map(fn(_) { Nil })
     |> result.map_error(FailedToStartConnection)
   process.send(reply_to, result)
 
-  case connection {
-    Ok(connection) -> {
+  case conn {
+    Ok(conn) -> {
       let selector =
-        connection.updates(connection)
+        connection.updates(conn)
         |> process.map_selector(fn(update) {
           case update {
             connection.ReceivedPacket(packet) -> ProcessReceived(packet)
@@ -348,7 +346,7 @@ fn do_connect(
         })
         |> process.selecting(state.self, function.identity)
 
-      let next = actor.continue(State(..state, connection: Some(connection)))
+      let next = actor.continue(State(..state, connection: Some(conn)))
       actor.with_selector(next, selector)
     }
     Error(_) -> {

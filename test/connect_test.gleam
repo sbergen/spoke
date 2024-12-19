@@ -46,17 +46,6 @@ pub fn aborted_connect_disconnects_expectedly_test() {
   fake_server.expect_connection_closed(socket)
 }
 
-// TODO: rethink connect timeouts
-// pub fn timed_out_connect_disconnects_test() {
-//   let #(_listener, port) = fake_server.start_server()
-//   let #(client, updates) = start_client_with_defaults(port)
-
-//   // The timeout used for connect is what matters (server timeout does not)
-//   let connect_task = task.async(fn() { spoke.connect(client, 2) })
-//   let assert Error(spoke.ConnectTimedOut) = task.await(connect_task, 100)
-//   let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 1)
-// }
-
 pub fn connecting_when_already_connected_fails_test() {
   let #(listener, port) = fake_server.start_server()
   let #(client, updates) = start_client_with_defaults(port)
