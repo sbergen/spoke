@@ -12,11 +12,12 @@
 //// which should immediately close the channel
 //// according to the MQTT specification.
 
-import gleam/erlang/process.{type Subject}
+import gleam/bool
+import gleam/dynamic
+import gleam/erlang/process.{type Selector, type Subject}
 import gleam/function
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import gleam/otp/actor
 import gleam/result
 import gleam/string
 import spoke/internal/packet
@@ -26,73 +27,77 @@ import spoke/internal/transport.{type ByteChannel, type ChannelResult}
 import spoke/internal/transport/channel.{type EncodedChannel}
 
 pub opaque type Connection {
-  Connection(subject: Subject(Message))
+  Connection(subject: Subject(Message), updates: Selector(Update))
 }
 
 pub type Disconnect {
   GracefulDisconnect
   AbnormalDisconnect(String)
-  UnexpectedProcessExit
+}
+
+pub type Update {
+  Disconnected(Disconnect)
+  ReceivedPacket(incoming.Packet)
 }
 
 // TODO: Add auth, will, etc
 /// Starts the connection.
 /// The connection will be alive until there is a channel error,
 /// protocol violation, or explicitly disconnected.
-/// The ConnAck packet will be sent to `incoming` connected.
+/// The ConnAck packet will be sent to `incoming` when connected.
 pub fn connect(
   create_channel: fn() -> ChannelResult(transport.ByteChannel),
-  incoming: Subject(incoming.Packet),
   client_id: String,
   keep_alive_ms: Int,
   server_timeout_ms: Int,
 ) -> Result(Connection, String) {
-  actor.start_spec(actor.Spec(
-    fn() {
-      init(
-        create_channel,
-        incoming,
-        client_id,
-        keep_alive_ms,
-        server_timeout_ms,
-      )
-    },
-    server_timeout_ms,
-    run,
-  ))
-  |> result.map(Connection)
-  |> result.map_error(fn(e) {
-    case e {
-      actor.InitCrashed(_) -> "Connection process crashed while starting"
-      actor.InitFailed(e) ->
-        case e {
-          process.Abnormal(e) -> e
-          process.Killed -> "Process killed while connecting"
-          process.Normal -> "Process start aborted (?)"
-        }
-      actor.InitTimeout -> "Establishing connection timed out"
-    }
-  })
+  // Start linked, as this *really* shouldn't fail
+  let ack_subject = process.new_subject()
+  let child =
+    process.start(linked: True, running: fn() {
+      let messages = process.new_subject()
+      let connect = process.new_subject()
+      process.send(ack_subject, #(messages, connect))
+      establish_channel(messages, connect)
+    })
+
+  // Start monitoring and unlink
+  let monitor = process.monitor_process(child)
+  process.unlink(child)
+
+  let updates = process.new_subject()
+  let config =
+    Config(create_channel, updates, client_id, keep_alive_ms, server_timeout_ms)
+
+  use #(messages, connect) <- result.try(
+    process.receive(ack_subject, server_timeout_ms)
+    |> result.map_error(fn(_) { "Failed to start connection process" }),
+  )
+
+  process.send(connect, config)
+
+  let updates =
+    process.new_selector()
+    |> process.selecting(updates, function.identity)
+    |> process.selecting_process_down(monitor, fn(down) {
+      let reason = down.reason
+      let normal = dynamic.from(process.Normal)
+      let killed = dynamic.from(process.Killed)
+
+      let kind = {
+        use <- bool.guard(reason == normal, GracefulDisconnect)
+        use <- bool.guard(reason == killed, AbnormalDisconnect("Killed"))
+        AbnormalDisconnect(string.inspect(reason))
+      }
+      Disconnected(kind)
+    })
+
+  Ok(Connection(messages, updates))
 }
 
-pub fn selecting_disconnects(
-  connection: Connection,
-) -> process.Selector(Disconnect) {
-  process.trap_exits(True)
-
-  let own_pid = process.subject_owner(connection.subject)
-  process.new_selector()
-  |> process.selecting_trapped_exits(fn(exit) {
-    case exit {
-      process.ExitMessage(pid, reason) if pid == own_pid ->
-        case reason {
-          process.Abnormal(message) -> AbnormalDisconnect(message)
-          process.Killed -> AbnormalDisconnect("Killed")
-          process.Normal -> GracefulDisconnect
-        }
-      _ -> UnexpectedProcessExit
-    }
-  })
+/// Gets the updates `Selector` from the connection
+pub fn updates(connection: Connection) -> Selector(Update) {
+  connection.updates
 }
 
 /// Sends the given packet
@@ -103,6 +108,16 @@ pub fn send(connection: Connection, packet: outgoing.Packet) -> Nil {
 /// Disconnects the connection cleanly
 pub fn shutdown(connection: Connection) {
   process.send(connection.subject, ShutDown)
+}
+
+type Config {
+  Config(
+    create_channel: fn() -> ChannelResult(ByteChannel),
+    updates: Subject(Update),
+    client_id: String,
+    keep_alive_ms: Int,
+    server_timeout_ms: Int,
+  )
 }
 
 type Message {
@@ -116,9 +131,10 @@ type Message {
 type State {
   State(
     self: Subject(Message),
+    selector: Selector(Message),
+    updates: Subject(Update),
     keep_alive_ms: Int,
     server_timeout_ms: Int,
-    incoming: Subject(incoming.Packet),
     connection_state: ConnectionState,
   )
 }
@@ -135,52 +151,63 @@ type ConnectionState {
   )
 }
 
-fn init(
-  create_channel: fn() -> ChannelResult(ByteChannel),
-  incoming: Subject(incoming.Packet),
-  client_id: String,
-  keep_alive_ms: Int,
-  server_timeout_ms: Int,
-) -> actor.InitResult(State, Message) {
-  let self = process.new_subject()
-  use channel <- connect_channel_or_fail(create_channel)
+fn establish_channel(
+  messages: Subject(Message),
+  connect: Subject(Config),
+) -> Nil {
+  // If we can't receive in time, the parent is very stuck, so dying is fine
+  let assert Ok(config) = process.receive(connect, 1000)
+
+  use channel <- ok_or_exit(config.create_channel(), fn(e) {
+    "Failed to establish connection to server: " <> string.inspect(e)
+  })
+  let channel = channel.as_encoded(channel)
+
   let connection_state = ConnectingToServer(channel)
   let state =
-    State(self, keep_alive_ms, server_timeout_ms, incoming, connection_state)
+    State(
+      messages,
+      next_selector(channel, <<>>, messages),
+      config.updates,
+      config.keep_alive_ms,
+      config.server_timeout_ms,
+      connection_state,
+    )
 
   // TODO clean session, auth, will
   let connect_options =
     packet.ConnectOptions(
       clean_session: True,
-      client_id: client_id,
-      keep_alive_seconds: keep_alive_ms / 1000,
+      client_id: config.client_id,
+      keep_alive_seconds: config.keep_alive_ms / 1000,
       auth: None,
       will: None,
     )
-  case send_packet(state, outgoing.Connect(connect_options)) {
-    Ok(state) -> actor.Ready(state, next_selector(channel, <<>>, state.self))
-    Error(e) ->
-      actor.Failed(
-        "Error sending connect packet to server: " <> string.inspect(e),
-      )
+
+  use state <- ok_or_exit(
+    send_packet(state, outgoing.Connect(connect_options)),
+    fn(e) { "Error sending connect packet to server: " <> string.inspect(e) },
+  )
+  run(state)
+}
+
+fn ok_or_exit(
+  result: Result(a, e),
+  make_reason: fn(e) -> String,
+  continuation: fn(a) -> b,
+) -> b {
+  case result {
+    Ok(a) -> continuation(a)
+    Error(e) -> {
+      process.send_abnormal_exit(process.self(), make_reason(e))
+      panic as "We should have died by now"
+    }
   }
 }
 
-fn connect_channel_or_fail(
-  create_channel: fn() -> ChannelResult(ByteChannel),
-  continue: fn(EncodedChannel) -> actor.InitResult(State, Message),
-) -> actor.InitResult(State, Message) {
-  case create_channel() {
-    Ok(channel) -> continue(channel.as_encoded(channel))
-    Error(e) ->
-      actor.Failed(
-        "Failed to establish connection to server: " <> string.inspect(e),
-      )
-  }
-}
-
-fn run(message: Message, state: State) -> actor.Next(Message, State) {
-  case message {
+fn run(state: State) -> Nil {
+  let message = process.select_forever(state.selector)
+  let state = case message {
     Received(#(new_channel_state, packets)) ->
       handle_receive(state, new_channel_state, packets)
     ProcessReceived(packet) -> process_packet(state, packet)
@@ -188,52 +215,42 @@ fn run(message: Message, state: State) -> actor.Next(Message, State) {
     SendPing -> send_ping(state)
     ShutDown -> shut_down(state)
   }
+
+  run(state)
 }
 
-fn shut_down(state: State) -> actor.Next(Message, State) {
+fn shut_down(state: State) -> State {
   get_channel(state).shutdown()
-  actor.Stop(process.Normal)
+  process.send_exit(process.self())
+  panic as "We should be dead by now"
 }
 
 /// Sends a packet coming directly from the session
-fn send_from_session(
-  state: State,
-  packet: outgoing.Packet,
-) -> actor.Next(Message, State) {
+fn send_from_session(state: State, packet: outgoing.Packet) -> State {
   use state <- send_packet_or_stop(state, packet)
-  actor.continue(state)
+  state
 }
 
 fn handle_receive(
   state: State,
   new_conn_state: BitArray,
   packets: ChannelResult(List(incoming.Packet)),
-) -> actor.Next(Message, State) {
-  case packets {
-    Ok(packets) -> {
-      // Schedule the packets to be processed,
-      // to atomically update the actor state.
-      list.each(packets, fn(packet) {
-        process.send(state.self, ProcessReceived(packet))
-      })
+) -> State {
+  use packets <- ok_or_exit(packets, fn(e) {
+    "Transport channel error while receiving: " <> string.inspect(e)
+  })
 
-      // Continue receiving immediately 
-      actor.with_selector(
-        actor.continue(state),
-        next_selector(get_channel(state), new_conn_state, state.self),
-      )
-    }
-    Error(e) ->
-      stop_abnormal(
-        "Transport channel error while receiving: " <> string.inspect(e),
-      )
-  }
+  // Schedule the packets to be processed,
+  // to atomically update the actor state.
+  list.each(packets, fn(packet) {
+    process.send(state.self, ProcessReceived(packet))
+  })
+
+  let selector = next_selector(get_channel(state), new_conn_state, state.self)
+  State(..state, selector:)
 }
 
-fn process_packet(
-  state: State,
-  packet: incoming.Packet,
-) -> actor.Next(Message, State) {
+fn process_packet(state: State, packet: incoming.Packet) -> State {
   case packet {
     incoming.ConnAck(data) -> handle_connack(state, data)
     incoming.PingResp -> handle_pingresp(state)
@@ -241,28 +258,22 @@ fn process_packet(
   }
 }
 
-fn send_to_session(
-  state: State,
-  packet: incoming.Packet,
-) -> actor.Next(Message, State) {
-  process.send(state.incoming, packet)
-  actor.continue(state)
+fn send_to_session(state: State, packet: incoming.Packet) -> State {
+  process.send(state.updates, ReceivedPacket(packet))
+  state
 }
 
-fn handle_connack(
-  state: State,
-  status: packet.ConnAckResult,
-) -> actor.Next(Message, State) {
+fn handle_connack(state: State, status: packet.ConnAckResult) -> State {
   case state.connection_state {
     ConnectingToServer(channel) -> {
       // Send the connack to the session, so that it knows the result
-      process.send(state.incoming, incoming.ConnAck(status))
+      process.send(state.updates, ReceivedPacket(incoming.ConnAck(status)))
 
       case status {
         Ok(_session_present) -> {
           let connection_state =
             Connected(channel, start_ping_timeout(state), None)
-          actor.continue(State(..state, connection_state: connection_state))
+          State(..state, connection_state:)
         }
         Error(_) -> {
           // If a server sends a CONNACK packet containing a non-zero return code
@@ -276,7 +287,7 @@ fn handle_connack(
   }
 }
 
-fn send_ping(state: State) -> actor.Next(Message, State) {
+fn send_ping(state: State) -> State {
   case state.connection_state {
     Connected(channel, ping, disconnect) -> {
       // We should also not be waiting for a ping response,
@@ -298,11 +309,9 @@ fn send_ping(state: State) -> actor.Next(Message, State) {
           use state <- send_packet_or_stop(state, outgoing.PingReq)
           let disconnect =
             process.send_after(state.self, state.server_timeout_ms, ShutDown)
-          actor.continue(
-            State(
-              ..state,
-              connection_state: Connected(channel, ping, Some(disconnect)),
-            ),
+          State(
+            ..state,
+            connection_state: Connected(channel, ping, Some(disconnect)),
           )
         }
       }
@@ -312,13 +321,11 @@ fn send_ping(state: State) -> actor.Next(Message, State) {
   }
 }
 
-fn handle_pingresp(state: State) -> actor.Next(Message, State) {
+fn handle_pingresp(state: State) -> State {
   case state.connection_state {
     Connected(channel, ping, Some(shutdown_timer)) -> {
       process.cancel_timer(shutdown_timer)
-      actor.continue(
-        State(..state, connection_state: Connected(channel, ping, None)),
-      )
+      State(..state, connection_state: Connected(channel, ping, None))
     }
     Connected(_, _, None) ->
       stop_abnormal("No shutdown timer active when receiving PingResp")
@@ -339,18 +346,16 @@ fn next_selector(
 fn send_packet_or_stop(
   state: State,
   packet: outgoing.Packet,
-  if_success: fn(State) -> actor.Next(Message, State),
-) -> actor.Next(Message, State) {
-  case send_packet(state, packet) {
-    Ok(state) -> if_success(state)
-    Error(e) ->
-      stop_abnormal(
-        "Transport channel error "
-        <> string.inspect(e)
-        <> " while sending packet "
-        <> string.inspect(packet),
-      )
-  }
+  if_success: fn(State) -> State,
+) -> State {
+  use state <- ok_or_exit(send_packet(state, packet), fn(e) {
+    "Transport channel error "
+    <> string.inspect(e)
+    <> " while sending packet "
+    <> string.inspect(packet)
+  })
+
+  if_success(state)
 }
 
 // Clients are allowed to send further Control Packets immediately after sending a CONNECT Packet;
@@ -390,6 +395,7 @@ fn get_channel(state: State) -> EncodedChannel {
   }
 }
 
-fn stop_abnormal(description: String) -> actor.Next(Message, State) {
-  actor.Stop(process.Abnormal(description))
+fn stop_abnormal(description: String) -> State {
+  process.send_abnormal_exit(process.self(), description)
+  panic as "We should be dead by now"
 }

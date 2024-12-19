@@ -299,8 +299,6 @@ fn handle_connection_drop(
       process.send(state.updates, DisconnectedExpectedly)
       True
     }
-    // TODO: Why am I getting these?
-    connection.UnexpectedProcessExit -> False
   }
 
   case disconnect {
@@ -327,11 +325,9 @@ fn do_connect(
   reply_to: Subject(Result(Nil, ConnectionEstablishError)),
 ) -> actor.Next(Message, State) {
   let config = state.config
-  let incoming = process.new_subject()
   let connection =
     connection.connect(
       config.connect,
-      incoming,
       config.client_id,
       config.keep_alive,
       config.server_timeout,
@@ -346,13 +342,14 @@ fn do_connect(
   case connection {
     Ok(connection) -> {
       let selector =
-        process.new_selector()
-        |> process.selecting(incoming, ProcessReceived)
+        connection.updates(connection)
+        |> process.map_selector(fn(update) {
+          case update {
+            connection.ReceivedPacket(packet) -> ProcessReceived(packet)
+            connection.Disconnected(reason) -> ConnectionDropped(reason)
+          }
+        })
         |> process.selecting(state.self, function.identity)
-        |> process.merge_selector(
-          connection.selecting_disconnects(connection)
-          |> process.map_selector(ConnectionDropped),
-        )
 
       let next = actor.continue(State(..state, connection: Some(connection)))
       actor.with_selector(next, selector)

@@ -77,10 +77,13 @@ pub fn connecting_when_already_connected_fails_test() {
 }
 
 pub fn channel_error_on_connect_fails_connect_test() {
-  let #(client, _updates) = start_client_with_defaults(9999)
-  let assert Error(spoke.ConnectChannelError(
-    "Failed to establish connection to server: ConnectFailed(\"Econnrefused\")",
-  )) = spoke.connect(client, 100)
+  let #(client, updates) = start_client_with_defaults(9999)
+
+  // TODO: rethink the return value and timeout here
+  let _ = spoke.connect(client, 100)
+
+  let assert Ok(spoke.DisconnectedUnexpectedly(_)) =
+    process.receive(updates, 10)
 }
 
 pub fn channel_error_after_establish_fails_connect_test() {
@@ -90,8 +93,8 @@ pub fn channel_error_after_establish_fails_connect_test() {
   let assert Ok(Nil) = spoke.connect(client, 100)
   fake_server.reject_connection(listener)
 
-  // TODO: This is not correct
-  let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 10)
+  let assert Ok(spoke.DisconnectedUnexpectedly(_)) =
+    process.receive(updates, 10)
 }
 
 fn connect(
