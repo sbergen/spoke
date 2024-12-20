@@ -44,11 +44,7 @@ pub fn main() {
     |> list.each(fn(msg_index) {
       let payload = "Hello: " <> string.inspect(msg_index)
       let assert Ok(_) =
-        spoke.publish(
-          client,
-          PublishData(..message, payload: <<payload:utf8>>),
-          10,
-        )
+        spoke.publish(client, PublishData(..message, payload: <<payload:utf8>>))
     })
   })
 

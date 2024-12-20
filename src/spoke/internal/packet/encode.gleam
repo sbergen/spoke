@@ -1,7 +1,6 @@
 //// Encoding of fundamental MQTT data types and shared error codes
 
 import gleam/bit_array
-import gleam/bool
 import gleam/bytes_tree.{type BytesTree}
 import gleam/list
 import gleam/option.{type Option, None, Some}

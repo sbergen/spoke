@@ -44,21 +44,15 @@ pub type PublishData {
   PublishData(topic: String, payload: BitArray, qos: QoS, retain: Bool)
 }
 
-pub type PublishError {
-  NotConnectedDuringPublish
-  PublishTimedOut
-  PublishChannelError(String)
-  KilledDuringPublish
+pub type OperationError {
+  NotConnected
+  OperationTimedOut
+  KilledDuringOperation
 }
 
 pub type Subscription {
   SuccessfulSubscription(topic_filter: String, qos: QoS)
   FailedSubscription
-}
-
-pub type SubscribeError {
-  // TODO more details here
-  SubscribeError
 }
 
 /// Quality of Service levels, as specified in the MQTT specification
@@ -149,44 +143,22 @@ pub fn disconnect(client: Client) {
 /// and send the `Disconnect` update.
 /// Note that in case of a timeout,
 /// the message might still have been already published.
-pub fn publish(
-  client: Client,
-  data: PublishData,
-  timeout: Int,
-) -> Result(Nil, PublishError) {
-  call_or_disconnect(
-    client,
-    Publish(data, _),
-    timeout,
-    KilledDuringPublish,
-    PublishTimedOut,
-  )
+pub fn publish(client: Client, data: PublishData) -> Result(Nil, OperationError) {
+  call_or_disconnect(client, Publish(data, _))
 }
 
 pub fn subscribe(
   client: Client,
   topics: List(SubscribeRequest),
-) -> Result(List(Subscription), SubscribeError) {
-  case
-    process.try_call(
-      client.subject,
-      Subscribe(topics, _),
-      client.config.server_timeout,
-    )
-  {
-    Ok(result) -> Ok(result)
-    Error(_) -> Error(SubscribeError)
-  }
+) -> Result(List(Subscription), OperationError) {
+  call_or_disconnect(client, Subscribe(topics, _))
 }
 
 fn call_or_disconnect(
   client: Client,
-  make_request: fn(Subject(Result(result, error))) -> Message,
-  timeout: Int,
-  killed_error: error,
-  timed_out_error: error,
+  make_request: fn(Subject(Result(result, OperationError))) -> Message,
 ) {
-  process.try_call(client.subject, make_request, timeout)
+  process.try_call(client.subject, make_request, client.config.server_timeout)
   |> result.map_error(fn(e) {
     case e {
       process.CallTimeout -> {
@@ -194,9 +166,9 @@ fn call_or_disconnect(
           client.subject,
           DropConnectionAndNotifyClient("Operation timed out"),
         )
-        timed_out_error
+        OperationTimedOut
       }
-      process.CalleeDown(_) -> killed_error
+      process.CalleeDown(_) -> KilledDuringOperation
     }
   })
   |> result.flatten
@@ -245,10 +217,16 @@ type State {
   )
 }
 
+type OperationResult(a) =
+  Result(a, OperationError)
+
 type Message {
   Connect(Subject(Result(Nil, ConnectionEstablishError)))
-  Publish(PublishData, Subject(Result(Nil, PublishError)))
-  Subscribe(List(SubscribeRequest), Subject(List(Subscription)))
+  Publish(PublishData, Subject(OperationResult(Nil)))
+  Subscribe(
+    List(SubscribeRequest),
+    Subject(OperationResult(List(Subscription))),
+  )
   ProcessReceived(incoming.Packet)
   ConnectionDropped(connection.Disconnect)
   Disconnect
@@ -258,7 +236,7 @@ type Message {
 type PendingSubscription {
   PendingSubscription(
     topics: List(SubscribeRequest),
-    reply_to: Subject(List(Subscription)),
+    reply_to: Subject(OperationResult(List(Subscription))),
   )
 }
 
@@ -367,7 +345,7 @@ fn do_connect(
 fn handle_outgoing_publish(
   state: State,
   data: PublishData,
-  reply_to: Subject(Result(Nil, PublishError)),
+  reply_to: Subject(Result(Nil, OperationError)),
 ) -> actor.Next(Message, State) {
   // TODO: When should we reply with QoS0?
   // Does it even matter?
@@ -386,7 +364,7 @@ fn handle_outgoing_publish(
       process.send(reply_to, Ok(Nil))
     }
     None -> {
-      process.send(reply_to, Error(NotConnectedDuringPublish))
+      process.send(reply_to, Error(NotConnected))
     }
   }
 
@@ -436,14 +414,14 @@ fn handle_suback(
     |> result.unwrap(FailedSubscription)
   }
 
-  process.send(pending_sub.reply_to, result)
+  process.send(pending_sub.reply_to, Ok(result))
   actor.continue(State(..state, pending_subs: dict.delete(subs, id)))
 }
 
 fn handle_subscribe(
   state: State,
   topics: List(SubscribeRequest),
-  reply_to: Subject(List(Subscription)),
+  reply_to: Subject(OperationResult(List(Subscription))),
 ) -> actor.Next(Message, State) {
   let #(state, id) = reserve_packet_id(state)
   let pending_sub = PendingSubscription(topics, reply_to)

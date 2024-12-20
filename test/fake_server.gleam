@@ -27,6 +27,12 @@ pub fn set_up_connected_client() -> #(
   Subject(spoke.Update),
   Socket,
 ) {
+  set_up_connected_client_with_timeout(100)
+}
+
+pub fn set_up_connected_client_with_timeout(
+  timeout: Int,
+) -> #(spoke.Client, Subject(spoke.Update), Socket) {
   let #(listener, port) = start_server()
 
   let updates = process.new_subject()
@@ -34,7 +40,7 @@ pub fn set_up_connected_client() -> #(
     spoke.start_with_ms_keep_alive(
       "ping-client",
       15,
-      100,
+      timeout,
       default_options(port),
       updates,
     )
