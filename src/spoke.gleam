@@ -47,6 +47,7 @@ pub type PublishData {
 pub type OperationError {
   NotConnected
   OperationTimedOut
+  ProtocolViolation
   KilledDuringOperation
 }
 
@@ -412,10 +413,21 @@ fn handle_suback(
   results: List(SubscribeResult),
 ) -> actor.Next(Message, State) {
   let subs = state.pending_subs
-  let assert Ok(pending_sub) = dict.get(subs, id)
-  let result = {
-    // TODO: Validate result length?
-    let pairs = list.zip(pending_sub.topics, results)
+
+  use pending_sub <- ok_or_drop_connection(state, dict.get(subs, id), fn(_) {
+    "Received invalid packet id in subscribe ack"
+  })
+
+  use pairs <- ok_or_drop_connection(
+    state,
+    list.strict_zip(pending_sub.topics, results),
+    fn(_) {
+      process.send(pending_sub.reply_to, Error(ProtocolViolation))
+      "Received invalid number of results in subscribe ack"
+    },
+  )
+
+  let results = {
     use #(topic, result) <- list.map(pairs)
 
     result
@@ -425,13 +437,15 @@ fn handle_suback(
     |> result.unwrap(FailedSubscription)
   }
 
-  process.send(pending_sub.reply_to, Ok(result))
+  process.send(pending_sub.reply_to, Ok(results))
   actor.continue(State(..state, pending_subs: dict.delete(subs, id)))
 }
 
 fn handle_unsuback(state: State, id: Int) -> actor.Next(Message, State) {
   let unsubs = state.pending_unsubs
-  let assert Ok(pending_unsub) = dict.get(unsubs, id)
+  use pending_unsub <- ok_or_drop_connection(state, dict.get(unsubs, id), fn(_) {
+    "Received invalid packet id in unsubscribe ack"
+  })
   process.send(pending_unsub, Ok(Nil))
   actor.continue(State(..state, pending_unsubs: dict.delete(unsubs, id)))
 }
@@ -516,6 +530,20 @@ fn drop_connection_and_notify(
       actor.continue(State(..state, connection: None))
     }
     None -> actor.continue(state)
+  }
+}
+
+fn ok_or_drop_connection(
+  state: State,
+  result: Result(a, e),
+  make_reason: fn(e) -> String,
+  continuation: fn(a) -> actor.Next(Message, State),
+) -> actor.Next(Message, State) {
+  case result {
+    Ok(a) -> continuation(a)
+    Error(e) -> {
+      drop_connection_and_notify(state, Some(make_reason(e)))
+    }
   }
 }
 

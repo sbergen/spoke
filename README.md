@@ -63,14 +63,14 @@ Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ## Development status
 
 Here's an overview of what MQTT features are implemented.
-In summary, only QoS 0 over TCP with permanent subscriptions
+In summary, only QoS 0 over TCP with non-persistent sessions
 is currently supported.
 
 ### MQTT features
 - [x] Connect
   - [ ] Auth
 - [x] Subscribe
-- [ ] Unsubscribe
+- [x] Unsubscribe
 - [x] Pings (keep alive)
 - [x] Receive messages
 - [x] Send messages

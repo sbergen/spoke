@@ -71,3 +71,39 @@ pub fn subscribe_timed_out_test() {
   let assert Ok(Error(spoke.OperationTimedOut)) = task.try_await(subscribe, 10)
   let assert Ok(spoke.DisconnectedUnexpectedly(_)) = process.receive(updates, 0)
 }
+
+pub fn subscribe_invalid_id_test() {
+  let #(client, updates, socket) =
+    fake_server.set_up_connected_client_with_timeout(5)
+
+  let topics = [spoke.SubscribeRequest("topic0", AtMostOnce)]
+
+  let subscribe = task.async(fn() { spoke.subscribe(client, topics) })
+  fake_server.expect_any_packet(socket)
+  fake_server.send_response(socket, server_out.SubAck(42, [Error(Nil)]))
+
+  // We don't know where to respond, so this has to be a timeout
+  let assert Ok(Error(spoke.OperationTimedOut)) = task.try_await(subscribe, 10)
+  let assert Ok(spoke.DisconnectedUnexpectedly(
+    "Received invalid packet id in subscribe ack",
+  )) = process.receive(updates, 0)
+}
+
+pub fn subscribe_invalid_length_test() {
+  let #(client, updates, socket) =
+    fake_server.set_up_connected_client_with_timeout(5)
+
+  let topics = [spoke.SubscribeRequest("topic0", AtMostOnce)]
+
+  let subscribe = task.async(fn() { spoke.subscribe(client, topics) })
+  fake_server.expect_any_packet(socket)
+  fake_server.send_response(
+    socket,
+    server_out.SubAck(1, [Error(Nil), Error(Nil)]),
+  )
+
+  let assert Ok(Error(spoke.ProtocolViolation)) = task.try_await(subscribe, 10)
+  let assert Ok(spoke.DisconnectedUnexpectedly(
+    "Received invalid number of results in subscribe ack",
+  )) = process.receive(updates, 0)
+}
