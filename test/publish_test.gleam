@@ -25,8 +25,7 @@ pub fn publish_timeout_disconnects_test() {
 
   // TODO: Rethink if publish should really have a timeout,
   // or if we should use the server_timeout value instead.
-  // TODO: This is not expected
-  // See https://github.com/gleam-lang/otp/pull/88
   fake_server.expect_connection_closed(socket)
-  let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 1)
+  let assert Ok(spoke.DisconnectedUnexpectedly("Operation timed out")) =
+    process.receive(updates, 1)
 }

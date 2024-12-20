@@ -185,7 +185,10 @@ fn call_or_disconnect(
   |> result.map_error(fn(e) {
     case e {
       process.CallTimeout -> {
-        process.send(client.subject, DropConnectionAndNotifyClient)
+        process.send(
+          client.subject,
+          DropConnectionAndNotifyClient("Operation timed out"),
+        )
         timed_out_error
       }
       process.CalleeDown(_) -> killed_error
@@ -244,7 +247,7 @@ type Message {
   ProcessReceived(incoming.Packet)
   ConnectionDropped(connection.Disconnect)
   Disconnect
-  DropConnectionAndNotifyClient
+  DropConnectionAndNotifyClient(String)
 }
 
 type PendingSubscription {
@@ -277,7 +280,8 @@ fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
     ConnectionDropped(reason) -> handle_connection_drop(state, reason)
     Disconnect -> handle_disconnect(state)
-    DropConnectionAndNotifyClient -> drop_connection_and_notify(state)
+    DropConnectionAndNotifyClient(reason) ->
+      drop_connection_and_notify(state, Some(reason))
   }
 }
 
@@ -473,18 +477,26 @@ fn handle_disconnect(state: State) -> actor.Next(Message, State) {
   case state.connection {
     Some(connection) -> {
       connection.send(connection, outgoing.Disconnect)
-      drop_connection_and_notify(state)
+      drop_connection_and_notify(state, None)
     }
     None -> actor.continue(state)
   }
 }
 
-fn drop_connection_and_notify(state: State) -> actor.Next(Message, State) {
+fn drop_connection_and_notify(
+  state: State,
+  error: Option(String),
+) -> actor.Next(Message, State) {
   case state.connection {
     Some(connection) -> {
       connection.shutdown(connection)
-      // TODO: This is not expected, improve it
-      process.send(state.updates, DisconnectedExpectedly)
+
+      let update = case error {
+        None -> DisconnectedExpectedly
+        Some(reason) -> DisconnectedUnexpectedly(reason)
+      }
+
+      process.send(state.updates, update)
       actor.continue(State(..state, connection: None))
     }
     None -> actor.continue(state)
