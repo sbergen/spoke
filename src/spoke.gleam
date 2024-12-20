@@ -166,9 +166,14 @@ pub fn publish(
 pub fn subscribe(
   client: Client,
   topics: List(SubscribeRequest),
-  timeout: Int,
 ) -> Result(List(Subscription), SubscribeError) {
-  case process.try_call(client.subject, Subscribe(topics, _), timeout) {
+  case
+    process.try_call(
+      client.subject,
+      Subscribe(topics, _),
+      client.config.server_timeout,
+    )
+  {
     Ok(result) -> Ok(result)
     Error(_) -> Error(SubscribeError)
   }

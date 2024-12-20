@@ -34,8 +34,7 @@ pub fn main() {
   let assert Ok(_) =
     spoke.subscribe(
       client,
-      [spoke.SubscribeRequest(topic, spoke.AtMostOnce)],
-      1000,
+      [spoke.SubscribeRequest(topic, spoke.AtMostOnce)]
     )
 
   let message =

@@ -31,11 +31,7 @@ pub fn main() {
   let assert Ok(spoke.Connected(_)) = process.receive(updates, 100)
 
   let assert Ok(_) =
-    spoke.subscribe(
-      client,
-      [spoke.SubscribeRequest("#", spoke.AtMostOnce)],
-      100,
-    )
+    spoke.subscribe(client, [spoke.SubscribeRequest("#", spoke.AtMostOnce)])
 
   let tasks = total_messages / messages_per_task
   list.range(1, tasks)

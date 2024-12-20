@@ -21,7 +21,7 @@ pub fn subscribe_success_test() {
   ]
   let results = [Ok(packet.QoS0), Ok(packet.QoS1), Ok(packet.QoS2)]
 
-  let subscribe = task.async(fn() { spoke.subscribe(client, topics, 100) })
+  let subscribe = task.async(fn() { spoke.subscribe(client, topics) })
   fake_server.expect_packet(socket, server_in.Subscribe(1, request_payload))
   fake_server.send_response(socket, server_out.SubAck(1, results))
 

@@ -23,8 +23,6 @@ pub fn publish_timeout_disconnects_test() {
   let data = spoke.PublishData("topic", <<>>, AtMostOnce, False)
   let assert Error(spoke.PublishTimedOut) = spoke.publish(client, data, 0)
 
-  // TODO: Rethink if publish should really have a timeout,
-  // or if we should use the server_timeout value instead.
   fake_server.expect_connection_closed(socket)
   let assert Ok(spoke.DisconnectedUnexpectedly("Operation timed out")) =
     process.receive(updates, 1)
