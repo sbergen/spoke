@@ -110,7 +110,7 @@ pub fn send(connection: Connection, packet: outgoing.Packet) -> Nil {
 
 /// Disconnects the connection cleanly
 pub fn shutdown(connection: Connection) {
-  process.send(connection.subject, ShutDown)
+  process.send(connection.subject, ShutDown(None))
 }
 
 type Config {
@@ -128,7 +128,7 @@ type Message {
   Received(#(BitArray, ChannelResult(List(incoming.Packet))))
   ProcessReceived(incoming.Packet)
   SendPing
-  ShutDown
+  ShutDown(Option(String))
 }
 
 type State {
@@ -213,16 +213,15 @@ fn run(state: State) -> Nil {
     ProcessReceived(packet) -> process_packet(state, packet)
     Send(packet) -> send_from_session(state, packet)
     SendPing -> send_ping(state)
-    ShutDown -> shut_down(state)
+    ShutDown(reason) -> shut_down(state, reason)
   }
 
   run(state)
 }
 
-fn shut_down(state: State) -> State {
+fn shut_down(state: State, reason: Option(String)) -> State {
   get_channel(state).shutdown()
-  process.send_exit(process.self())
-  panic as "We should be dead by now"
+  stop(reason)
 }
 
 /// Sends a packet coming directly from the session
@@ -278,12 +277,13 @@ fn handle_connack(state: State, status: packet.ConnAckResult) -> State {
         Error(_) -> {
           // If a server sends a CONNACK packet containing a non-zero return code
           // it MUST then close the Network Connection
-          // TODO: Send status to parent before shutting down
-          shut_down(state)
+          // The status was was sent above, so make this a "normal" shutdown
+          shut_down(state, None)
         }
       }
     }
-    Connected(..) -> stop_abnormal("Got ConnAck while already connected")
+    Connected(..) ->
+      shut_down(state, Some("Got ConnAck while already connected"))
   }
 }
 
@@ -308,7 +308,11 @@ fn send_ping(state: State) -> State {
         None, _ -> {
           use state <- send_packet_or_stop(state, outgoing.PingReq)
           let disconnect =
-            process.send_after(state.self, state.server_timeout_ms, ShutDown)
+            process.send_after(
+              state.self,
+              state.server_timeout_ms,
+              ShutDown(Some("Ping timeout")),
+            )
           State(
             ..state,
             connection_state: Connected(channel, ping, Some(disconnect)),
@@ -395,7 +399,15 @@ fn get_channel(state: State) -> EncodedChannel {
   }
 }
 
-fn stop_abnormal(description: String) -> anything {
-  process.send_abnormal_exit(process.self(), description)
+fn stop_abnormal(reason: String) {
+  stop(Some(reason))
+}
+
+fn stop(reason: Option(String)) -> anything {
+  case reason {
+    None -> process.send_exit(process.self())
+    Some(reason) -> process.send_abnormal_exit(process.self(), reason)
+  }
+
   panic as "We should be dead by now"
 }
