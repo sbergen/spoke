@@ -154,6 +154,13 @@ pub fn subscribe(
   call_or_disconnect(client, Subscribe(topics, _))
 }
 
+pub fn unsubscribe(
+  client: Client,
+  topics: List(String),
+) -> Result(Nil, OperationError) {
+  call_or_disconnect(client, Unsubscribe(topics, _))
+}
+
 fn call_or_disconnect(
   client: Client,
   make_request: fn(Subject(Result(result, OperationError))) -> Message,
@@ -214,6 +221,7 @@ type State {
     connection: Option(Connection),
     packet_id: Int,
     pending_subs: Dict(Int, PendingSubscription),
+    pending_unsubs: Dict(Int, Subject(OperationResult(Nil))),
   )
 }
 
@@ -227,6 +235,7 @@ type Message {
     List(SubscribeRequest),
     Subject(OperationResult(List(Subscription))),
   )
+  Unsubscribe(List(String), Subject(OperationResult(Nil)))
   ProcessReceived(incoming.Packet)
   ConnectionDropped(connection.Disconnect)
   Disconnect
@@ -246,7 +255,7 @@ fn init(
 ) -> actor.InitResult(State, Message) {
   let self = process.new_subject()
 
-  let state = State(self, config, updates, None, 1, dict.new())
+  let state = State(self, config, updates, None, 1, dict.new(), dict.new())
 
   let selector =
     process.new_selector()
@@ -261,6 +270,7 @@ fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
     ProcessReceived(packet) -> process_packet(state, packet)
     Publish(data, reply_to) -> handle_outgoing_publish(state, data, reply_to)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
+    Unsubscribe(topics, reply_to) -> handle_unsubscribe(state, topics, reply_to)
     ConnectionDropped(reason) -> handle_connection_drop(state, reason)
     Disconnect -> handle_disconnect(state)
     DropConnectionAndNotifyClient(reason) ->
@@ -379,7 +389,8 @@ fn process_packet(
     incoming.ConnAck(result) -> handle_connack(state, result)
     incoming.Publish(data) -> handle_incoming_publish(state, data)
     incoming.SubAck(id, results) -> handle_suback(state, id, results)
-    _ -> panic as { "Packet type not handled" <> string.inspect(packet) }
+    incoming.UnsubAck(id) -> handle_unsuback(state, id)
+    _ -> panic as { "Packet type not handled: " <> string.inspect(packet) }
   }
 }
 
@@ -418,6 +429,13 @@ fn handle_suback(
   actor.continue(State(..state, pending_subs: dict.delete(subs, id)))
 }
 
+fn handle_unsuback(state: State, id: Int) -> actor.Next(Message, State) {
+  let unsubs = state.pending_unsubs
+  let assert Ok(pending_unsub) = dict.get(unsubs, id)
+  process.send(pending_unsub, Ok(Nil))
+  actor.continue(State(..state, pending_unsubs: dict.delete(unsubs, id)))
+}
+
 fn handle_subscribe(
   state: State,
   topics: List(SubscribeRequest),
@@ -436,7 +454,22 @@ fn handle_subscribe(
   let assert Some(connection) = state.connection
   connection.send(connection, outgoing.Subscribe(id, topics))
 
-  actor.continue(State(..state, pending_subs: pending_subs))
+  actor.continue(State(..state, pending_subs:))
+}
+
+fn handle_unsubscribe(
+  state: State,
+  topics: List(String),
+  reply_to: Subject(OperationResult(Nil)),
+) -> actor.Next(Message, State) {
+  let #(state, id) = reserve_packet_id(state)
+  let pending_unsubs = state.pending_unsubs |> dict.insert(id, reply_to)
+
+  // TODO: handle not connected
+  let assert Some(connection) = state.connection
+  connection.send(connection, outgoing.Unsubscribe(id, topics))
+
+  actor.continue(State(..state, pending_unsubs:))
 }
 
 fn handle_incoming_publish(

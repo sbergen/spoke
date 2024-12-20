@@ -12,6 +12,7 @@
         "suback",
         "unsub",
         "unsuback",
+        "unsubs",
         "varint"
     ]
 }
