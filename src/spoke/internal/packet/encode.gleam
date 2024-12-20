@@ -88,8 +88,8 @@ pub fn publish(data: packet.PublishData) -> BytesTree {
     packet.PublishDataQoS2(msg, dup, id) -> #(msg, dup, integer(id), QoS2)
   }
 
-  let dup = bool.to_int(dup)
-  let retain = bool.to_int(msg.retain)
+  let dup = encode_bool(dup)
+  let retain = encode_bool(msg.retain)
   let flags = <<dup:1, encode_qos(qos):2, retain:1>>
   let header = <<string(msg.topic):bits, packet_id:bits>>
 
