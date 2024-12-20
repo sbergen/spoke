@@ -1,4 +1,5 @@
 import fake_server
+import gleam/erlang/process
 import gleam/otp/task
 import gleeunit/should
 import spoke.{AtLeastOnce, AtMostOnce, ExactlyOnce}
@@ -34,4 +35,39 @@ pub fn subscribe_success_test() {
   ])
 
   fake_server.disconnect(client, updates, socket)
+}
+
+pub fn subscribe_failed_test() {
+  let #(client, updates, socket) = fake_server.set_up_connected_client()
+
+  let topics = [
+    spoke.SubscribeRequest("topic0", AtMostOnce),
+    spoke.SubscribeRequest("topic1", AtLeastOnce),
+  ]
+  let results = [Ok(packet.QoS0), Error(Nil)]
+
+  let subscribe = task.async(fn() { spoke.subscribe(client, topics) })
+  fake_server.expect_any_packet(socket)
+  fake_server.send_response(socket, server_out.SubAck(1, results))
+
+  let assert Ok(Ok(results)) = task.try_await(subscribe, 10)
+  results
+  |> should.equal([
+    spoke.SuccessfulSubscription("topic0", AtMostOnce),
+    spoke.FailedSubscription,
+  ])
+
+  fake_server.disconnect(client, updates, socket)
+}
+
+pub fn subscribe_timed_out_test() {
+  let #(client, updates, _socket) =
+    fake_server.set_up_connected_client_with_timeout(5)
+
+  let topics = [spoke.SubscribeRequest("topic0", AtMostOnce)]
+
+  let subscribe = task.async(fn() { spoke.subscribe(client, topics) })
+
+  let assert Ok(Error(spoke.OperationTimedOut)) = task.try_await(subscribe, 10)
+  let assert Ok(spoke.DisconnectedUnexpectedly(_)) = process.receive(updates, 0)
 }

@@ -129,6 +129,11 @@ pub fn expect_packet(socket: Socket, expected_packet: incoming.Packet) -> Nil {
   expect_packet_timeout(socket, default_timeout, expected_packet)
 }
 
+pub fn expect_any_packet(socket: Socket) -> Nil {
+  let _ = receive_packet(socket, default_timeout)
+  Nil
+}
+
 pub fn expect_packet_timeout(
   socket: Socket,
   timeout: Int,
