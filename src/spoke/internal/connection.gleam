@@ -144,7 +144,7 @@ type State {
 
 type ConnectionState {
   /// Connect packet has been sent, but we haven't gotten a connack
-  ConnectingToServer(channel: EncodedChannel)
+  ConnectingToServer(channel: EncodedChannel, disconnect_timer: process.Timer)
   Connected(
     channel: EncodedChannel,
     /// Timer for sending the next ping request
@@ -154,10 +154,7 @@ type ConnectionState {
   )
 }
 
-fn establish_channel(
-  messages: Subject(Message),
-  connect: Subject(Config),
-) -> Nil {
+fn establish_channel(mailbox: Subject(Message), connect: Subject(Config)) -> Nil {
   // If we can't receive in time, the parent is very stuck, so dying is fine
   let assert Ok(config) = process.receive(connect, 1000)
 
@@ -166,11 +163,17 @@ fn establish_channel(
   })
   let channel = channel.as_encoded(channel)
 
-  let connection_state = ConnectingToServer(channel)
+  let disconnect_timer =
+    process.send_after(
+      mailbox,
+      config.server_timeout_ms,
+      ShutDown(Some("Connect timed out")),
+    )
+  let connection_state = ConnectingToServer(channel, disconnect_timer)
   let state =
     State(
-      messages,
-      next_selector(channel, <<>>, messages),
+      mailbox,
+      next_selector(channel, <<>>, mailbox),
       config.updates,
       config.keep_alive_ms,
       config.server_timeout_ms,
@@ -191,6 +194,7 @@ fn establish_channel(
     send_packet(state, outgoing.Connect(connect_options)),
     fn(e) { "Error sending connect packet to server: " <> string.inspect(e) },
   )
+
   run(state)
 }
 
@@ -264,7 +268,9 @@ fn send_to_session(state: State, packet: incoming.Packet) -> State {
 
 fn handle_connack(state: State, status: packet.ConnAckResult) -> State {
   case state.connection_state {
-    ConnectingToServer(channel) -> {
+    ConnectingToServer(channel, disconnect_timer) -> {
+      process.cancel_timer(disconnect_timer)
+
       // Send the connack to the session, so that it knows the result
       process.send(state.updates, ReceivedPacket(incoming.ConnAck(status)))
 
@@ -374,7 +380,7 @@ fn send_packet_or_stop(
 // will not be processed if the Server rejects the connection.
 fn send_packet(state: State, packet: outgoing.Packet) -> ChannelResult(State) {
   case state.connection_state {
-    ConnectingToServer(channel) -> {
+    ConnectingToServer(channel, ..) -> {
       // Don't start ping if connection has not yet finished
       use _ <- result.try(channel.send(packet))
       Ok(state)
@@ -395,7 +401,7 @@ fn start_ping_timeout(state: State) -> process.Timer {
 fn get_channel(state: State) -> EncodedChannel {
   case state.connection_state {
     Connected(channel, ..) -> channel
-    ConnectingToServer(channel) -> channel
+    ConnectingToServer(channel, ..) -> channel
   }
 }
 

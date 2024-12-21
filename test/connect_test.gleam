@@ -7,7 +7,7 @@ import spoke/internal/packet/server/outgoing as server_out
 
 const default_client_id = "fake-client-id"
 
-pub fn connect_disconnect_test() {
+pub fn connect_and_disconnect_test() {
   let #(client, updates, state, result, details) =
     connect(Ok(False), "test-client-id", 42)
 
@@ -81,6 +81,20 @@ pub fn channel_error_after_establish_fails_connect_test() {
 
   spoke.connect(client)
   fake_server.reject_connection(listener)
+
+  let assert Ok(ConnectionStateChanged(spoke.ConnectFailed(_))) =
+    process.receive(updates, 10)
+}
+
+pub fn timed_out_connect_test() {
+  let #(listener, port) = fake_server.start_server()
+  let connect_opts = spoke.ConnectOptions(default_client_id, 10, 5)
+  let updates = process.new_subject()
+  let client =
+    spoke.start(connect_opts, fake_server.default_options(port), updates)
+  spoke.connect(client)
+
+  fake_server.expect_connection_established(listener)
 
   let assert Ok(ConnectionStateChanged(spoke.ConnectFailed(_))) =
     process.receive(updates, 10)
