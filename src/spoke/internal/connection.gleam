@@ -44,7 +44,7 @@ pub type Update {
 /// Starts the connection.
 /// The connection will be alive until there is a channel error,
 /// protocol violation, or explicitly disconnected.
-/// The ConnAck packet will be sent to `incoming` when connected.
+/// The ConnAck packet will be sent as an update if/when connected.
 pub fn connect(
   create_channel: fn() -> ChannelResult(transport.ByteChannel),
   client_id: String,

@@ -27,8 +27,9 @@ pub fn main() {
   io.println("Connecting & subscribing..")
   let updates = process.new_subject()
   let client = spoke.start(connect_opts, transport_opts, updates)
-  let assert Ok(_) = spoke.connect(client)
-  let assert Ok(spoke.Connected(_)) = process.receive(updates, 100)
+  spoke.connect(client)
+  let assert Ok(spoke.ConnectionStateChanged(spoke.ConnectAccepted(_))) =
+    process.receive(updates, 100)
 
   let assert Ok(_) =
     spoke.subscribe(client, [spoke.SubscribeRequest("#", spoke.AtMostOnce)])
@@ -56,7 +57,8 @@ pub fn main() {
   )
 
   spoke.disconnect(client)
-  let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 10)
+  let assert Ok(spoke.ConnectionStateChanged(spoke.Disconnected)) =
+    process.receive(updates, 10)
 }
 
 fn receive(

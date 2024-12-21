@@ -70,7 +70,8 @@ pub fn connection_is_shut_down_if_no_pingresp_within_server_timeout_test() {
 
   fake_server.expect_connection_closed(socket)
 
-  let assert Ok(spoke.DisconnectedUnexpectedly(_)) = process.receive(updates, 1)
+  let assert Ok(spoke.ConnectionStateChanged(spoke.DisconnectedUnexpectedly(_))) =
+    process.receive(updates, 1)
 }
 
 fn set_up_connected() -> #(spoke.Client, Subject(spoke.Update), Socket) {

@@ -1,7 +1,7 @@
 import fake_server.{type ConnectedState, type ReceivedConnectData}
 import gleam/erlang/process.{type Subject}
 import gleeunit/should
-import spoke
+import spoke.{ConnectionStateChanged}
 import spoke/internal/packet
 import spoke/internal/packet/server/outgoing as server_out
 
@@ -23,7 +23,6 @@ pub fn reconnect_after_rejected_connect_test() {
     connect(Error(packet.BadUsernameOrPassword), default_client_id, 10)
 
   result |> should.equal(Error(spoke.BadUsernameOrPassword))
-  let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 10)
 
   let #(state, result) =
     fake_server.reconnect(client, updates, state.listener, Ok(True))
@@ -36,31 +35,33 @@ pub fn aborted_connect_disconnects_expectedly_test() {
   let #(listener, port) = fake_server.start_server()
   let #(client, updates) = start_client_with_defaults(port)
 
-  let assert Ok(Nil) = spoke.connect(client)
+  spoke.connect(client)
 
   let socket = fake_server.expect_connection_established(listener)
   spoke.disconnect(client)
 
-  let assert Ok(spoke.DisconnectedExpectedly) = process.receive(updates, 10)
+  let assert Ok(ConnectionStateChanged(spoke.Disconnected)) =
+    process.receive(updates, 10)
 
   fake_server.expect_connection_closed(socket)
 }
 
-pub fn connecting_when_already_connected_fails_test() {
+pub fn connecting_when_already_connected_succeeds_test() {
   let #(listener, port) = fake_server.start_server()
   let #(client, updates) = start_client_with_defaults(port)
 
   // Start first connect
-  let assert Ok(Nil) = spoke.connect(client)
+  spoke.connect(client)
   let socket = fake_server.expect_connection_established(listener)
 
   // Start overlapping connect
-  let assert Error(spoke.AlreadyConnected) = spoke.connect(client)
+  spoke.connect(client)
 
   // Finish initial connect
   fake_server.drop_incoming_data(socket)
   fake_server.send_response(socket, server_out.ConnAck(Ok(False)))
-  let assert Ok(spoke.Connected(False)) = process.receive(updates, 10)
+  let assert Ok(ConnectionStateChanged(spoke.ConnectAccepted(False))) =
+    process.receive(updates, 10)
 
   fake_server.disconnect(client, updates, socket)
 }
@@ -70,7 +71,7 @@ pub fn channel_error_on_connect_fails_connect_test() {
 
   let _ = spoke.connect(client)
 
-  let assert Ok(spoke.DisconnectedUnexpectedly(_)) =
+  let assert Ok(ConnectionStateChanged(spoke.ConnectFailed(_))) =
     process.receive(updates, 10)
 }
 
@@ -78,10 +79,10 @@ pub fn channel_error_after_establish_fails_connect_test() {
   let #(listener, port) = fake_server.start_server()
   let #(client, updates) = start_client_with_defaults(port)
 
-  let assert Ok(Nil) = spoke.connect(client)
+  spoke.connect(client)
   fake_server.reject_connection(listener)
 
-  let assert Ok(spoke.DisconnectedUnexpectedly(_)) =
+  let assert Ok(ConnectionStateChanged(spoke.ConnectFailed(_))) =
     process.receive(updates, 10)
 }
 

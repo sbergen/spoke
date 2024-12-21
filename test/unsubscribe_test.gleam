@@ -1,7 +1,7 @@
 import fake_server
 import gleam/erlang/process
 import gleam/otp/task
-import spoke
+import spoke.{ConnectionStateChanged}
 import spoke/internal/packet/server/incoming as server_in
 import spoke/internal/packet/server/outgoing as server_out
 
@@ -31,9 +31,9 @@ pub fn unsubscribe_invalid_id_test() {
   let assert Ok(Error(spoke.OperationTimedOut)) =
     task.try_await(unsubscribe, 10)
 
-  let assert Ok(spoke.DisconnectedUnexpectedly(
+  let assert Ok(ConnectionStateChanged(spoke.DisconnectedUnexpectedly(
     "Received invalid packet id in unsubscribe ack",
-  )) = process.receive(updates, 0)
+  ))) = process.receive(updates, 0)
 }
 
 pub fn unsubscribe_timed_out_test() {
@@ -44,5 +44,6 @@ pub fn unsubscribe_timed_out_test() {
 
   let assert Ok(Error(spoke.OperationTimedOut)) =
     task.try_await(unsubscribe, 10)
-  let assert Ok(spoke.DisconnectedUnexpectedly(_)) = process.receive(updates, 0)
+  let assert Ok(ConnectionStateChanged(spoke.DisconnectedUnexpectedly(_))) =
+    process.receive(updates, 0)
 }

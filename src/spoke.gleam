@@ -1,3 +1,4 @@
+import gleam/bool
 import gleam/dict.{type Dict}
 import gleam/erlang/process.{type Subject}
 import gleam/function
@@ -34,10 +35,26 @@ pub type ConnectOptions {
 
 pub type Update {
   ReceivedMessage(topic: String, payload: BitArray, retained: Bool)
-  Connected(session_present: Bool)
-  ConnectionFailed(ConnectError)
+  ConnectionStateChanged(ConnectionState)
+}
+
+pub type ConnectionState {
+  /// Connecting to the server failed before we got a response
+  /// to the connect packet.
+  ConnectFailed(String)
+
+  /// The server was reachable, but rejected our connect packet
+  ConnectRejected(ConnectError)
+
+  /// The server has accepted our connect packet
+  ConnectAccepted(session_present: Bool)
+
+  /// Disconnected as a result of calling `disconnect`
+  Disconnected
+
+  /// The connection was dropped for an unexpected reason,
+  /// e.g. a transport channel error or protocol violation.
   DisconnectedUnexpectedly(reason: String)
-  DisconnectedExpectedly
 }
 
 pub type PublishData {
@@ -72,20 +89,8 @@ pub type QoS {
   ExactlyOnce
 }
 
-/// Error happened during establishing a connection
-pub type ConnectionEstablishError {
-  /// A disconnect was requested while connecting
-  DisconnectRequested
-  /// The MQTT process was killed during a connect call
-  KilledDuringConnect
-  /// Starting the connection process failed
-  FailedToStartConnection(String)
-  /// A connect is already established, or being established
-  AlreadyConnected
-}
-
 /// Error code from the server -
-/// we got a response, but 
+/// we got a response, but there was an error.
 pub type ConnectError {
   /// The MQTT server doesn't support MQTT 3.1.1
   UnacceptableProtocolVersion
@@ -103,7 +108,8 @@ pub type SubscribeRequest {
   SubscribeRequest(filter: String, qos: QoS)
 }
 
-/// Starts a new MQTT client with the given options
+/// Starts a new MQTT client with the given options.
+/// Does not connect to the server, until `connect` is called.
 pub fn start(
   connect_opts: ConnectOptions,
   transport_opts: TransportOptions,
@@ -118,23 +124,18 @@ pub fn start(
   )
 }
 
-/// Connects to the MQTT server.
+/// Starts connecting to the MQTT server.
 /// The connection state will be published as an update.
-/// Note that MQTT allows sending data to the transport channel
-/// already before receiving a connection acknowledgement.
-/// If establishing a connection or sending the connect packet
-/// fails, this will return an error.
-pub fn connect(client: Client) -> Result(Nil, ConnectionEstablishError) {
-  process.try_call(client.subject, Connect, client.config.server_timeout)
-  |> result.map_error(fn(e) {
-    case e {
-      process.CallTimeout -> FailedToStartConnection("Timed out")
-      process.CalleeDown(_) -> KilledDuringConnect
-    }
-  })
-  |> result.flatten
+/// If a connection is already established or being established,
+/// this will be a no-op.
+pub fn connect(client: Client) -> Nil {
+  process.send(client.subject, Connect)
 }
 
+/// Starts disconnecting from the MQTT server.
+/// The connection state will be published as an update.
+/// If a connection is not established or being established,
+/// this will be a no-op.
 pub fn disconnect(client: Client) {
   process.send(client.subject, Disconnect)
 }
@@ -220,6 +221,7 @@ type State {
     config: Config,
     updates: Subject(Update),
     connection: Option(Connection),
+    fully_connected: Bool,
     packet_id: Int,
     pending_subs: Dict(Int, PendingSubscription),
     pending_unsubs: Dict(Int, Subject(OperationResult(Nil))),
@@ -230,7 +232,7 @@ type OperationResult(a) =
   Result(a, OperationError)
 
 type Message {
-  Connect(Subject(Result(Nil, ConnectionEstablishError)))
+  Connect
   Publish(PublishData, Subject(OperationResult(Nil)))
   Subscribe(
     List(SubscribeRequest),
@@ -256,7 +258,8 @@ fn init(
 ) -> actor.InitResult(State, Message) {
   let self = process.new_subject()
 
-  let state = State(self, config, updates, None, 1, dict.new(), dict.new())
+  let state =
+    State(self, config, updates, None, False, 1, dict.new(), dict.new())
 
   let selector =
     process.new_selector()
@@ -267,7 +270,7 @@ fn init(
 
 fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
   case message {
-    Connect(reply_to) -> handle_connect(state, reply_to)
+    Connect -> handle_connect(state)
     ProcessReceived(packet) -> process_packet(state, packet)
     Publish(data, reply_to) -> handle_outgoing_publish(state, data, reply_to)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
@@ -283,40 +286,34 @@ fn handle_connection_drop(
   state: State,
   reason: connection.Disconnect,
 ) -> actor.Next(Message, State) {
-  let disconnect = case reason {
-    connection.AbnormalDisconnect(reason) -> {
-      process.send(state.updates, DisconnectedUnexpectedly(reason))
-      True
-    }
-    connection.GracefulDisconnect -> {
-      process.send(state.updates, DisconnectedExpectedly)
-      True
-    }
+  let connecting = !state.fully_connected
+  let change = case reason {
+    connection.AbnormalDisconnect(reason) if connecting ->
+      Some(ConnectFailed(reason))
+
+    // This is already handled by the connack status
+    connection.GracefulDisconnect if connecting -> None
+
+    connection.AbnormalDisconnect(reason) ->
+      Some(DisconnectedUnexpectedly(reason))
+
+    connection.GracefulDisconnect -> Some(Disconnected)
   }
 
-  case disconnect {
-    True -> actor.continue(State(..state, connection: None))
-    False -> actor.continue(state)
+  case change {
+    Some(change) -> process.send(state.updates, ConnectionStateChanged(change))
+    None -> Nil
   }
+
+  actor.continue(State(..state, connection: None, fully_connected: False))
 }
 
-fn handle_connect(
-  state: State,
-  reply_to: Subject(Result(Nil, ConnectionEstablishError)),
-) -> actor.Next(Message, State) {
-  case state.connection {
-    Some(_) -> {
-      process.send(reply_to, Error(AlreadyConnected))
-      actor.continue(state)
-    }
-    None -> do_connect(state, reply_to)
-  }
-}
+fn handle_connect(state: State) -> actor.Next(Message, State) {
+  use <- bool.guard(
+    when: option.is_some(state.connection),
+    return: actor.continue(state),
+  )
 
-fn do_connect(
-  state: State,
-  reply_to: Subject(Result(Nil, ConnectionEstablishError)),
-) -> actor.Next(Message, State) {
   let config = state.config
   let conn =
     connection.connect(
@@ -325,12 +322,6 @@ fn do_connect(
       config.keep_alive,
       config.server_timeout,
     )
-
-  let result =
-    conn
-    |> result.map(fn(_) { Nil })
-    |> result.map_error(FailedToStartConnection)
-  process.send(reply_to, result)
 
   case conn {
     Ok(conn) -> {
@@ -400,11 +391,11 @@ fn handle_connack(
   result: packet.ConnAckResult,
 ) -> actor.Next(Message, State) {
   let update = case result {
-    Ok(session_present) -> Connected(session_present)
-    Error(e) -> ConnectionFailed(from_packet_connect_error(e))
+    Ok(session_present) -> ConnectAccepted(session_present)
+    Error(e) -> ConnectRejected(from_packet_connect_error(e))
   }
-  process.send(state.updates, update)
-  actor.continue(state)
+  process.send(state.updates, ConnectionStateChanged(update))
+  actor.continue(State(..state, fully_connected: result.is_ok(result)))
 }
 
 fn handle_suback(
@@ -522,11 +513,11 @@ fn drop_connection_and_notify(
       connection.shutdown(connection)
 
       let update = case error {
-        None -> DisconnectedExpectedly
+        None -> Disconnected
         Some(reason) -> DisconnectedUnexpectedly(reason)
       }
 
-      process.send(state.updates, update)
+      process.send(state.updates, ConnectionStateChanged(update))
       actor.continue(State(..state, connection: None))
     }
     None -> actor.continue(state)

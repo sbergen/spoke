@@ -67,7 +67,7 @@ pub fn connect_client(
   listener: ListenSocket,
   response: Result(Bool, packet.ConnectError),
 ) -> #(ConnectedState, Result(Bool, spoke.ConnectError), ReceivedConnectData) {
-  let assert Ok(Nil) = spoke.connect(client)
+  spoke.connect(client)
 
   let #(state, details) = expect_connect(listener)
   send_response(state.socket, outgoing.ConnAck(response))
@@ -80,10 +80,22 @@ pub fn connect_client(
   }
 
   let assert Ok(update) = process.receive(updates, default_timeout)
-  let connect_result = case update {
-    spoke.Connected(session_present) -> Ok(session_present)
-    spoke.ConnectionFailed(e) -> Error(e)
-    _ -> panic as "Unexpected update while connecting"
+  let connection_state = case update {
+    spoke.ConnectionStateChanged(state) -> state
+    _ ->
+      panic as {
+        "Unexpected update while connecting: " <> string.inspect(update)
+      }
+  }
+
+  let connect_result = case connection_state {
+    spoke.ConnectAccepted(session_present) -> Ok(session_present)
+    spoke.ConnectRejected(e) -> Error(e)
+    _ ->
+      panic as {
+        "Unexpected connection change while connecting: "
+        <> string.inspect(connection_state)
+      }
   }
 
   #(state, connect_result, details)
@@ -204,7 +216,7 @@ pub fn disconnect(
 ) -> Nil {
   spoke.disconnect(client)
 
-  let assert Ok(spoke.DisconnectedExpectedly) =
+  let assert Ok(spoke.ConnectionStateChanged(spoke.Disconnected)) =
     process.receive(updates, default_timeout)
 
   expect_packet(socket, incoming.Disconnect)

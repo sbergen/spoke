@@ -2,7 +2,7 @@ import fake_server
 import gleam/erlang/process
 import gleam/otp/task
 import gleeunit/should
-import spoke.{AtLeastOnce, AtMostOnce, ExactlyOnce}
+import spoke.{AtLeastOnce, AtMostOnce, ConnectionStateChanged, ExactlyOnce}
 import spoke/internal/packet
 import spoke/internal/packet/server/incoming as server_in
 import spoke/internal/packet/server/outgoing as server_out
@@ -69,7 +69,8 @@ pub fn subscribe_timed_out_test() {
   let subscribe = task.async(fn() { spoke.subscribe(client, topics) })
 
   let assert Ok(Error(spoke.OperationTimedOut)) = task.try_await(subscribe, 10)
-  let assert Ok(spoke.DisconnectedUnexpectedly(_)) = process.receive(updates, 0)
+  let assert Ok(ConnectionStateChanged(spoke.DisconnectedUnexpectedly(_))) =
+    process.receive(updates, 0)
 }
 
 pub fn subscribe_invalid_id_test() {
@@ -84,9 +85,9 @@ pub fn subscribe_invalid_id_test() {
 
   // We don't know where to respond, so this has to be a timeout
   let assert Ok(Error(spoke.OperationTimedOut)) = task.try_await(subscribe, 10)
-  let assert Ok(spoke.DisconnectedUnexpectedly(
+  let assert Ok(ConnectionStateChanged(spoke.DisconnectedUnexpectedly(
     "Received invalid packet id in subscribe ack",
-  )) = process.receive(updates, 0)
+  ))) = process.receive(updates, 0)
 }
 
 pub fn subscribe_invalid_length_test() {
@@ -103,7 +104,7 @@ pub fn subscribe_invalid_length_test() {
   )
 
   let assert Ok(Error(spoke.ProtocolViolation)) = task.try_await(subscribe, 10)
-  let assert Ok(spoke.DisconnectedUnexpectedly(
+  let assert Ok(ConnectionStateChanged(spoke.DisconnectedUnexpectedly(
     "Received invalid number of results in subscribe ack",
-  )) = process.receive(updates, 0)
+  ))) = process.receive(updates, 0)
 }
