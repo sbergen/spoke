@@ -8,7 +8,7 @@ import spoke.{type Update, PublishData}
 
 const total_messages = 100_000
 
-const messages_per_task = 500
+const tasks = 100
 
 /// Runs a stress test on a MQTT broker running on localhost.
 /// Note that this is not part of the default test suite,
@@ -32,19 +32,20 @@ pub fn main() {
     process.receive(updates, 100)
 
   let assert Ok(_) =
-    spoke.subscribe(client, [spoke.SubscribeRequest("#", spoke.AtMostOnce)])
+    spoke.subscribe(client, [spoke.SubscribeRequest("#", spoke.AtLeastOnce)])
 
-  let tasks = total_messages / messages_per_task
+  let messages_per_task = total_messages / tasks
   list.range(1, tasks)
   |> list.each(fn(i) {
     use <- task.async()
     let index = string.inspect(i)
     let message =
-      PublishData("topic" <> index, <<>>, spoke.AtMostOnce, retain: False)
+      PublishData("topic" <> index, <<>>, spoke.AtLeastOnce, retain: False)
     list.range(1, messages_per_task)
     |> list.each(fn(msg_index) {
       let payload = "Hello: " <> string.inspect(msg_index)
       spoke.publish(client, PublishData(..message, payload: <<payload:utf8>>))
+      process.sleep(1)
     })
   })
 
