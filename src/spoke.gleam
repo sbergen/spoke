@@ -11,6 +11,7 @@ import spoke/internal/connection.{type Connection}
 import spoke/internal/packet.{type SubscribeResult}
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
+import spoke/internal/session.{type Session}
 import spoke/internal/transport.{type ByteChannel, type ChannelResult}
 import spoke/internal/transport/tcp
 
@@ -222,7 +223,7 @@ type State {
     updates: Subject(Update),
     connection: Option(Connection),
     fully_connected: Bool,
-    packet_id: Int,
+    session: Session,
     pending_subs: Dict(Int, PendingSubscription),
     pending_unsubs: Dict(Int, Subject(OperationResult(Nil))),
   )
@@ -259,7 +260,16 @@ fn init(
   let self = process.new_subject()
 
   let state =
-    State(self, config, updates, None, False, 1, dict.new(), dict.new())
+    State(
+      self,
+      config,
+      updates,
+      None,
+      False,
+      session.new(),
+      dict.new(),
+      dict.new(),
+    )
 
   let selector =
     process.new_selector()
@@ -443,7 +453,7 @@ fn handle_subscribe(
   topics: List(SubscribeRequest),
   reply_to: Subject(OperationResult(List(Subscription))),
 ) -> actor.Next(Message, State) {
-  let #(state, id) = reserve_packet_id(state)
+  let #(session, id) = session.reserve_packet_id(state.session)
   let pending_sub = PendingSubscription(topics, reply_to)
   let pending_subs = state.pending_subs |> dict.insert(id, pending_sub)
 
@@ -456,7 +466,7 @@ fn handle_subscribe(
   let assert Some(connection) = state.connection
   connection.send(connection, outgoing.Subscribe(id, topics))
 
-  actor.continue(State(..state, pending_subs:))
+  actor.continue(State(..state, session:, pending_subs:))
 }
 
 fn handle_unsubscribe(
@@ -464,14 +474,14 @@ fn handle_unsubscribe(
   topics: List(String),
   reply_to: Subject(OperationResult(Nil)),
 ) -> actor.Next(Message, State) {
-  let #(state, id) = reserve_packet_id(state)
+  let #(session, id) = session.reserve_packet_id(state.session)
   let pending_unsubs = state.pending_unsubs |> dict.insert(id, reply_to)
 
   // TODO: handle not connected
   let assert Some(connection) = state.connection
   connection.send(connection, outgoing.Unsubscribe(id, topics))
 
-  actor.continue(State(..state, pending_unsubs:))
+  actor.continue(State(..state, session:, pending_unsubs:))
 }
 
 fn handle_incoming_publish(
@@ -533,12 +543,6 @@ fn ok_or_drop_connection(
       drop_connection_and_notify(state, Some(make_reason(e)))
     }
   }
-}
-
-fn reserve_packet_id(state: State) -> #(State, Int) {
-  let id = state.packet_id
-  let state = State(..state, packet_id: id + 1)
-  #(state, id)
 }
 
 // The below conversion are _mostly_ required because we can't re-export constructors
