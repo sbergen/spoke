@@ -39,7 +39,7 @@ pub fn set_up_connected_client_with_timeout(
   let client =
     spoke.start_with_ms_keep_alive(
       "ping-client",
-      15,
+      1000,
       timeout,
       default_options(port),
       updates,

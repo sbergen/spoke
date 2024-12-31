@@ -564,14 +564,25 @@ fn handle_incoming_publish(
   state: State,
   data: packet.PublishData,
 ) -> actor.Next(Message, State) {
-  // TODO QoS > 0
-  // We should have different paths in the future,
-  // so not making a function to extract the message.
+  // TODO: QoS2
   let msg = case data {
     packet.PublishDataQoS0(msg) -> msg
-    packet.PublishDataQoS1(msg, ..) -> msg
+
+    // dup is essentially useless,
+    // as we don't know if we have already received this or not.
+    packet.PublishDataQoS1(msg, _dup, id) -> {
+      case state.connection {
+        Some(connection) -> {
+          connection.send(connection, outgoing.PubAck(id))
+          msg
+        }
+        None -> msg
+      }
+    }
+
     packet.PublishDataQoS2(msg, ..) -> msg
   }
+
   let update = ReceivedMessage(msg.topic, msg.payload, msg.retain)
   process.send(state.updates, update)
   actor.continue(state)
