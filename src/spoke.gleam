@@ -453,6 +453,11 @@ fn handle_subscribe(
   topics: List(SubscribeRequest),
   reply_to: Subject(OperationResult(List(Subscription))),
 ) -> actor.Next(Message, State) {
+  use connection <- guard_connected(state, fn() {
+    process.send(reply_to, Error(NotConnected))
+    actor.continue(state)
+  })
+
   let #(session, id) = session.reserve_packet_id(state.session)
   let pending_sub = PendingSubscription(topics, reply_to)
   let pending_subs = state.pending_subs |> dict.insert(id, pending_sub)
@@ -461,9 +466,6 @@ fn handle_subscribe(
     use topic <- list.map(topics)
     packet.SubscribeRequest(topic.filter, to_packet_qos(topic.qos))
   }
-
-  // TODO: handle not connected
-  let assert Some(connection) = state.connection
   connection.send(connection, outgoing.Subscribe(id, topics))
 
   actor.continue(State(..state, session:, pending_subs:))
@@ -474,11 +476,14 @@ fn handle_unsubscribe(
   topics: List(String),
   reply_to: Subject(OperationResult(Nil)),
 ) -> actor.Next(Message, State) {
+  use connection <- guard_connected(state, fn() {
+    process.send(reply_to, Error(NotConnected))
+    actor.continue(state)
+  })
+
   let #(session, id) = session.reserve_packet_id(state.session)
   let pending_unsubs = state.pending_unsubs |> dict.insert(id, reply_to)
 
-  // TODO: handle not connected
-  let assert Some(connection) = state.connection
   connection.send(connection, outgoing.Unsubscribe(id, topics))
 
   actor.continue(State(..state, session:, pending_unsubs:))
@@ -508,6 +513,17 @@ fn handle_disconnect(state: State) -> actor.Next(Message, State) {
       drop_connection_and_notify(state, None)
     }
     None -> actor.continue(state)
+  }
+}
+
+fn guard_connected(
+  state: State,
+  if_not_connected: fn() -> actor.Next(Message, State),
+  if_connected: fn(Connection) -> actor.Next(Message, State),
+) -> actor.Next(Message, State) {
+  case state.connection {
+    None -> if_not_connected()
+    Some(connection) -> if_connected(connection)
   }
 }
 

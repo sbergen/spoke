@@ -7,6 +7,18 @@ import spoke/internal/packet
 import spoke/internal/packet/server/incoming as server_in
 import spoke/internal/packet/server/outgoing as server_out
 
+pub fn subscribe_when_not_connected_returns_error_test() {
+  let client =
+    spoke.start(
+      spoke.ConnectOptions("client-id", 10, 100),
+      fake_server.default_options(1883),
+      process.new_subject(),
+    )
+
+  let assert Error(spoke.NotConnected) =
+    spoke.subscribe(client, [spoke.SubscribeRequest("topic0", AtMostOnce)])
+}
+
 pub fn subscribe_success_test() {
   let #(client, updates, socket) = fake_server.set_up_connected_client()
 
