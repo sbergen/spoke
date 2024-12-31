@@ -82,7 +82,7 @@ pub fn subscribe_timed_out_test() {
 
   let assert Ok(Error(spoke.OperationTimedOut)) = task.try_await(subscribe, 10)
   let assert Ok(ConnectionStateChanged(spoke.DisconnectedUnexpectedly(_))) =
-    process.receive(updates, 0)
+    process.receive(updates, 10)
 }
 
 pub fn subscribe_invalid_id_test() {

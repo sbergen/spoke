@@ -157,7 +157,7 @@ pub fn expect_packet_timeout(
     False ->
       panic as {
         "expected "
-        <> string.inspect(expect_packet)
+        <> string.inspect(expected_packet)
         <> ", got: "
         <> string.inspect(received_packet)
       }

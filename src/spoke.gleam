@@ -164,6 +164,27 @@ pub fn unsubscribe(
   call_or_disconnect(client, Unsubscribe(topics, _))
 }
 
+/// Returns the number of QoS > 0 publishes that haven't yet been completely published.
+/// Also see `wait_for_publishes_to_finish`.
+pub fn pending_publishes(client: Client) -> Int {
+  process.call(
+    client.subject,
+    GetPendingPublishes(_),
+    client.config.server_timeout,
+  )
+}
+
+/// Wait for all pending QoS > 0 publishes to complete.
+/// Returns an error if the operation times out,
+/// or client is killed while waiting.
+pub fn wait_for_publishes_to_finish(
+  client: Client,
+  timeout: Int,
+) -> Result(Nil, Nil) {
+  process.try_call(client.subject, WaitForPublishesToFinish(_), timeout)
+  |> result.replace_error(Nil)
+}
+
 fn call_or_disconnect(
   client: Client,
   make_request: fn(Subject(Result(result, OperationError))) -> Message,
@@ -226,6 +247,7 @@ type State {
     session: Session,
     pending_subs: Dict(Int, PendingSubscription),
     pending_unsubs: Dict(Int, Subject(OperationResult(Nil))),
+    publish_completion_listeners: List(Subject(Nil)),
   )
 }
 
@@ -244,6 +266,8 @@ type Message {
   ConnectionDropped(connection.Disconnect)
   Disconnect
   DropConnectionAndNotifyClient(String)
+  GetPendingPublishes(Subject(Int))
+  WaitForPublishesToFinish(Subject(Nil))
 }
 
 type PendingSubscription {
@@ -261,14 +285,15 @@ fn init(
 
   let state =
     State(
-      self,
-      config,
-      updates,
-      None,
-      False,
-      session.new(),
-      dict.new(),
-      dict.new(),
+      self:,
+      config:,
+      updates:,
+      connection: None,
+      fully_connected: False,
+      session: session.new(),
+      pending_subs: dict.new(),
+      pending_unsubs: dict.new(),
+      publish_completion_listeners: [],
     )
 
   let selector =
@@ -289,7 +314,27 @@ fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
     Disconnect -> handle_disconnect(state)
     DropConnectionAndNotifyClient(reason) ->
       drop_connection_and_notify(state, Some(reason))
+    GetPendingPublishes(reply_to) -> get_pending_publishes(state, reply_to)
+    WaitForPublishesToFinish(reply_to) ->
+      handle_wait_for_publishes_to_finish(state, reply_to)
   }
+}
+
+fn get_pending_publishes(
+  state: State,
+  reply_to: Subject(Int),
+) -> actor.Next(Message, State) {
+  let pending_pubs = session.pending_publishes(state.session)
+  process.send(reply_to, pending_pubs)
+  actor.continue(state)
+}
+
+fn handle_wait_for_publishes_to_finish(state: State, reply_to: Subject(Nil)) {
+  let publish_completion_listeners = [
+    reply_to,
+    ..state.publish_completion_listeners
+  ]
+  actor.continue(State(..state, publish_completion_listeners:))
 }
 
 fn handle_connection_drop(
@@ -358,26 +403,35 @@ fn handle_outgoing_publish(
   state: State,
   data: PublishData,
 ) -> actor.Next(Message, State) {
-  case state.connection {
-    Some(connection) -> {
-      let message =
-        packet.MessageData(
-          topic: data.topic,
-          payload: data.payload,
-          retain: data.retain,
-        )
-      // TODO: QoS > 0
+  use connection <- guard_connected(state, fn() {
+    // QoS 0 packets are just dropped,
+    // we'll need to store them in the session for QoS > 0
+    actor.continue(state)
+  })
+
+  let message =
+    packet.MessageData(
+      topic: data.topic,
+      payload: data.payload,
+      retain: data.retain,
+    )
+
+  case data.qos {
+    AtMostOnce -> {
       let packet = outgoing.Publish(packet.PublishDataQoS0(message))
       connection.send(connection, packet)
+      actor.continue(state)
     }
-    None -> {
-      // QoS 0 packets are just dropped,
-      // we'll need to store them in the session for QoS > 0
-      Nil
-    }
-  }
 
-  actor.continue(state)
+    AtLeastOnce -> {
+      let #(session, packet) =
+        session.start_qos1_publish(state.session, message)
+      connection.send(connection, packet)
+      actor.continue(State(..state, session:))
+    }
+
+    ExactlyOnce -> panic as "QoS2 not supported!"
+  }
 }
 
 fn process_packet(
@@ -389,6 +443,7 @@ fn process_packet(
     incoming.Publish(data) -> handle_incoming_publish(state, data)
     incoming.SubAck(id, results) -> handle_suback(state, id, results)
     incoming.UnsubAck(id) -> handle_unsuback(state, id)
+    incoming.PubAck(id) -> handle_puback(state, id)
     _ -> panic as { "Packet type not handled: " <> string.inspect(packet) }
   }
 }
@@ -446,6 +501,22 @@ fn handle_unsuback(state: State, id: Int) -> actor.Next(Message, State) {
   })
   process.send(pending_unsub, Ok(Nil))
   actor.continue(State(..state, pending_unsubs: dict.delete(unsubs, id)))
+}
+
+fn handle_puback(state: State, id: Int) -> actor.Next(Message, State) {
+  case session.handle_puback(state.session, id) {
+    session.InvalidPubAckId ->
+      drop_connection_and_notify(
+        state,
+        Some("Received invalid packet id in publish ack"),
+      )
+
+    session.PublishFinished(session) -> {
+      State(..state, session:)
+      |> notify_if_publishes_finished
+      |> actor.continue
+    }
+  }
 }
 
 fn handle_subscribe(
@@ -513,6 +584,19 @@ fn handle_disconnect(state: State) -> actor.Next(Message, State) {
       drop_connection_and_notify(state, None)
     }
     None -> actor.continue(state)
+  }
+}
+
+fn notify_if_publishes_finished(state: State) -> State {
+  case session.pending_publishes(state.session) {
+    0 -> {
+      {
+        use listener <- list.each(state.publish_completion_listeners)
+        process.send(listener, Nil)
+      }
+      State(..state, publish_completion_listeners: [])
+    }
+    _ -> state
   }
 }
 
