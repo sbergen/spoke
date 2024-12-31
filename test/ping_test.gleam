@@ -44,15 +44,15 @@ pub fn pings_are_not_sent_when_has_other_activity_test() {
   }
 
   // Send data at intervals less than the keep-alive
-  let assert Ok(_) = spoke.publish(client, publish_data)
+  spoke.publish(client, publish_data)
   fake_server.expect_packet_matching(socket, is_publish)
   process.sleep(keep_alive / 2)
 
-  let assert Ok(_) = spoke.publish(client, publish_data)
+  spoke.publish(client, publish_data)
   fake_server.expect_packet_matching(socket, is_publish)
   process.sleep(keep_alive / 2)
 
-  let assert Ok(_) = spoke.publish(client, publish_data)
+  spoke.publish(client, publish_data)
   fake_server.expect_packet_matching(socket, is_publish)
 
   // The ping should be delayed

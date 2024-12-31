@@ -44,7 +44,7 @@ pub fn main() {
       spoke.AtMostOnce,
       retain: False,
     )
-  let assert Ok(_) = spoke.publish(client, message)
+  spoke.publish(client, message)
 
   let assert Ok(spoke.ConnectionStateChanged(spoke.ConnectAccepted(_))) =
     process.receive(updates, 1000)

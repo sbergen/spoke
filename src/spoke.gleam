@@ -136,7 +136,7 @@ pub fn connect(client: Client) -> Nil {
 /// The connection state will be published as an update.
 /// If a connection is not established or being established,
 /// this will be a no-op.
-pub fn disconnect(client: Client) {
+pub fn disconnect(client: Client) -> Nil {
   process.send(client.subject, Disconnect)
 }
 
@@ -145,8 +145,8 @@ pub fn disconnect(client: Client) {
 /// and send the `Disconnect` update.
 /// Note that in case of a timeout,
 /// the message might still have been already published.
-pub fn publish(client: Client, data: PublishData) -> Result(Nil, OperationError) {
-  call_or_disconnect(client, Publish(data, _))
+pub fn publish(client: Client, data: PublishData) -> Nil {
+  process.send(client.subject, Publish(data))
 }
 
 pub fn subscribe(
@@ -233,7 +233,7 @@ type OperationResult(a) =
 
 type Message {
   Connect
-  Publish(PublishData, Subject(OperationResult(Nil)))
+  Publish(PublishData)
   Subscribe(
     List(SubscribeRequest),
     Subject(OperationResult(List(Subscription))),
@@ -272,7 +272,7 @@ fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
   case message {
     Connect -> handle_connect(state)
     ProcessReceived(packet) -> process_packet(state, packet)
-    Publish(data, reply_to) -> handle_outgoing_publish(state, data, reply_to)
+    Publish(data) -> handle_outgoing_publish(state, data)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
     Unsubscribe(topics, reply_to) -> handle_unsubscribe(state, topics, reply_to)
     ConnectionDropped(reason) -> handle_connection_drop(state, reason)
@@ -347,11 +347,7 @@ fn handle_connect(state: State) -> actor.Next(Message, State) {
 fn handle_outgoing_publish(
   state: State,
   data: PublishData,
-  reply_to: Subject(Result(Nil, OperationError)),
 ) -> actor.Next(Message, State) {
-  // TODO: When should we reply with QoS0?
-  // Does it even matter?
-
   case state.connection {
     Some(connection) -> {
       let message =
@@ -363,10 +359,11 @@ fn handle_outgoing_publish(
       // TODO: QoS > 0
       let packet = outgoing.Publish(packet.PublishDataQoS0(message))
       connection.send(connection, packet)
-      process.send(reply_to, Ok(Nil))
     }
     None -> {
-      process.send(reply_to, Error(NotConnected))
+      // QoS 0 packets are just dropped,
+      // we'll need to store them in the session for QoS > 0
+      Nil
     }
   }
 
