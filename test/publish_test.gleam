@@ -80,7 +80,7 @@ pub fn resend_qos1_after_disconnected_test() {
   fake_server.disconnect(client, server)
 }
 
-pub fn publish_qos2_success_flow_test() {
+pub fn publish_qos2_happy_path_test() {
   let #(client, server) =
     fake_server.set_up_connected_client(clean_session: True)
 
@@ -94,18 +94,48 @@ pub fn publish_qos2_success_flow_test() {
       dup: False,
       packet_id: 1,
     ))
-  fake_server.expect_packet(server, expected)
+  let server = fake_server.expect_packet(server, expected)
 
   let assert 1 = spoke.pending_publishes(client)
   fake_server.send_response(server, server_out.PubRec(1))
   let assert 1 = spoke.pending_publishes(client)
-  fake_server.expect_packet(server, server_in.PubRel(1))
+  let server = fake_server.expect_packet(server, server_in.PubRel(1))
   let assert 1 = spoke.pending_publishes(client)
 
   fake_server.send_response(server, server_out.PubComp(1))
 
   let assert Ok(Nil) = spoke.wait_for_publishes_to_finish(client, 100)
     as "the packet should be considered sent after PubComp"
+
+  fake_server.disconnect(client, server)
+}
+
+pub fn publish_qos2_resend_test() {
+  let #(client, server) =
+    fake_server.set_up_connected_client(clean_session: False)
+
+  let data = spoke.PublishData("topic", <<"payload">>, spoke.ExactlyOnce, False)
+  spoke.publish(client, data)
+
+  // Disconnect and reconnect
+  let server = fake_server.close_connection(server)
+  // Consume disconnect update:
+  let assert Ok(_) = process.receive(spoke.updates(client), 100)
+  let server = fake_server.reconnect(client, server, False, True)
+
+  // Should resend after reconnecting
+  let expected =
+    server_in.Publish(packet.PublishDataQoS2(
+      packet.MessageData(data.topic, data.payload, retain: data.retain),
+      dup: True,
+      packet_id: 1,
+    ))
+  let server = fake_server.expect_packet(server, expected)
+  fake_server.send_response(server, server_out.PubRec(1))
+  let server = fake_server.expect_packet(server, server_in.PubRel(1))
+  fake_server.send_response(server, server_out.PubComp(1))
+
+  let assert Ok(Nil) = spoke.wait_for_publishes_to_finish(client, 100)
 
   fake_server.disconnect(client, server)
 }

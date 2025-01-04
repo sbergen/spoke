@@ -126,7 +126,33 @@ pub fn handle_pubrel(session: Session, packet_id: Int) -> Session {
 }
 
 pub fn packets_to_send_after_connect(session: Session) -> List(outgoing.Packet) {
-  use id <- list.map(dict.keys(session.unacked_qos1))
-  let assert Ok(message) = dict.get(session.unacked_qos1, id)
-  outgoing.Publish(packet.PublishDataQoS1(message, dup: True, packet_id: id))
+  let packets = list.new()
+
+  // Add unacked Qos1 messages
+  let packets =
+    list.fold(dict.keys(session.unacked_qos1), packets, fn(packets, id) {
+      let assert Ok(message) = dict.get(session.unacked_qos1, id)
+      let packet =
+        outgoing.Publish(packet.PublishDataQoS1(
+          message,
+          dup: True,
+          packet_id: id,
+        ))
+      [packet, ..packets]
+    })
+
+  // Add unreceived QoS2 messages
+  let packets =
+    list.fold(dict.keys(session.unreceived_qos2), packets, fn(packets, id) {
+      let assert Ok(message) = dict.get(session.unreceived_qos2, id)
+      let packet =
+        outgoing.Publish(packet.PublishDataQoS2(
+          message,
+          dup: True,
+          packet_id: id,
+        ))
+      [packet, ..packets]
+    })
+
+  packets
 }
