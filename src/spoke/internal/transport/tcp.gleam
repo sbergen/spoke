@@ -39,7 +39,7 @@ pub fn connect(
 
 fn send(socket: mug.Socket, data: BytesTree) -> ChannelResult(Nil) {
   mug.send_builder(socket, data)
-  |> map_mug_error(transport.SendFailed)
+  |> map_mug_error(transport.TransportError)
 }
 
 fn map_tcp_message(msg: mug.TcpMessage) -> #(Nil, ChannelResult(BitArray)) {

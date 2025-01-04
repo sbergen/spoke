@@ -25,7 +25,7 @@ fn send(
 ) -> ChannelResult(Nil) {
   case outgoing.encode_packet(packet) {
     Ok(bytes) -> channel.send(bytes)
-    Error(e) -> Error(transport.SendFailed(string.inspect(e)))
+    Error(e) -> Error(transport.TransportError(string.inspect(e)))
   }
 }
 

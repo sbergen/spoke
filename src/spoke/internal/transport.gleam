@@ -5,8 +5,13 @@ import gleam/erlang/process.{type Selector}
 /// Used internally for e.g. chunking and encoding/decoding
 pub type Channel(state, send, receive) {
   Channel(
+    /// Function that sends the data to the channel.
     send: fn(send) -> ChannelResult(Nil),
+    /// Returns a selector that publishes the next chunk of received data
+    /// together with a new state for the channel,
+    /// which must be used in the next call to `selecting_next`.
     selecting_next: fn(state) -> Selector(#(state, ChannelResult(receive))),
+    /// Function that shuts down the connection.
     shutdown: fn() -> Nil,
   )
 }
@@ -23,9 +28,16 @@ pub type ChannelResult(a) =
 /// Generic error type for channels.
 /// Will need to refine the errors later...
 pub type ChannelError {
+  /// The channel went from established to closed.
   ChannelClosed
+
+  /// Connecting the channel failed.
   ConnectFailed(String)
+
+  /// The The channel was established,
+  /// but ran into an error while sending or receiving data.
   TransportError(String)
-  SendFailed(String)
+
+  /// We received data that was not in the expected format.
   InvalidData(String)
 }
