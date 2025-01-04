@@ -1,4 +1,4 @@
-import fake_server.{type ListeningServer, type ReceivedConnectData}
+import fake_server.{type ListeningServer}
 import gleam/erlang/process
 import gleeunit/should
 import spoke.{ConnectionStateChanged}
@@ -13,7 +13,18 @@ pub fn connect_and_disconnect_test() {
     fake_server.connect_client(client, server, False, False)
 
   details.client_id |> should.equal("test-client-id")
-  details.keep_alive |> should.equal(42)
+  details.keep_alive_seconds |> should.equal(42)
+  details.clean_session |> should.be_false()
+
+  fake_server.disconnect(client, server)
+}
+
+pub fn connect_and_disconnect_clean_session_test() {
+  let #(client, server) = start_client_and_server("test-client-id", 42)
+  let #(server, details) =
+    fake_server.connect_client(client, server, True, False)
+
+  details.clean_session |> should.be_true()
 
   fake_server.disconnect(client, server)
 }
@@ -101,7 +112,7 @@ fn connect_with_error(
   error: packet.ConnectError,
   client_id: String,
   keep_alive: Int,
-) -> #(spoke.Client, ListeningServer, spoke.ConnectError, ReceivedConnectData) {
+) -> #(spoke.Client, ListeningServer, spoke.ConnectError, packet.ConnectOptions) {
   let #(client, server) = start_client_and_server(client_id, keep_alive)
   let #(server, error, details) =
     fake_server.connect_client_with_error(client, server, error)

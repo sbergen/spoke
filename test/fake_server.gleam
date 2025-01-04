@@ -22,16 +22,15 @@ pub type ConnectedServer {
   ConnectedServer(server: ListeningServer, socket: Socket, leftover: BitArray)
 }
 
-pub type ReceivedConnectData {
-  ReceivedConnectData(client_id: String, keep_alive: Int)
-}
-
 /// Good default for most tests
-pub fn set_up_connected_client() -> #(spoke.Client, ConnectedServer) {
-  set_up_connected_client_with_timeout(100)
+pub fn set_up_connected_client(
+  clean_session clean_session: Bool,
+) -> #(spoke.Client, ConnectedServer) {
+  set_up_connected_client_with_timeout(clean_session, 100)
 }
 
 pub fn set_up_connected_client_with_timeout(
+  clean_session: Bool,
   timeout: Int,
 ) -> #(spoke.Client, ConnectedServer) {
   let server = start_server()
@@ -44,7 +43,7 @@ pub fn set_up_connected_client_with_timeout(
       default_options(server.port),
     )
 
-  let #(server, _) = connect_client(client, server, False, False)
+  let #(server, _) = connect_client(client, server, clean_session, False)
 
   #(client, server)
 }
@@ -65,7 +64,7 @@ pub fn connect_client(
   server: ListeningServer,
   clean_session: Bool,
   session_present: Bool,
-) -> #(ConnectedServer, ReceivedConnectData) {
+) -> #(ConnectedServer, packet.ConnectOptions) {
   spoke.connect(client, clean_session)
 
   let #(server, details) = expect_connect(server)
@@ -100,7 +99,7 @@ pub fn connect_client_with_error(
   client: spoke.Client,
   server: ListeningServer,
   error: packet.ConnectError,
-) -> #(ListeningServer, spoke.ConnectError, ReceivedConnectData) {
+) -> #(ListeningServer, spoke.ConnectError, packet.ConnectOptions) {
   spoke.connect(client, False)
 
   let #(server, details) = expect_connect(server)
@@ -283,15 +282,12 @@ fn receive_packet(
 /// Expects a TCP connect & connect packet
 fn expect_connect(
   server: ListeningServer,
-) -> #(ConnectedServer, ReceivedConnectData) {
+) -> #(ConnectedServer, packet.ConnectOptions) {
   let connected = expect_connection_established(server)
   let packet = receive_packet(connected, default_timeout)
 
   case packet {
-    #(server, incoming.Connect(options)) -> #(
-      server,
-      ReceivedConnectData(options.client_id, options.keep_alive_seconds),
-    )
+    #(server, incoming.Connect(options)) -> #(server, options)
     _ -> panic as { "expected Connect, got: " <> string.inspect(packet) }
   }
 }

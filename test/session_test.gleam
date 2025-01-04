@@ -2,7 +2,7 @@ import gleeunit/should
 import spoke/internal/session.{type Session}
 
 pub fn packet_id_increment_test() {
-  let session = session.new()
+  let session = session.new(True)
 
   let assert #(session, 1) = session.reserve_packet_id(session)
     as "Packet ids should start at 1"
@@ -12,7 +12,7 @@ pub fn packet_id_increment_test() {
 }
 
 pub fn packet_id_wrap_test() {
-  let session = session.new()
+  let session = session.new(True)
   let max_id = 65_535
   let session = reserve_n_ids(session, max_id - 1)
   let #(session, id) = session.reserve_packet_id(session)

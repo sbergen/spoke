@@ -6,7 +6,7 @@ import spoke/internal/packet
 import spoke/internal/packet/server/outgoing as server_out
 
 pub fn multiple_packets_at_once_test() {
-  let #(client, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) = fake_server.set_up_connected_client(True)
 
   let assert Ok(data) = server_out.encode_packet(default_publish())
   let two_publishes = bytes_tree.concat([data, data])
@@ -25,7 +25,7 @@ pub fn multiple_packets_at_once_test() {
 }
 
 pub fn split_packets_test() {
-  let #(client, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) = fake_server.set_up_connected_client(True)
 
   let assert Ok(data) = server_out.encode_packet(default_publish())
   let assert <<begin:bytes-size(5), end:bytes>> = bytes_tree.to_bit_array(data)

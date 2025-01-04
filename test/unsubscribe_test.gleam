@@ -16,7 +16,7 @@ pub fn subscribe_when_not_connected_returns_error_test() {
 }
 
 pub fn unsubscribe_success_test() {
-  let #(client, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) = fake_server.set_up_connected_client(True)
 
   let topics = ["topic0", "topic1"]
 
@@ -30,7 +30,8 @@ pub fn unsubscribe_success_test() {
 }
 
 pub fn unsubscribe_invalid_id_test() {
-  let #(client, socket) = fake_server.set_up_connected_client_with_timeout(5)
+  let #(client, socket) =
+    fake_server.set_up_connected_client_with_timeout(True, 5)
 
   let unsubscribe = task.async(fn() { spoke.unsubscribe(client, ["topic0"]) })
   fake_server.expect_any_packet(socket)
@@ -46,7 +47,8 @@ pub fn unsubscribe_invalid_id_test() {
 }
 
 pub fn unsubscribe_timed_out_test() {
-  let #(client, _socket) = fake_server.set_up_connected_client_with_timeout(5)
+  let #(client, _socket) =
+    fake_server.set_up_connected_client_with_timeout(True, 5)
 
   let unsubscribe = task.async(fn() { spoke.unsubscribe(client, ["topic0"]) })
 

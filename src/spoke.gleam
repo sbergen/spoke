@@ -296,7 +296,7 @@ fn init(
       updates:,
       connection: None,
       fully_connected: False,
-      session: session.new(),
+      session: session.new(False),
       pending_subs: dict.new(),
       pending_unsubs: dict.new(),
       publish_completion_listeners: [],
@@ -383,9 +383,20 @@ fn handle_connect(
     connection.connect(
       config.connect,
       config.client_id,
+      clean_session,
       config.keep_alive,
       config.server_timeout,
     )
+
+  // [MQTT-3.1.2-6]
+  // If CleanSession is set to 1,
+  // the Client and Server MUST discard any previous Session and start a new one.
+  // This Session lasts as long as the Network Connection.
+  // State data associated with this Session MUST NOT be reused in any subsequent Session.
+  let session = case clean_session || session.is_volatile(state.session) {
+    True -> session.new(clean_session)
+    False -> state.session
+  }
 
   case conn {
     Ok(conn) -> {
@@ -399,7 +410,7 @@ fn handle_connect(
         })
         |> process.selecting(state.self, function.identity)
 
-      let state = State(..state, connection: Some(conn))
+      let state = State(..state, connection: Some(conn), session:)
 
       session.packets_to_send_after_connect(state.session)
       |> list.each(connection.send(conn, _))

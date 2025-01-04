@@ -6,7 +6,8 @@ import spoke/internal/packet/server/incoming as server_in
 import spoke/internal/packet/server/outgoing as server_out
 
 pub fn publish_qos0_test() {
-  let #(client, server) = fake_server.set_up_connected_client()
+  let #(client, server) =
+    fake_server.set_up_connected_client(clean_session: True)
 
   let data = spoke.PublishData("topic", <<"payload">>, AtMostOnce, False)
   spoke.publish(client, data)
@@ -19,7 +20,8 @@ pub fn publish_qos0_test() {
 }
 
 pub fn publish_qos1_success_flow_test() {
-  let #(client, server) = fake_server.set_up_connected_client()
+  let #(client, server) =
+    fake_server.set_up_connected_client(clean_session: True)
 
   let data = spoke.PublishData("topic", <<"payload">>, spoke.AtLeastOnce, False)
   spoke.publish(client, data)
@@ -44,8 +46,9 @@ pub fn publish_qos1_success_flow_test() {
   fake_server.disconnect(client, server)
 }
 
-pub fn publish_qos1_disconnected_test() {
-  let #(client, server) = fake_server.set_up_connected_client()
+pub fn resend_qos1_after_disconnected_test() {
+  let #(client, server) =
+    fake_server.set_up_connected_client(clean_session: False)
 
   let data = spoke.PublishData("topic", <<"payload">>, spoke.AtLeastOnce, False)
   spoke.publish(client, data)
@@ -73,6 +76,46 @@ pub fn publish_qos1_disconnected_test() {
 
   let assert Ok(Nil) = spoke.wait_for_publishes_to_finish(client, 10)
     as "the packet should be considered sent after the ACK"
+
+  fake_server.disconnect(client, server)
+}
+
+pub fn clean_session_after_disconnected_test() {
+  let #(client, server) =
+    fake_server.set_up_connected_client(clean_session: False)
+
+  let data = spoke.PublishData("topic", <<"payload">>, spoke.AtLeastOnce, False)
+  spoke.publish(client, data)
+
+  let server = fake_server.close_connection(server)
+  // Consume disconnect update:
+  let assert Ok(_) = process.receive(spoke.updates(client), 100)
+
+  let server = fake_server.reconnect(client, server, True, False)
+
+  // Expect re-transmission after reconnect, since no ack was received
+  let assert 0 = spoke.pending_publishes(client)
+    as "the packet should be discarded, when clean_session is set to True"
+
+  fake_server.disconnect(client, server)
+}
+
+pub fn previous_clean_session_is_discarded_test() {
+  let #(client, server) =
+    fake_server.set_up_connected_client(clean_session: True)
+
+  let data = spoke.PublishData("topic", <<"payload">>, spoke.AtLeastOnce, False)
+  spoke.publish(client, data)
+
+  let server = fake_server.close_connection(server)
+  // Consume disconnect update:
+  let assert Ok(_) = process.receive(spoke.updates(client), 100)
+
+  let server = fake_server.reconnect(client, server, False, False)
+
+  // Expect re-transmission after reconnect, since no ack was received
+  let assert 0 = spoke.pending_publishes(client)
+    as "the packet should be discarded, when clean_session was set to True in previous session"
 
   fake_server.disconnect(client, server)
 }

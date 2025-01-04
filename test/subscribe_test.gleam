@@ -19,7 +19,7 @@ pub fn subscribe_when_not_connected_returns_error_test() {
 }
 
 pub fn subscribe_success_test() {
-  let #(client, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) = fake_server.set_up_connected_client(True)
 
   let topics = [
     spoke.SubscribeRequest("topic0", AtMostOnce),
@@ -49,7 +49,7 @@ pub fn subscribe_success_test() {
 }
 
 pub fn subscribe_failed_test() {
-  let #(client, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) = fake_server.set_up_connected_client(True)
 
   let topics = [
     spoke.SubscribeRequest("topic0", AtMostOnce),
@@ -72,7 +72,8 @@ pub fn subscribe_failed_test() {
 }
 
 pub fn subscribe_timed_out_test() {
-  let #(client, _socket) = fake_server.set_up_connected_client_with_timeout(5)
+  let #(client, _socket) =
+    fake_server.set_up_connected_client_with_timeout(True, 5)
 
   let topics = [spoke.SubscribeRequest("topic0", AtMostOnce)]
 
@@ -84,7 +85,8 @@ pub fn subscribe_timed_out_test() {
 }
 
 pub fn subscribe_invalid_id_test() {
-  let #(client, socket) = fake_server.set_up_connected_client_with_timeout(5)
+  let #(client, socket) =
+    fake_server.set_up_connected_client_with_timeout(True, 5)
 
   let topics = [spoke.SubscribeRequest("topic0", AtMostOnce)]
 
@@ -100,7 +102,8 @@ pub fn subscribe_invalid_id_test() {
 }
 
 pub fn subscribe_invalid_length_test() {
-  let #(client, socket) = fake_server.set_up_connected_client_with_timeout(5)
+  let #(client, socket) =
+    fake_server.set_up_connected_client_with_timeout(True, 5)
 
   let topics = [spoke.SubscribeRequest("topic0", AtMostOnce)]
 

@@ -6,7 +6,8 @@ import spoke/internal/packet/server/incoming as server_in
 import spoke/internal/packet/server/outgoing as server_out
 
 pub fn receive_message_qos0_test() {
-  let #(client, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) =
+    fake_server.set_up_connected_client(clean_session: True)
 
   let msg =
     packet.MessageData(topic: "topic", payload: <<"payload">>, retain: False)
@@ -21,7 +22,8 @@ pub fn receive_message_qos0_test() {
 }
 
 pub fn receive_message_qos1_happy_path_test() {
-  let #(client, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) =
+    fake_server.set_up_connected_client(clean_session: True)
 
   let msg =
     packet.MessageData(topic: "topic", payload: <<"payload">>, retain: False)

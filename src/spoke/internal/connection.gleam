@@ -48,6 +48,7 @@ pub type Update {
 pub fn connect(
   create_channel: fn() -> ChannelResult(transport.ByteChannel),
   client_id: String,
+  clean_session: Bool,
   keep_alive_ms: Int,
   server_timeout_ms: Int,
 ) -> Result(Connection, String) {
@@ -58,7 +59,7 @@ pub fn connect(
       let messages = process.new_subject()
       let connect = process.new_subject()
       process.send(ack_subject, #(messages, connect))
-      establish_channel(messages, connect)
+      establish_channel(messages, connect, clean_session)
     })
 
   // Start monitoring and unlink
@@ -154,7 +155,11 @@ type ConnectionState {
   )
 }
 
-fn establish_channel(mailbox: Subject(Message), connect: Subject(Config)) -> Nil {
+fn establish_channel(
+  mailbox: Subject(Message),
+  connect: Subject(Config),
+  clean_session: Bool,
+) -> Nil {
   // If we can't receive in time, the parent is very stuck, so dying is fine
   let assert Ok(config) = process.receive(connect, 1000)
 
@@ -180,10 +185,10 @@ fn establish_channel(mailbox: Subject(Message), connect: Subject(Config)) -> Nil
       connection_state,
     )
 
-  // TODO clean session, auth, will
+  // TODO auth, will
   let connect_options =
     packet.ConnectOptions(
-      clean_session: True,
+      clean_session:,
       client_id: config.client_id,
       keep_alive_seconds: config.keep_alive_ms / 1000,
       auth: None,

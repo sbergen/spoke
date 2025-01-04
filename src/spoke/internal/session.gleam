@@ -13,7 +13,11 @@ import spoke/internal/packet
 import spoke/internal/packet/client/outgoing
 
 pub opaque type Session {
-  Session(packet_id: Int, unacked_qos1: Dict(Int, packet.MessageData))
+  Session(
+    clean_session: Bool,
+    packet_id: Int,
+    unacked_qos1: Dict(Int, packet.MessageData),
+  )
 }
 
 pub type PubAckResult {
@@ -21,8 +25,12 @@ pub type PubAckResult {
   InvalidPubAckId
 }
 
-pub fn new() -> Session {
-  Session(packet_id: 1, unacked_qos1: dict.new())
+pub fn new(clean_session: Bool) -> Session {
+  Session(clean_session:, packet_id: 1, unacked_qos1: dict.new())
+}
+
+pub fn is_volatile(session: Session) -> Bool {
+  session.clean_session
 }
 
 pub fn pending_publishes(session: Session) -> Int {
