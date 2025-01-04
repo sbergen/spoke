@@ -68,13 +68,16 @@ pub fn start_qos1_publish(
   #(Session(..session, unacked_qos1:), packet)
 }
 
-pub fn start_qos2_receive(
-  session: Session,
-  packet_id: Int,
-) -> #(Session, outgoing.Packet) {
-  // TODO: deduplication is missing
-  let unreleased_qos2 = set.insert(session.unreleased_qos2, packet_id)
-  #(Session(..session, unreleased_qos2:), outgoing.PubRec(packet_id))
+/// Marks the packet id as unreleased.
+/// The second element in the return value indicates whether we should publish the message or not.
+pub fn start_qos2_receive(session: Session, packet_id: Int) -> #(Session, Bool) {
+  case set.contains(session.unreleased_qos2, packet_id) {
+    True -> #(session, False)
+    False -> {
+      let unreleased_qos2 = set.insert(session.unreleased_qos2, packet_id)
+      #(Session(..session, unreleased_qos2:), True)
+    }
+  }
 }
 
 pub fn handle_puback(session: Session, packet_id: Int) -> PubAckResult {

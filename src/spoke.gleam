@@ -600,19 +600,25 @@ fn handle_incoming_publish(
   data: packet.PublishData,
 ) -> actor.Next(Message, State) {
   let #(msg, session, packet) = case data {
-    packet.PublishDataQoS0(msg) -> #(msg, state.session, None)
+    packet.PublishDataQoS0(msg) -> #(Some(msg), state.session, None)
 
     // dup is essentially useless,
     // as we don't know if we have already received this or not.
     packet.PublishDataQoS1(msg, _dup, id) -> #(
-      msg,
+      Some(msg),
       state.session,
       Some(outgoing.PubAck(id)),
     )
 
     packet.PublishDataQoS2(msg, _dup, id) -> {
-      let #(session, packet) = session.start_qos2_receive(state.session, id)
-      #(msg, session, Some(packet))
+      // TODO, validate dup here?
+      let #(session, publish_result) =
+        session.start_qos2_receive(state.session, id)
+      let msg = case publish_result {
+        True -> Some(msg)
+        False -> None
+      }
+      #(msg, session, Some(outgoing.PubRec(id)))
     }
   }
 
@@ -621,8 +627,13 @@ fn handle_incoming_publish(
     _, _ -> Nil
   }
 
-  let update = ReceivedMessage(msg.topic, msg.payload, msg.retain)
-  process.send(state.updates, update)
+  case msg {
+    Some(msg) -> {
+      let update = ReceivedMessage(msg.topic, msg.payload, msg.retain)
+      process.send(state.updates, update)
+    }
+    None -> Nil
+  }
 
   actor.continue(State(..state, session:))
 }
