@@ -1,3 +1,4 @@
+import gleam/bit_array
 import gleam/bytes_tree.{type BytesTree}
 import gleam/erlang/process
 import gleam/string
@@ -7,6 +8,7 @@ import glisten/socket/options.{ActiveMode, Passive}
 import glisten/tcp
 import spoke
 import spoke/internal/packet
+import spoke/internal/packet/decode
 import spoke/internal/packet/server/incoming
 import spoke/internal/packet/server/outgoing
 
@@ -17,7 +19,7 @@ pub type ListeningServer {
 }
 
 pub type ConnectedServer {
-  ConnectedServer(server: ListeningServer, socket: Socket)
+  ConnectedServer(server: ListeningServer, socket: Socket, leftover: BitArray)
 }
 
 pub type ReceivedConnectData {
@@ -152,10 +154,10 @@ pub fn assert_no_incoming_data(server: ConnectedServer) -> Nil {
 pub fn expect_packet_matching(
   server: ConnectedServer,
   predicate: fn(incoming.Packet) -> Bool,
-) -> Nil {
-  let received_packet = receive_packet(server, default_timeout)
+) -> ConnectedServer {
+  let #(server, received_packet) = receive_packet(server, default_timeout)
   case predicate(received_packet) {
-    True -> Nil
+    True -> server
     False ->
       panic as {
         "Received packet did not match expectation: "
@@ -167,7 +169,7 @@ pub fn expect_packet_matching(
 pub fn expect_packet(
   server: ConnectedServer,
   expected_packet: incoming.Packet,
-) -> Nil {
+) -> ConnectedServer {
   expect_packet_timeout(server, default_timeout, expected_packet)
 }
 
@@ -180,10 +182,10 @@ pub fn expect_packet_timeout(
   server: ConnectedServer,
   timeout: Int,
   expected_packet: incoming.Packet,
-) -> Nil {
-  let received_packet = receive_packet(server, timeout)
+) -> ConnectedServer {
+  let #(server, received_packet) = receive_packet(server, timeout)
   case received_packet == expected_packet {
-    True -> Nil
+    True -> server
     False ->
       panic as {
         "expected "
@@ -207,7 +209,7 @@ pub fn send_raw_response(server: ConnectedServer, data: BytesTree) -> Nil {
 
 pub fn expect_connection_established(server: ListeningServer) -> ConnectedServer {
   let assert Ok(socket) = tcp.accept_timeout(server.listener, default_timeout)
-  ConnectedServer(server, socket)
+  ConnectedServer(server, socket, <<>>)
 }
 
 // Listens for a connection and immediately drops it
@@ -254,15 +256,25 @@ pub fn disconnect(
   let assert Ok(spoke.ConnectionStateChanged(spoke.Disconnected)) =
     process.receive(spoke.updates(client), default_timeout)
 
-  expect_packet(server, incoming.Disconnect)
+  let server = expect_packet(server, incoming.Disconnect)
   let assert Ok(_) = tcp.shutdown(server.socket)
   server.server
 }
 
-fn receive_packet(server: ConnectedServer, timeout: Int) -> incoming.Packet {
-  let assert Ok(data) = tcp.receive_timeout(server.socket, 0, timeout)
-  let assert Ok(#(packet, <<>>)) = incoming.decode_packet(data)
-  packet
+fn receive_packet(
+  server: ConnectedServer,
+  timeout: Int,
+) -> #(ConnectedServer, incoming.Packet) {
+  case incoming.decode_packet(server.leftover) {
+    Ok(#(packet, leftover)) -> #(ConnectedServer(..server, leftover:), packet)
+    Error(decode.DataTooShort) -> {
+      let assert Ok(new_data) = tcp.receive_timeout(server.socket, 0, timeout)
+      let data = bit_array.append(server.leftover, new_data)
+      let assert Ok(#(packet, leftover)) = incoming.decode_packet(data)
+      #(ConnectedServer(..server, leftover:), packet)
+    }
+    error -> panic as { "Failed to decode packet: " <> string.inspect(error) }
+  }
 }
 
 /// Expects a TCP connect & connect packet
@@ -273,8 +285,8 @@ fn expect_connect(
   let packet = receive_packet(connected, default_timeout)
 
   case packet {
-    incoming.Connect(options) -> #(
-      connected,
+    #(server, incoming.Connect(options)) -> #(
+      server,
       ReceivedConnectData(options.client_id, options.keep_alive_seconds),
     )
     _ -> panic as { "expected Connect, got: " <> string.inspect(packet) }

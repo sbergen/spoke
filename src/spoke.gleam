@@ -394,8 +394,12 @@ fn handle_connect(state: State) -> actor.Next(Message, State) {
         })
         |> process.selecting(state.self, function.identity)
 
-      let next = actor.continue(State(..state, connection: Some(conn)))
-      actor.with_selector(next, selector)
+      let state = State(..state, connection: Some(conn))
+
+      session.packets_to_send_after_connect(state.session)
+      |> list.each(connection.send(conn, _))
+
+      actor.with_selector(actor.continue(state), selector)
     }
     Error(_) -> {
       actor.continue(State(..state, connection: None))
