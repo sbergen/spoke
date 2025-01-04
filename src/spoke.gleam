@@ -626,7 +626,6 @@ fn handle_incoming_publish(
     )
 
     packet.PublishDataQoS2(msg, _dup, id) -> {
-      // TODO, validate dup here?
       let #(session, publish_result) =
         session.start_qos2_receive(state.session, id)
       let msg = case publish_result {

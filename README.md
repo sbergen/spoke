@@ -62,29 +62,17 @@ Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 
 ## Development status
 
-Here's an overview of what MQTT features are implemented.
-In summary, only QoS 0 and 1 over TCP with non-persistent sessions
-is currently supported.
+### Missing MQTT 3.1.1 features
+- Auth
+- Will
+- Persistent sessions across restarts
 
-### MQTT features
-- [x] Connect
-  - [ ] Auth
-- [x] Subscribe
-- [x] Unsubscribe
-- [x] Pings (keep alive)
-- [x] Receive messages
-- [x] Send messages
-- [x] QoS 0
-- [x] QoS 1
-- [ ] QoS 2
-- [ ] Persistent sessions across restarts
-- [ ] Will
-
-### Transport
+### Transport channels
 - [x] TCP
 - [ ] WebSocket
 
-### General
-- [ ] Better documentation of public parts of code
-- [ ] Better error handling in client
-- [ ] Graceful shutdown
+### General improvements planned
+- Better documentation of public parts of code
+- More ergonomic building of options
+- Move TCP channel to separate package
+- Automated integration tests against actual server
