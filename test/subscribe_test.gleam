@@ -12,7 +12,6 @@ pub fn subscribe_when_not_connected_returns_error_test() {
     spoke.start(
       spoke.ConnectOptions("client-id", 10, 100),
       fake_server.default_options(1883),
-      process.new_subject(),
     )
 
   let assert Error(spoke.NotConnected) =
@@ -20,7 +19,7 @@ pub fn subscribe_when_not_connected_returns_error_test() {
 }
 
 pub fn subscribe_success_test() {
-  let #(client, updates, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) = fake_server.set_up_connected_client()
 
   let topics = [
     spoke.SubscribeRequest("topic0", AtMostOnce),
@@ -46,11 +45,11 @@ pub fn subscribe_success_test() {
     spoke.SuccessfulSubscription("topic2", ExactlyOnce),
   ])
 
-  fake_server.disconnect(client, updates, socket)
+  fake_server.disconnect(client, socket)
 }
 
 pub fn subscribe_failed_test() {
-  let #(client, updates, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) = fake_server.set_up_connected_client()
 
   let topics = [
     spoke.SubscribeRequest("topic0", AtMostOnce),
@@ -69,12 +68,11 @@ pub fn subscribe_failed_test() {
     spoke.FailedSubscription,
   ])
 
-  fake_server.disconnect(client, updates, socket)
+  fake_server.disconnect(client, socket)
 }
 
 pub fn subscribe_timed_out_test() {
-  let #(client, updates, _socket) =
-    fake_server.set_up_connected_client_with_timeout(5)
+  let #(client, _socket) = fake_server.set_up_connected_client_with_timeout(5)
 
   let topics = [spoke.SubscribeRequest("topic0", AtMostOnce)]
 
@@ -82,12 +80,11 @@ pub fn subscribe_timed_out_test() {
 
   let assert Ok(Error(spoke.OperationTimedOut)) = task.try_await(subscribe, 10)
   let assert Ok(ConnectionStateChanged(spoke.DisconnectedUnexpectedly(_))) =
-    process.receive(updates, 10)
+    process.receive(spoke.updates(client), 10)
 }
 
 pub fn subscribe_invalid_id_test() {
-  let #(client, updates, socket) =
-    fake_server.set_up_connected_client_with_timeout(5)
+  let #(client, socket) = fake_server.set_up_connected_client_with_timeout(5)
 
   let topics = [spoke.SubscribeRequest("topic0", AtMostOnce)]
 
@@ -99,12 +96,11 @@ pub fn subscribe_invalid_id_test() {
   let assert Ok(Error(spoke.OperationTimedOut)) = task.try_await(subscribe, 10)
   let assert Ok(ConnectionStateChanged(spoke.DisconnectedUnexpectedly(
     "Received invalid packet id in subscribe ack",
-  ))) = process.receive(updates, 0)
+  ))) = process.receive(spoke.updates(client), 0)
 }
 
 pub fn subscribe_invalid_length_test() {
-  let #(client, updates, socket) =
-    fake_server.set_up_connected_client_with_timeout(5)
+  let #(client, socket) = fake_server.set_up_connected_client_with_timeout(5)
 
   let topics = [spoke.SubscribeRequest("topic0", AtMostOnce)]
 
@@ -118,5 +114,5 @@ pub fn subscribe_invalid_length_test() {
   let assert Ok(Error(spoke.ProtocolViolation)) = task.try_await(subscribe, 10)
   let assert Ok(ConnectionStateChanged(spoke.DisconnectedUnexpectedly(
     "Received invalid number of results in subscribe ack",
-  ))) = process.receive(updates, 0)
+  ))) = process.receive(spoke.updates(client), 0)
 }

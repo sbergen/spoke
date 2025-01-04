@@ -25,9 +25,10 @@ pub fn main() {
   let transport_opts = spoke.TcpOptions("localhost", 1883, connect_timeout: 100)
 
   io.println("Connecting & subscribing..")
-  let updates = process.new_subject()
-  let client = spoke.start(connect_opts, transport_opts, updates)
+  let client = spoke.start(connect_opts, transport_opts)
   spoke.connect(client)
+
+  let updates = spoke.updates(client)
   let assert Ok(spoke.ConnectionStateChanged(spoke.ConnectAccepted(_))) =
     process.receive(updates, 100)
 

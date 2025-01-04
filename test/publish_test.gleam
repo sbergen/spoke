@@ -5,7 +5,7 @@ import spoke/internal/packet/server/incoming as server_in
 import spoke/internal/packet/server/outgoing as server_out
 
 pub fn publish_qos0_test() {
-  let #(client, updates, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) = fake_server.set_up_connected_client()
 
   let data = spoke.PublishData("topic", <<"payload">>, AtMostOnce, False)
   spoke.publish(client, data)
@@ -14,11 +14,11 @@ pub fn publish_qos0_test() {
   let expected = server_in.Publish(packet.PublishDataQoS0(expected_msg))
   fake_server.expect_packet(socket, expected)
 
-  fake_server.disconnect(client, updates, socket)
+  fake_server.disconnect(client, socket)
 }
 
 pub fn publish_qos0_success_flow_test() {
-  let #(client, updates, socket) = fake_server.set_up_connected_client()
+  let #(client, socket) = fake_server.set_up_connected_client()
 
   let data = spoke.PublishData("topic", <<"payload">>, spoke.AtLeastOnce, False)
   spoke.publish(client, data)
@@ -40,5 +40,5 @@ pub fn publish_qos0_success_flow_test() {
   let assert Ok(Nil) = spoke.wait_for_publishes_to_finish(client, 10)
     as "the packet should be considered sent after the ACK"
 
-  fake_server.disconnect(client, updates, socket)
+  fake_server.disconnect(client, socket)
 }

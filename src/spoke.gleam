@@ -16,7 +16,7 @@ import spoke/internal/transport.{type ByteChannel, type ChannelResult}
 import spoke/internal/transport/tcp
 
 pub opaque type Client {
-  Client(subject: Subject(Message), config: Config)
+  Client(subject: Subject(Message), updates: Subject(Update), config: Config)
 }
 
 pub type TransportOptions {
@@ -114,15 +114,19 @@ pub type SubscribeRequest {
 pub fn start(
   connect_opts: ConnectOptions,
   transport_opts: TransportOptions,
-  updates: Subject(Update),
 ) -> Client {
   start_with_ms_keep_alive(
     connect_opts.client_id,
     connect_opts.keep_alive_seconds * 1000,
     connect_opts.server_timeout_ms,
     transport_opts,
-    updates,
   )
+}
+
+/// Returns a `Subject` for receiving client updates
+/// (received messages and connection state changes).
+pub fn updates(client: Client) -> Subject(Update) {
+  client.updates
 }
 
 /// Starts connecting to the MQTT server.
@@ -212,13 +216,13 @@ pub fn start_with_ms_keep_alive(
   keep_alive_ms: Int,
   server_timeout_ms: Int,
   transport_opts: TransportOptions,
-  updates: Subject(Update),
 ) -> Client {
+  let updates = process.new_subject()
   let connect = fn() { create_channel(transport_opts) }
   let config = Config(client_id, keep_alive_ms, server_timeout_ms, connect)
   let assert Ok(client) =
     actor.start_spec(actor.Spec(fn() { init(config, updates) }, 100, run_client))
-  Client(client, config)
+  Client(client, updates, config)
 }
 
 fn create_channel(options: TransportOptions) -> ChannelResult(ByteChannel) {

@@ -1,5 +1,5 @@
 import gleam/bytes_tree.{type BytesTree}
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process
 import gleam/result
 import gleam/string
 import gleeunit/should
@@ -22,32 +22,26 @@ pub type ReceivedConnectData {
 }
 
 /// Good default for most tests
-pub fn set_up_connected_client() -> #(
-  spoke.Client,
-  Subject(spoke.Update),
-  Socket,
-) {
+pub fn set_up_connected_client() -> #(spoke.Client, Socket) {
   set_up_connected_client_with_timeout(100)
 }
 
 pub fn set_up_connected_client_with_timeout(
   timeout: Int,
-) -> #(spoke.Client, Subject(spoke.Update), Socket) {
+) -> #(spoke.Client, Socket) {
   let #(listener, port) = start_server()
 
-  let updates = process.new_subject()
   let client =
     spoke.start_with_ms_keep_alive(
       "ping-client",
       1000,
       timeout,
       default_options(port),
-      updates,
     )
 
-  let #(state, _, _) = connect_client(client, updates, listener, Ok(False))
+  let #(state, _, _) = connect_client(client, listener, Ok(False))
 
-  #(client, updates, state.socket)
+  #(client, state.socket)
 }
 
 pub fn start_server() -> #(ListenSocket, Int) {
@@ -63,7 +57,6 @@ pub fn default_options(port: Int) {
 /// Runs the full client connect process and returns the given response
 pub fn connect_client(
   client: spoke.Client,
-  updates: Subject(spoke.Update),
   listener: ListenSocket,
   response: Result(Bool, packet.ConnectError),
 ) -> #(ConnectedState, Result(Bool, spoke.ConnectError), ReceivedConnectData) {
@@ -79,7 +72,8 @@ pub fn connect_client(
     False -> Nil
   }
 
-  let assert Ok(update) = process.receive(updates, default_timeout)
+  let assert Ok(update) =
+    process.receive(spoke.updates(client), default_timeout)
   let connection_state = case update {
     spoke.ConnectionStateChanged(state) -> state
     _ ->
@@ -103,11 +97,10 @@ pub fn connect_client(
 
 pub fn reconnect(
   client: spoke.Client,
-  updates: Subject(spoke.Update),
   listener: ListenSocket,
   response: Result(Bool, packet.ConnectError),
 ) -> #(ConnectedState, Result(Bool, spoke.ConnectError)) {
-  let #(state, result, _) = connect_client(client, updates, listener, response)
+  let #(state, result, _) = connect_client(client, listener, response)
   #(state, result)
 }
 
@@ -209,15 +202,11 @@ fn expect_connection_closed_with_limit(try_index: Int, socket: Socket) -> Nil {
 }
 
 /// Runs a clean disconnect on the client
-pub fn disconnect(
-  client: spoke.Client,
-  updates: Subject(spoke.Update),
-  socket: Socket,
-) -> Nil {
+pub fn disconnect(client: spoke.Client, socket: Socket) -> Nil {
   spoke.disconnect(client)
 
   let assert Ok(spoke.ConnectionStateChanged(spoke.Disconnected)) =
-    process.receive(updates, default_timeout)
+    process.receive(spoke.updates(client), default_timeout)
 
   expect_packet(socket, incoming.Disconnect)
   let assert Ok(_) = tcp.shutdown(socket)

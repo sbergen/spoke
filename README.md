@@ -27,8 +27,7 @@ pub fn main() {
   let transport_opts =
     spoke.TcpOptions("test.mosquitto.org", 1883, connect_timeout: 10_000)
 
-  let updates = process.new_subject()
-  let client = spoke.start(connect_opts, transport_opts, updates)
+  let client = spoke.start(connect_opts, transport_opts)
   spoke.connect(client)
 
   let assert Ok(_) =
@@ -45,6 +44,8 @@ pub fn main() {
       retain: False,
     )
   spoke.publish(client, message)
+
+  let updates = spoke.updates(client)
 
   let assert Ok(spoke.ConnectionStateChanged(spoke.ConnectAccepted(_))) =
     process.receive(updates, 1000)
