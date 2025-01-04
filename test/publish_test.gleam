@@ -140,6 +140,29 @@ pub fn publish_qos2_resend_test() {
   fake_server.disconnect(client, server)
 }
 
+pub fn publish_qos2_rerelease_test() {
+  let #(client, server) =
+    fake_server.set_up_connected_client(clean_session: False)
+
+  let data = spoke.PublishData("topic", <<"payload">>, spoke.ExactlyOnce, False)
+  spoke.publish(client, data)
+  let server = fake_server.expect_any_packet(server)
+  fake_server.send_response(server, server_out.PubRec(1))
+
+  // Disconnect and reconnect
+  let server = fake_server.close_connection(server)
+  // Consume disconnect update:
+  let assert Ok(_) = process.receive(spoke.updates(client), 100)
+  let server = fake_server.reconnect(client, server, False, True)
+
+  let server = fake_server.expect_packet(server, server_in.PubRel(1))
+  fake_server.send_response(server, server_out.PubComp(1))
+
+  let assert Ok(Nil) = spoke.wait_for_publishes_to_finish(client, 100)
+
+  fake_server.disconnect(client, server)
+}
+
 pub fn clean_session_after_disconnected_test() {
   let #(client, server) =
     fake_server.set_up_connected_client(clean_session: False)

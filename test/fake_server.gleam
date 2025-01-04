@@ -175,9 +175,9 @@ pub fn expect_packet(
   expect_packet_timeout(server, default_timeout, expected_packet)
 }
 
-pub fn expect_any_packet(server: ConnectedServer) -> Nil {
-  let _ = receive_packet(server, default_timeout)
-  Nil
+pub fn expect_any_packet(server: ConnectedServer) -> ConnectedServer {
+  let #(server, _) = receive_packet(server, default_timeout)
+  server
 }
 
 pub fn expect_packet_timeout(

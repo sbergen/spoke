@@ -19,8 +19,8 @@ pub opaque type Session {
     packet_id: Int,
     unacked_qos1: Dict(Int, packet.MessageData),
     unreceived_qos2: Dict(Int, packet.MessageData),
-    incomplete_qos2: Set(Int),
     unreleased_qos2: Set(Int),
+    incomplete_qos2: Set(Int),
   )
 }
 
@@ -35,8 +35,8 @@ pub fn new(clean_session: Bool) -> Session {
     packet_id: 1,
     unacked_qos1: dict.new(),
     unreceived_qos2: dict.new(),
-    incomplete_qos2: set.new(),
     unreleased_qos2: set.new(),
+    incomplete_qos2: set.new(),
   )
 }
 
@@ -47,7 +47,7 @@ pub fn is_volatile(session: Session) -> Bool {
 pub fn pending_publishes(session: Session) -> Int {
   dict.size(session.unacked_qos1)
   + dict.size(session.unreceived_qos2)
-  + set.size(session.incomplete_qos2)
+  + set.size(session.unreleased_qos2)
 }
 
 pub fn reserve_packet_id(session: Session) -> #(Session, Int) {
@@ -89,23 +89,23 @@ pub fn start_qos2_publish(
 
 pub fn handle_pubrec(session: Session, id: Int) -> Session {
   let unreceived_qos2 = dict.delete(session.unreceived_qos2, id)
-  let incomplete_qos2 = set.insert(session.incomplete_qos2, id)
-  Session(..session, unreceived_qos2:, incomplete_qos2:)
+  let unreleased_qos2 = set.insert(session.unreleased_qos2, id)
+  Session(..session, unreceived_qos2:, unreleased_qos2:)
 }
 
 pub fn handle_pubcomp(session: Session, id: Int) -> Session {
-  let incomplete_qos2 = set.delete(session.incomplete_qos2, id)
-  Session(..session, incomplete_qos2:)
+  let unreleased_qos2 = set.delete(session.unreleased_qos2, id)
+  Session(..session, unreleased_qos2:)
 }
 
 /// Marks the packet id as unreleased.
 /// The second element in the return value indicates whether we should publish the message or not.
 pub fn start_qos2_receive(session: Session, packet_id: Int) -> #(Session, Bool) {
-  case set.contains(session.unreleased_qos2, packet_id) {
+  case set.contains(session.incomplete_qos2, packet_id) {
     True -> #(session, False)
     False -> {
-      let unreleased_qos2 = set.insert(session.unreleased_qos2, packet_id)
-      #(Session(..session, unreleased_qos2:), True)
+      let incomplete_qos2 = set.insert(session.incomplete_qos2, packet_id)
+      #(Session(..session, incomplete_qos2:), True)
     }
   }
 }
@@ -121,8 +121,8 @@ pub fn handle_puback(session: Session, packet_id: Int) -> PubAckResult {
 }
 
 pub fn handle_pubrel(session: Session, packet_id: Int) -> Session {
-  let unreleased_qos2 = set.delete(session.unreleased_qos2, packet_id)
-  Session(..session, unreleased_qos2:)
+  let incomplete_qos2 = set.delete(session.incomplete_qos2, packet_id)
+  Session(..session, incomplete_qos2:)
 }
 
 pub fn packets_to_send_after_connect(session: Session) -> List(outgoing.Packet) {
@@ -152,6 +152,12 @@ pub fn packets_to_send_after_connect(session: Session) -> List(outgoing.Packet) 
           packet_id: id,
         ))
       [packet, ..packets]
+    })
+
+  // Add unreleased QoS2 messages
+  let packets =
+    list.fold(set.to_list(session.unreleased_qos2), packets, fn(packets, id) {
+      [outgoing.PubRel(id), ..packets]
     })
 
   packets
