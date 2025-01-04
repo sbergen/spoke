@@ -31,16 +31,13 @@ pub fn main() {
   spoke.connect(client, True)
 
   let assert Ok(_) =
-    spoke.subscribe(
-      client,
-      [spoke.SubscribeRequest(topic, spoke.AtMostOnce)]
-    )
+    spoke.subscribe(client, [spoke.SubscribeRequest(topic, spoke.AtLeastOnce)])
 
   let message =
     spoke.PublishData(
       topic,
       <<"Hello from spoke!">>,
-      spoke.AtMostOnce,
+      spoke.AtLeastOnce,
       retain: False,
     )
   spoke.publish(client, message)
@@ -66,7 +63,7 @@ Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ## Development status
 
 Here's an overview of what MQTT features are implemented.
-In summary, only QoS 0 over TCP with non-persistent sessions
+In summary, only QoS 0 and 1 over TCP with non-persistent sessions
 is currently supported.
 
 ### MQTT features
@@ -78,9 +75,9 @@ is currently supported.
 - [x] Receive messages
 - [x] Send messages
 - [x] QoS 0
-- [ ] QoS 1
+- [x] QoS 1
 - [ ] QoS 2
-- [ ] Session management & reconnects (only required for QoS > 0?)
+- [ ] Persistent sessions across restarts
 - [ ] Will
 
 ### Transport

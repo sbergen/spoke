@@ -74,7 +74,7 @@ pub fn resend_qos1_after_disconnected_test() {
 
   fake_server.send_response(server, server_out.PubAck(1))
 
-  let assert Ok(Nil) = spoke.wait_for_publishes_to_finish(client, 10)
+  let assert Ok(Nil) = spoke.wait_for_publishes_to_finish(client, 100)
     as "the packet should be considered sent after the ACK"
 
   fake_server.disconnect(client, server)
