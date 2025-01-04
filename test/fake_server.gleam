@@ -44,7 +44,7 @@ pub fn set_up_connected_client_with_timeout(
       default_options(server.port),
     )
 
-  let #(server, _) = connect_client(client, server, False)
+  let #(server, _) = connect_client(client, server, False, False)
 
   #(client, server)
 }
@@ -63,9 +63,10 @@ pub fn default_options(port: Int) {
 pub fn connect_client(
   client: spoke.Client,
   server: ListeningServer,
+  clean_session: Bool,
   session_present: Bool,
 ) -> #(ConnectedServer, ReceivedConnectData) {
-  spoke.connect(client)
+  spoke.connect(client, clean_session)
 
   let #(server, details) = expect_connect(server)
   send_response(server, outgoing.ConnAck(Ok(session_present)))
@@ -100,7 +101,7 @@ pub fn connect_client_with_error(
   server: ListeningServer,
   error: packet.ConnectError,
 ) -> #(ListeningServer, spoke.ConnectError, ReceivedConnectData) {
-  spoke.connect(client)
+  spoke.connect(client, False)
 
   let #(server, details) = expect_connect(server)
   send_response(server, outgoing.ConnAck(Error(error)))
@@ -134,9 +135,11 @@ pub fn connect_client_with_error(
 pub fn reconnect(
   client: spoke.Client,
   server: ListeningServer,
+  clean_session: Bool,
   session_present: Bool,
 ) -> ConnectedServer {
-  let #(server, _) = connect_client(client, server, session_present)
+  let #(server, _) =
+    connect_client(client, server, clean_session, session_present)
   server
 }
 
@@ -161,7 +164,7 @@ pub fn expect_packet_matching(
     False ->
       panic as {
         "Received packet did not match expectation: "
-        <> string.inspect(receive_packet)
+        <> string.inspect(received_packet)
       }
   }
 }

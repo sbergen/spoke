@@ -1,6 +1,4 @@
-import fake_server.{
-  type ConnectedServer, type ListeningServer, type ReceivedConnectData,
-}
+import fake_server.{type ListeningServer, type ReceivedConnectData}
 import gleam/erlang/process
 import gleeunit/should
 import spoke.{ConnectionStateChanged}
@@ -10,7 +8,9 @@ import spoke/internal/packet/server/outgoing as server_out
 const default_client_id = "fake-client-id"
 
 pub fn connect_and_disconnect_test() {
-  let #(client, server, details) = connect(False, "test-client-id", 42)
+  let #(client, server) = start_client_and_server("test-client-id", 42)
+  let #(server, details) =
+    fake_server.connect_client(client, server, False, False)
 
   details.client_id |> should.equal("test-client-id")
   details.keep_alive |> should.equal(42)
@@ -24,7 +24,7 @@ pub fn reconnect_after_rejected_connect_test() {
 
   result |> should.equal(spoke.BadUsernameOrPassword)
 
-  let server = fake_server.reconnect(client, server, True)
+  let server = fake_server.reconnect(client, server, False, True)
 
   fake_server.disconnect(client, server)
 }
@@ -33,7 +33,7 @@ pub fn aborted_connect_disconnects_expectedly_test() {
   let server = fake_server.start_server()
   let client = start_client_with_defaults(server.port)
 
-  spoke.connect(client)
+  spoke.connect(client, False)
 
   let server = fake_server.expect_connection_established(server)
   spoke.disconnect(client)
@@ -49,11 +49,11 @@ pub fn connecting_when_already_connected_succeeds_test() {
   let client = start_client_with_defaults(server.port)
 
   // Start first connect
-  spoke.connect(client)
+  spoke.connect(client, False)
   let socket = fake_server.expect_connection_established(server)
 
   // Start overlapping connect
-  spoke.connect(client)
+  spoke.connect(client, False)
 
   // Finish initial connect
   fake_server.drop_incoming_data(socket)
@@ -67,7 +67,7 @@ pub fn connecting_when_already_connected_succeeds_test() {
 pub fn channel_error_on_connect_fails_connect_test() {
   let client = start_client_with_defaults(9999)
 
-  let _ = spoke.connect(client)
+  let _ = spoke.connect(client, False)
 
   let assert Ok(ConnectionStateChanged(spoke.ConnectFailed(_))) =
     process.receive(spoke.updates(client), 10)
@@ -77,7 +77,7 @@ pub fn channel_error_after_establish_fails_connect_test() {
   let server = fake_server.start_server()
   let client = start_client_with_defaults(server.port)
 
-  spoke.connect(client)
+  spoke.connect(client, False)
   fake_server.reject_connection(server)
 
   let assert Ok(ConnectionStateChanged(spoke.ConnectFailed(_))) =
@@ -89,23 +89,12 @@ pub fn timed_out_connect_test() {
   let connect_opts = spoke.ConnectOptions(default_client_id, 10, 5)
   let client =
     spoke.start(connect_opts, fake_server.default_options(server.port))
-  spoke.connect(client)
+  spoke.connect(client, False)
 
   fake_server.expect_connection_established(server)
 
   let assert Ok(ConnectionStateChanged(spoke.ConnectFailed(_))) =
     process.receive(spoke.updates(client), 10)
-}
-
-fn connect(
-  session_present: Bool,
-  client_id: String,
-  keep_alive: Int,
-) -> #(spoke.Client, ConnectedServer, ReceivedConnectData) {
-  let #(client, server) = start_client_and_server(client_id, keep_alive)
-  let #(server, details) =
-    fake_server.connect_client(client, server, session_present)
-  #(client, server, details)
 }
 
 fn connect_with_error(

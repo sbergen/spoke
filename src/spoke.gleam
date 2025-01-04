@@ -133,8 +133,10 @@ pub fn updates(client: Client) -> Subject(Update) {
 /// The connection state will be published as an update.
 /// If a connection is already established or being established,
 /// this will be a no-op.
-pub fn connect(client: Client) -> Nil {
-  process.send(client.subject, Connect)
+/// Note that switching between `clean_session` values
+/// while already connecting is currently not well handled.
+pub fn connect(client: Client, clean_session: Bool) -> Nil {
+  process.send(client.subject, Connect(clean_session))
 }
 
 /// Starts disconnecting from the MQTT server.
@@ -259,7 +261,7 @@ type OperationResult(a) =
   Result(a, OperationError)
 
 type Message {
-  Connect
+  Connect(Bool)
   Publish(PublishData)
   Subscribe(
     List(SubscribeRequest),
@@ -309,7 +311,7 @@ fn init(
 
 fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
   case message {
-    Connect -> handle_connect(state)
+    Connect(clean_session) -> handle_connect(state, clean_session)
     ProcessReceived(packet) -> process_packet(state, packet)
     Publish(data) -> handle_outgoing_publish(state, data)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
@@ -367,7 +369,10 @@ fn handle_connection_drop(
   actor.continue(State(..state, connection: None, fully_connected: False))
 }
 
-fn handle_connect(state: State) -> actor.Next(Message, State) {
+fn handle_connect(
+  state: State,
+  clean_session: Bool,
+) -> actor.Next(Message, State) {
   use <- bool.guard(
     when: option.is_some(state.connection),
     return: actor.continue(state),

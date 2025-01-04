@@ -54,7 +54,7 @@ pub fn publish_qos1_disconnected_test() {
   // Consume disconnect update:
   let assert Ok(_) = process.receive(spoke.updates(client), 100)
 
-  let server = fake_server.reconnect(client, server, True)
+  let server = fake_server.reconnect(client, server, False, True)
 
   // Expect re-transmission after reconnect, since no ack was received
   let expected_msg = packet.MessageData("topic", <<"payload">>, retain: False)

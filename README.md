@@ -28,7 +28,7 @@ pub fn main() {
     spoke.TcpOptions("test.mosquitto.org", 1883, connect_timeout: 10_000)
 
   let client = spoke.start(connect_opts, transport_opts)
-  spoke.connect(client)
+  spoke.connect(client, True)
 
   let assert Ok(_) =
     spoke.subscribe(

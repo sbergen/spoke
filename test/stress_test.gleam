@@ -26,7 +26,7 @@ pub fn main() {
 
   io.println("Connecting & subscribing..")
   let client = spoke.start(connect_opts, transport_opts)
-  spoke.connect(client)
+  spoke.connect(client, True)
 
   let updates = spoke.updates(client)
   let assert Ok(spoke.ConnectionStateChanged(spoke.ConnectAccepted(_))) =
