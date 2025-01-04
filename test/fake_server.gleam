@@ -1,6 +1,5 @@
 import gleam/bytes_tree.{type BytesTree}
 import gleam/erlang/process
-import gleam/result
 import gleam/string
 import gleeunit/should
 import glisten/socket.{type ListenSocket, type Socket}
@@ -13,8 +12,12 @@ import spoke/internal/packet/server/outgoing
 
 const default_timeout = 100
 
-pub type ConnectedState {
-  ConnectedState(listener: ListenSocket, socket: Socket)
+pub type ListeningServer {
+  ListeningServer(listener: ListenSocket, port: Int)
+}
+
+pub type ConnectedServer {
+  ConnectedServer(server: ListeningServer, socket: Socket)
 }
 
 pub type ReceivedConnectData {
@@ -22,32 +25,32 @@ pub type ReceivedConnectData {
 }
 
 /// Good default for most tests
-pub fn set_up_connected_client() -> #(spoke.Client, Socket) {
+pub fn set_up_connected_client() -> #(spoke.Client, ConnectedServer) {
   set_up_connected_client_with_timeout(100)
 }
 
 pub fn set_up_connected_client_with_timeout(
   timeout: Int,
-) -> #(spoke.Client, Socket) {
-  let #(listener, port) = start_server()
+) -> #(spoke.Client, ConnectedServer) {
+  let server = start_server()
 
   let client =
     spoke.start_with_ms_keep_alive(
       "ping-client",
       1000,
       timeout,
-      default_options(port),
+      default_options(server.port),
     )
 
-  let #(state, _, _) = connect_client(client, listener, Ok(False))
+  let #(server, _) = connect_client(client, server, False)
 
-  #(client, state.socket)
+  #(client, server)
 }
 
-pub fn start_server() -> #(ListenSocket, Int) {
+pub fn start_server() -> ListeningServer {
   let assert Ok(listener) = tcp.listen(0, [ActiveMode(Passive)])
   let assert Ok(#(_, port)) = tcp.sockname(listener)
-  #(listener, port)
+  ListeningServer(listener, port)
 }
 
 pub fn default_options(port: Int) {
@@ -57,20 +60,52 @@ pub fn default_options(port: Int) {
 /// Runs the full client connect process and returns the given response
 pub fn connect_client(
   client: spoke.Client,
-  listener: ListenSocket,
-  response: Result(Bool, packet.ConnectError),
-) -> #(ConnectedState, Result(Bool, spoke.ConnectError), ReceivedConnectData) {
+  server: ListeningServer,
+  session_present: Bool,
+) -> #(ConnectedServer, ReceivedConnectData) {
   spoke.connect(client)
 
-  let #(state, details) = expect_connect(listener)
-  send_response(state.socket, outgoing.ConnAck(response))
+  let #(server, details) = expect_connect(server)
+  send_response(server, outgoing.ConnAck(Ok(session_present)))
+
+  let assert Ok(update) =
+    process.receive(spoke.updates(client), default_timeout)
+
+  let connection_state = case update {
+    spoke.ConnectionStateChanged(state) -> state
+    _ ->
+      panic as {
+        "Unexpected update while connecting: " <> string.inspect(update)
+      }
+  }
+
+  let is_session_present = case connection_state {
+    spoke.ConnectAccepted(session_present) -> session_present
+    _ ->
+      panic as {
+        "Unexpected connection change while connecting: "
+        <> string.inspect(connection_state)
+      }
+  }
+
+  is_session_present |> should.equal(session_present)
+
+  #(server, details)
+}
+
+pub fn connect_client_with_error(
+  client: spoke.Client,
+  server: ListeningServer,
+  error: packet.ConnectError,
+) -> #(ListeningServer, spoke.ConnectError, ReceivedConnectData) {
+  spoke.connect(client)
+
+  let #(server, details) = expect_connect(server)
+  send_response(server, outgoing.ConnAck(Error(error)))
 
   // If a server sends a CONNACK packet containing a non-zero return code
   // it MUST then close the Network Connection
-  case result.is_error(response) {
-    True -> close_connection(state.socket)
-    False -> Nil
-  }
+  let server = close_connection(server)
 
   let assert Ok(update) =
     process.receive(spoke.updates(client), default_timeout)
@@ -83,8 +118,7 @@ pub fn connect_client(
   }
 
   let connect_result = case connection_state {
-    spoke.ConnectAccepted(session_present) -> Ok(session_present)
-    spoke.ConnectRejected(e) -> Error(e)
+    spoke.ConnectRejected(e) -> e
     _ ->
       panic as {
         "Unexpected connection change while connecting: "
@@ -92,34 +126,34 @@ pub fn connect_client(
       }
   }
 
-  #(state, connect_result, details)
+  #(server, connect_result, details)
 }
 
 pub fn reconnect(
   client: spoke.Client,
-  listener: ListenSocket,
-  response: Result(Bool, packet.ConnectError),
-) -> #(ConnectedState, Result(Bool, spoke.ConnectError)) {
-  let #(state, result, _) = connect_client(client, listener, response)
-  #(state, result)
+  server: ListeningServer,
+  session_present: Bool,
+) -> ConnectedServer {
+  let #(server, _) = connect_client(client, server, session_present)
+  server
 }
 
 // Receives whatever is available, and drops the data
-pub fn drop_incoming_data(socket: Socket) -> Nil {
-  let _ = tcp.receive_timeout(socket, 0, default_timeout)
+pub fn drop_incoming_data(server: ConnectedServer) -> Nil {
+  let _ = tcp.receive_timeout(server.socket, 0, default_timeout)
   Nil
 }
 
-pub fn assert_no_incoming_data(socket: Socket) -> Nil {
-  let assert Error(socket.Timeout) = tcp.receive_timeout(socket, 0, 1)
+pub fn assert_no_incoming_data(server: ConnectedServer) -> Nil {
+  let assert Error(socket.Timeout) = tcp.receive_timeout(server.socket, 0, 1)
   Nil
 }
 
 pub fn expect_packet_matching(
-  socket: Socket,
+  server: ConnectedServer,
   predicate: fn(incoming.Packet) -> Bool,
 ) -> Nil {
-  let received_packet = receive_packet(socket, default_timeout)
+  let received_packet = receive_packet(server, default_timeout)
   case predicate(received_packet) {
     True -> Nil
     False ->
@@ -130,21 +164,24 @@ pub fn expect_packet_matching(
   }
 }
 
-pub fn expect_packet(socket: Socket, expected_packet: incoming.Packet) -> Nil {
-  expect_packet_timeout(socket, default_timeout, expected_packet)
+pub fn expect_packet(
+  server: ConnectedServer,
+  expected_packet: incoming.Packet,
+) -> Nil {
+  expect_packet_timeout(server, default_timeout, expected_packet)
 }
 
-pub fn expect_any_packet(socket: Socket) -> Nil {
-  let _ = receive_packet(socket, default_timeout)
+pub fn expect_any_packet(server: ConnectedServer) -> Nil {
+  let _ = receive_packet(server, default_timeout)
   Nil
 }
 
 pub fn expect_packet_timeout(
-  socket: Socket,
+  server: ConnectedServer,
   timeout: Int,
   expected_packet: incoming.Packet,
 ) -> Nil {
-  let received_packet = receive_packet(socket, timeout)
+  let received_packet = receive_packet(server, timeout)
   case received_packet == expected_packet {
     True -> Nil
     False ->
@@ -157,78 +194,87 @@ pub fn expect_packet_timeout(
   }
 }
 
-pub fn send_response(socket: Socket, packet: outgoing.Packet) -> Nil {
+pub fn send_response(server: ConnectedServer, packet: outgoing.Packet) -> Nil {
   let assert Ok(data) = outgoing.encode_packet(packet)
-  let assert Ok(_) = tcp.send(socket, data)
+  let assert Ok(_) = tcp.send(server.socket, data)
   Nil
 }
 
-pub fn send_raw_response(socket: Socket, data: BytesTree) -> Nil {
-  let assert Ok(_) = tcp.send(socket, data)
+pub fn send_raw_response(server: ConnectedServer, data: BytesTree) -> Nil {
+  let assert Ok(_) = tcp.send(server.socket, data)
   Nil
 }
 
-pub fn expect_connection_established(listener: ListenSocket) -> Socket {
-  let assert Ok(socket) = tcp.accept_timeout(listener, default_timeout)
-  socket
+pub fn expect_connection_established(server: ListeningServer) -> ConnectedServer {
+  let assert Ok(socket) = tcp.accept_timeout(server.listener, default_timeout)
+  ConnectedServer(server, socket)
 }
 
 // Listens for a connection and immediately drops it
-pub fn reject_connection(listener: ListenSocket) -> Nil {
-  let assert Ok(socket) = tcp.accept_timeout(listener, default_timeout)
+pub fn reject_connection(server: ListeningServer) -> Nil {
+  let assert Ok(socket) = tcp.accept_timeout(server.listener, default_timeout)
   let assert Ok(_) = tcp.shutdown(socket)
   Nil
 }
 
-pub fn close_connection(socket: Socket) -> Nil {
-  let assert Ok(_) = tcp.shutdown(socket)
-  Nil
+pub fn close_connection(server: ConnectedServer) -> ListeningServer {
+  let assert Ok(_) = tcp.shutdown(server.socket)
+  server.server
 }
 
-pub fn expect_connection_closed(socket: Socket) -> Nil {
-  expect_connection_closed_with_limit(10, socket)
+pub fn expect_connection_closed(server: ConnectedServer) -> ListeningServer {
+  expect_connection_closed_with_limit(10, server)
 }
 
-fn expect_connection_closed_with_limit(try_index: Int, socket: Socket) -> Nil {
+fn expect_connection_closed_with_limit(
+  try_index: Int,
+  server: ConnectedServer,
+) -> ListeningServer {
   case try_index {
     0 ->
       panic as "Too many incoming packets when expecting connection to be closed"
     _ ->
-      case tcp.receive_timeout(socket, 0, default_timeout) {
-        Ok(_) -> expect_connection_closed_with_limit(try_index - 1, socket)
-        Error(e) -> e |> should.equal(socket.Closed)
+      case tcp.receive_timeout(server.socket, 0, default_timeout) {
+        Ok(_) -> expect_connection_closed_with_limit(try_index - 1, server)
+        Error(e) -> {
+          e |> should.equal(socket.Closed)
+          server.server
+        }
       }
   }
 }
 
 /// Runs a clean disconnect on the client
-pub fn disconnect(client: spoke.Client, socket: Socket) -> Nil {
+pub fn disconnect(
+  client: spoke.Client,
+  server: ConnectedServer,
+) -> ListeningServer {
   spoke.disconnect(client)
 
   let assert Ok(spoke.ConnectionStateChanged(spoke.Disconnected)) =
     process.receive(spoke.updates(client), default_timeout)
 
-  expect_packet(socket, incoming.Disconnect)
-  let assert Ok(_) = tcp.shutdown(socket)
-  Nil
+  expect_packet(server, incoming.Disconnect)
+  let assert Ok(_) = tcp.shutdown(server.socket)
+  server.server
 }
 
-fn receive_packet(socket: Socket, timeout: Int) -> incoming.Packet {
-  let assert Ok(data) = tcp.receive_timeout(socket, 0, timeout)
+fn receive_packet(server: ConnectedServer, timeout: Int) -> incoming.Packet {
+  let assert Ok(data) = tcp.receive_timeout(server.socket, 0, timeout)
   let assert Ok(#(packet, <<>>)) = incoming.decode_packet(data)
   packet
 }
 
 /// Expects a TCP connect & connect packet
 fn expect_connect(
-  listener: ListenSocket,
-) -> #(ConnectedState, ReceivedConnectData) {
-  let socket = expect_connection_established(listener)
-  let packet = receive_packet(socket, default_timeout)
+  server: ListeningServer,
+) -> #(ConnectedServer, ReceivedConnectData) {
+  let connected = expect_connection_established(server)
+  let packet = receive_packet(connected, default_timeout)
 
   case packet {
     incoming.Connect(options) -> #(
-      ConnectedState(listener, socket),
+      connected,
       ReceivedConnectData(options.client_id, options.keep_alive_seconds),
     )
     _ -> panic as { "expected Connect, got: " <> string.inspect(packet) }
