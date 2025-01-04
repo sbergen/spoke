@@ -18,6 +18,8 @@ pub opaque type Session {
     clean_session: Bool,
     packet_id: Int,
     unacked_qos1: Dict(Int, packet.MessageData),
+    unreceived_qos2: Dict(Int, packet.MessageData),
+    incomplete_qos2: Set(Int),
     unreleased_qos2: Set(Int),
   )
 }
@@ -32,6 +34,8 @@ pub fn new(clean_session: Bool) -> Session {
     clean_session:,
     packet_id: 1,
     unacked_qos1: dict.new(),
+    unreceived_qos2: dict.new(),
+    incomplete_qos2: set.new(),
     unreleased_qos2: set.new(),
   )
 }
@@ -42,6 +46,8 @@ pub fn is_volatile(session: Session) -> Bool {
 
 pub fn pending_publishes(session: Session) -> Int {
   dict.size(session.unacked_qos1)
+  + dict.size(session.unreceived_qos2)
+  + set.size(session.incomplete_qos2)
 }
 
 pub fn reserve_packet_id(session: Session) -> #(Session, Int) {
@@ -66,6 +72,30 @@ pub fn start_qos1_publish(
     outgoing.Publish(packet.PublishDataQoS1(message, dup: False, packet_id: id))
 
   #(Session(..session, unacked_qos1:), packet)
+}
+
+pub fn start_qos2_publish(
+  session: Session,
+  message: packet.MessageData,
+) -> #(Session, outgoing.Packet) {
+  let #(session, id) = reserve_packet_id(session)
+  let unreceived_qos2 = dict.insert(session.unreceived_qos2, id, message)
+
+  let packet =
+    outgoing.Publish(packet.PublishDataQoS2(message, dup: False, packet_id: id))
+
+  #(Session(..session, unreceived_qos2:), packet)
+}
+
+pub fn handle_pubrec(session: Session, id: Int) -> Session {
+  let unreceived_qos2 = dict.delete(session.unreceived_qos2, id)
+  let incomplete_qos2 = set.insert(session.incomplete_qos2, id)
+  Session(..session, unreceived_qos2:, incomplete_qos2:)
+}
+
+pub fn handle_pubcomp(session: Session, id: Int) -> Session {
+  let incomplete_qos2 = set.delete(session.incomplete_qos2, id)
+  Session(..session, incomplete_qos2:)
 }
 
 /// Marks the packet id as unreleased.

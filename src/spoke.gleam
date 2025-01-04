@@ -6,7 +6,6 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
-import gleam/string
 import spoke/internal/connection.{type Connection}
 import spoke/internal/packet.{type SubscribeResult}
 import spoke/internal/packet/client/incoming
@@ -427,12 +426,6 @@ fn handle_outgoing_publish(
   state: State,
   data: PublishData,
 ) -> actor.Next(Message, State) {
-  use connection <- guard_connected(state, fn() {
-    // QoS 0 packets are just dropped,
-    // we'll need to store them in the session for QoS > 0
-    actor.continue(state)
-  })
-
   let message =
     packet.MessageData(
       topic: data.topic,
@@ -440,22 +433,23 @@ fn handle_outgoing_publish(
       retain: data.retain,
     )
 
-  case data.qos {
-    AtMostOnce -> {
-      let packet = outgoing.Publish(packet.PublishDataQoS0(message))
-      connection.send(connection, packet)
-      actor.continue(state)
-    }
-
-    AtLeastOnce -> {
-      let #(session, packet) =
-        session.start_qos1_publish(state.session, message)
-      connection.send(connection, packet)
-      actor.continue(State(..state, session:))
-    }
-
-    ExactlyOnce -> panic as "QoS2 not supported!"
+  let #(session, packet) = case data.qos {
+    AtMostOnce -> #(
+      state.session,
+      outgoing.Publish(packet.PublishDataQoS0(message)),
+    )
+    AtLeastOnce -> session.start_qos1_publish(state.session, message)
+    ExactlyOnce -> session.start_qos2_publish(state.session, message)
   }
+  let state = State(..state, session:)
+
+  use connection <- guard_connected(state, fn() {
+    // QoS 0 packets are just dropped, QoS > 0 have been saved in the session
+    actor.continue(state)
+  })
+
+  connection.send(connection, packet)
+  actor.continue(state)
 }
 
 fn process_packet(
@@ -469,7 +463,11 @@ fn process_packet(
     incoming.UnsubAck(id) -> handle_unsuback(state, id)
     incoming.PubAck(id) -> handle_puback(state, id)
     incoming.PubRel(id) -> handle_pubrel(state, id)
-    _ -> panic as { "Packet type not handled: " <> string.inspect(packet) }
+    incoming.PubRec(id) -> handle_pubrec(state, id)
+    incoming.PubComp(id) -> handle_pubcomp(state, id)
+
+    // Handled by the connection
+    incoming.PingResp -> actor.continue(state)
   }
 }
 
@@ -552,6 +550,23 @@ fn handle_pubrel(state: State, id: Int) -> actor.Next(Message, State) {
   connection.send(connection, outgoing.PubComp(id))
   let session = session.handle_pubrel(state.session, id)
   actor.continue(State(..state, session:))
+}
+
+fn handle_pubrec(state: State, id: Int) -> actor.Next(Message, State) {
+  use connection <- guard_connected(state, fn() { actor.continue(state) })
+
+  let session = session.handle_pubrec(state.session, id)
+  connection.send(connection, outgoing.PubRel(id))
+  actor.continue(State(..state, session:))
+}
+
+fn handle_pubcomp(state: State, id: Int) -> actor.Next(Message, State) {
+  let session = session.handle_pubcomp(state.session, id)
+  let state =
+    State(..state, session:)
+    |> notify_if_publishes_finished
+
+  actor.continue(state)
 }
 
 fn handle_subscribe(
