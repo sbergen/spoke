@@ -9,6 +9,7 @@
 
 import gleam/dict.{type Dict}
 import gleam/list
+import gleam/set.{type Set}
 import spoke/internal/packet
 import spoke/internal/packet/client/outgoing
 
@@ -17,6 +18,7 @@ pub opaque type Session {
     clean_session: Bool,
     packet_id: Int,
     unacked_qos1: Dict(Int, packet.MessageData),
+    unreleased_qos2: Set(Int),
   )
 }
 
@@ -26,7 +28,12 @@ pub type PubAckResult {
 }
 
 pub fn new(clean_session: Bool) -> Session {
-  Session(clean_session:, packet_id: 1, unacked_qos1: dict.new())
+  Session(
+    clean_session:,
+    packet_id: 1,
+    unacked_qos1: dict.new(),
+    unreleased_qos2: set.new(),
+  )
 }
 
 pub fn is_volatile(session: Session) -> Bool {
@@ -61,6 +68,15 @@ pub fn start_qos1_publish(
   #(Session(..session, unacked_qos1:), packet)
 }
 
+pub fn start_qos2_receive(
+  session: Session,
+  packet_id: Int,
+) -> #(Session, outgoing.Packet) {
+  // TODO: deduplication is missing
+  let unreleased_qos2 = set.insert(session.unreleased_qos2, packet_id)
+  #(Session(..session, unreleased_qos2:), outgoing.PubRec(packet_id))
+}
+
 pub fn handle_puback(session: Session, packet_id: Int) -> PubAckResult {
   case dict.has_key(session.unacked_qos1, packet_id) {
     True -> {
@@ -69,6 +85,11 @@ pub fn handle_puback(session: Session, packet_id: Int) -> PubAckResult {
     }
     False -> InvalidPubAckId
   }
+}
+
+pub fn handle_pubrel(session: Session, packet_id: Int) -> Session {
+  let unreleased_qos2 = set.delete(session.unreleased_qos2, packet_id)
+  Session(..session, unreleased_qos2:)
 }
 
 pub fn packets_to_send_after_connect(session: Session) -> List(outgoing.Packet) {

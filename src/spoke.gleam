@@ -468,6 +468,7 @@ fn process_packet(
     incoming.SubAck(id, results) -> handle_suback(state, id, results)
     incoming.UnsubAck(id) -> handle_unsuback(state, id)
     incoming.PubAck(id) -> handle_puback(state, id)
+    incoming.PubRel(id) -> handle_pubrel(state, id)
     _ -> panic as { "Packet type not handled: " <> string.inspect(packet) }
   }
 }
@@ -543,6 +544,16 @@ fn handle_puback(state: State, id: Int) -> actor.Next(Message, State) {
   }
 }
 
+fn handle_pubrel(state: State, id: Int) -> actor.Next(Message, State) {
+  use connection <- guard_connected(state, fn() { actor.continue(state) })
+
+  // Whether or not we already sent PubComp, we always do it when receiving PubRel.
+  // This is in case we lose the connection after PubRec
+  connection.send(connection, outgoing.PubComp(id))
+  let session = session.handle_pubrel(state.session, id)
+  actor.continue(State(..state, session:))
+}
+
 fn handle_subscribe(
   state: State,
   topics: List(SubscribeRequest),
@@ -588,28 +599,32 @@ fn handle_incoming_publish(
   state: State,
   data: packet.PublishData,
 ) -> actor.Next(Message, State) {
-  // TODO: QoS2
-  let msg = case data {
-    packet.PublishDataQoS0(msg) -> msg
+  let #(msg, session, packet) = case data {
+    packet.PublishDataQoS0(msg) -> #(msg, state.session, None)
 
     // dup is essentially useless,
     // as we don't know if we have already received this or not.
-    packet.PublishDataQoS1(msg, _dup, id) -> {
-      case state.connection {
-        Some(connection) -> {
-          connection.send(connection, outgoing.PubAck(id))
-          msg
-        }
-        None -> msg
-      }
-    }
+    packet.PublishDataQoS1(msg, _dup, id) -> #(
+      msg,
+      state.session,
+      Some(outgoing.PubAck(id)),
+    )
 
-    packet.PublishDataQoS2(msg, ..) -> msg
+    packet.PublishDataQoS2(msg, _dup, id) -> {
+      let #(session, packet) = session.start_qos2_receive(state.session, id)
+      #(msg, session, Some(packet))
+    }
+  }
+
+  case packet, state.connection {
+    Some(packet), Some(connection) -> connection.send(connection, packet)
+    _, _ -> Nil
   }
 
   let update = ReceivedMessage(msg.topic, msg.payload, msg.retain)
   process.send(state.updates, update)
-  actor.continue(state)
+
+  actor.continue(State(..state, session:))
 }
 
 fn handle_disconnect(state: State) -> actor.Next(Message, State) {
