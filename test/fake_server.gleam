@@ -12,7 +12,7 @@ import spoke/internal/packet/decode
 import spoke/internal/packet/server/incoming
 import spoke/internal/packet/server/outgoing
 
-const default_timeout = 100
+const default_timeout = 200
 
 pub type ListeningServer {
   ListeningServer(listener: ListenSocket, port: Int)
