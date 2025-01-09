@@ -23,7 +23,6 @@ pub fn send_receive_and_shutdown_test() {
 }
 
 fn receive_next(channel: ByteChannel) -> BitArray {
-  let assert Ok(#(Nil, Ok(bytes))) =
-    process.select(channel.selecting_next(Nil), 100)
+  let assert Ok(Ok(bytes)) = process.select(channel.selecting_next(), 100)
   bytes
 }

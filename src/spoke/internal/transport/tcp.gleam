@@ -22,9 +22,9 @@ pub fn connect(
     |> mug.selecting_tcp_messages(map_tcp_message)
 
   Ok(
-    transport.Channel(
+    transport.ByteChannel(
       send: send(socket, _),
-      selecting_next: fn(_) {
+      selecting_next: fn() {
         mug.receive_next_packet_as_message(socket)
         selector
       },
@@ -42,14 +42,12 @@ fn send(socket: mug.Socket, data: BytesTree) -> ChannelResult(Nil) {
   |> map_mug_error(transport.TransportError)
 }
 
-fn map_tcp_message(msg: mug.TcpMessage) -> #(Nil, ChannelResult(BitArray)) {
-  let result = case msg {
+fn map_tcp_message(msg: mug.TcpMessage) -> ChannelResult(BitArray) {
+  case msg {
     mug.Packet(_, data) -> Ok(data)
     mug.SocketClosed(_) -> Error(transport.ChannelClosed)
     mug.TcpError(_, e) -> Error(transport.TransportError(string.inspect(e)))
   }
-
-  #(Nil, result)
 }
 
 fn map_mug_error(

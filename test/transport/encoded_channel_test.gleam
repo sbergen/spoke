@@ -47,9 +47,9 @@ pub fn receive_multiple_packets_test() {
 pub fn shutdown_shuts_down_underlying_channel_test() {
   let shutdowns = process.new_subject()
   let channel =
-    transport.Channel(
+    transport.ByteChannel(
       send: fn(_) { panic },
-      selecting_next: fn(_) { panic },
+      selecting_next: fn() { panic },
       shutdown: fn() { process.send(shutdowns, Nil) },
     )
     |> channel.as_encoded
@@ -68,12 +68,12 @@ fn encode(packet: outgoing.Packet) -> BitArray {
 fn set_up_send() -> #(EncodedChannel, Subject(BitArray)) {
   let sent = process.new_subject()
   let raw_channel =
-    transport.Channel(
+    transport.ByteChannel(
       send: fn(builder) {
         process.send(sent, bytes_tree.to_bit_array(builder))
         Ok(Nil)
       },
-      selecting_next: fn(_) { panic },
+      selecting_next: fn() { panic },
       shutdown: fn() { panic },
     )
 
@@ -83,11 +83,11 @@ fn set_up_send() -> #(EncodedChannel, Subject(BitArray)) {
 fn set_up_receive() -> #(EncodedChannel, Subject(BitArray)) {
   let receive = process.new_subject()
   let raw_channel =
-    transport.Channel(
+    transport.ByteChannel(
       send: fn(_) { panic },
-      selecting_next: fn(_) {
+      selecting_next: fn() {
         process.new_selector()
-        |> process.selecting(receive, fn(data) { #(Nil, Ok(data)) })
+        |> process.selecting(receive, fn(data) { Ok(data) })
       },
       shutdown: fn() { panic },
     )
