@@ -18,16 +18,15 @@ pub fn main() {
   let client_id = "spoke" <> string.inspect(int.random(999_999_999))
   let topic = "spoke-test"
 
-  let connect_opts =
+  let connect_options =
     spoke.ConnectOptions(
+      spoke.TcpOptions("test.mosquitto.org", 1883, connect_timeout: 10_000),
       client_id,
       keep_alive_seconds: 10,
       server_timeout_ms: 1000,
     )
-  let transport_opts =
-    spoke.TcpOptions("test.mosquitto.org", 1883, connect_timeout: 10_000)
 
-  let client = spoke.start(connect_opts, transport_opts)
+  let client = spoke.start(connect_options)
   spoke.connect(client, True)
 
   let assert Ok(_) =

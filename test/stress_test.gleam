@@ -18,14 +18,14 @@ pub fn main() {
 
   let connect_opts =
     spoke.ConnectOptions(
+      spoke.TcpOptions("localhost", 1883, connect_timeout: 100),
       client_id,
       keep_alive_seconds: 1,
       server_timeout_ms: 100,
     )
-  let transport_opts = spoke.TcpOptions("localhost", 1883, connect_timeout: 100)
 
   io.println("Connecting & subscribing..")
-  let client = spoke.start(connect_opts, transport_opts)
+  let client = spoke.start(connect_opts)
   spoke.connect(client, True)
 
   let updates = spoke.updates(client)

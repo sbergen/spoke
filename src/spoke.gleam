@@ -24,6 +24,7 @@ pub type TransportOptions {
 
 pub type ConnectOptions {
   ConnectOptions(
+    transport_options: TransportOptions,
     client_id: String,
     /// Keep-alive interval in seconds (MQTT spec doesn't allow more granular control)
     keep_alive_seconds: Int,
@@ -110,15 +111,12 @@ pub type SubscribeRequest {
 
 /// Starts a new MQTT client with the given options.
 /// Does not connect to the server, until `connect` is called.
-pub fn start(
-  connect_opts: ConnectOptions,
-  transport_opts: TransportOptions,
-) -> Client {
+pub fn start(connect_options: ConnectOptions) -> Client {
   start_with_ms_keep_alive(
-    connect_opts.client_id,
-    connect_opts.keep_alive_seconds * 1000,
-    connect_opts.server_timeout_ms,
-    transport_opts,
+    connect_options.client_id,
+    connect_options.keep_alive_seconds * 1000,
+    connect_options.server_timeout_ms,
+    connect_options.transport_options,
   )
 }
 

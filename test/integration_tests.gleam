@@ -1,3 +1,5 @@
+//// Tests that require a MQTT broker to be running on localhost
+
 import gleam/dynamic.{type Dynamic}
 import gleam/erlang
 import gleam/erlang/process
@@ -12,7 +14,7 @@ pub fn main() -> Int {
   io.println("--------------------------")
   let failures =
     0
-    |> run_test("subscribe & publish", subscribe_and_publish)
+    |> run_test("subscribe & publish, QoS 0", subscribe_and_publish_qos0)
 
   io.println("--------------------------")
   case failures {
@@ -23,15 +25,15 @@ pub fn main() -> Int {
   failures
 }
 
-fn subscribe_and_publish() -> Nil {
+fn subscribe_and_publish_qos0() -> Nil {
   let connect_opts =
     spoke.ConnectOptions(
+      spoke.TcpOptions("localhost", 1883, connect_timeout: 100),
       "subscribe_and_publish",
       keep_alive_seconds: 1,
       server_timeout_ms: 100,
     )
-  let transport_opts = spoke.TcpOptions("localhost", 1883, connect_timeout: 100)
-  let client = spoke.start(connect_opts, transport_opts)
+  let client = spoke.start(connect_opts)
   let updates = spoke.updates(client)
 
   spoke.connect(client, True)
@@ -48,7 +50,7 @@ fn subscribe_and_publish() -> Nil {
     spoke.PublishData(
       topic,
       <<"Hello from spoke!">>,
-      spoke.AtLeastOnce,
+      spoke.AtMostOnce,
       retain: False,
     )
   spoke.publish(client, message)
