@@ -10,6 +10,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      mqtt-broker:
+        image: emqx
+        ports:
+          - 1883:1883
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
@@ -19,4 +24,5 @@ jobs:
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam test
+      - run: gleam run -m integration_tests
       - run: gleam format --check src test
