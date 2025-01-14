@@ -27,6 +27,9 @@ pub fn connect_and_disconnect_clean_session_test() {
   details.clean_session |> should.be_true()
 
   fake_server.disconnect(client, server)
+
+  let assert Error(Nil) = process.receive(spoke.updates(client), 100)
+    as "No more updates should be sent after disconnect"
 }
 
 pub fn reconnect_after_rejected_connect_test() {
@@ -48,9 +51,6 @@ pub fn aborted_connect_disconnects_expectedly_test() {
 
   let server = fake_server.expect_connection_established(server)
   spoke.disconnect(client)
-
-  let assert Ok(ConnectionStateChanged(spoke.Disconnected)) =
-    process.receive(spoke.updates(client), 10)
 
   fake_server.expect_connection_closed(server)
 }

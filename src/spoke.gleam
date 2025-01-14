@@ -707,7 +707,8 @@ fn handle_disconnect(state: State) -> actor.Next(Message, State) {
   case state.connection {
     Some(connection) -> {
       connection.send(connection, outgoing.Disconnect)
-      drop_connection_and_notify(state, None)
+      connection.shutdown(connection)
+      actor.continue(State(..state, connection: None))
     }
     None -> actor.continue(state)
   }
