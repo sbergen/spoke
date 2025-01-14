@@ -26,14 +26,10 @@ pub fn main() -> Int {
 }
 
 fn subscribe_and_publish_qos0() -> Nil {
-  let connect_opts =
-    spoke.ConnectOptions(
-      spoke.TcpOptions("localhost", 1883, connect_timeout: 100),
-      "subscribe_and_publish",
-      keep_alive_seconds: 1,
-      server_timeout_ms: 100,
-    )
-  let client = spoke.start(connect_opts)
+  let client =
+    spoke.default_tcp_options("localhost")
+    |> spoke.connect_with_id("subscribe_and_publish")
+    |> spoke.start
   let updates = spoke.updates(client)
 
   spoke.connect(client, True)

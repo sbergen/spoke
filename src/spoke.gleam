@@ -109,6 +109,59 @@ pub type SubscribeRequest {
   SubscribeRequest(filter: String, qos: QoS)
 }
 
+/// Constructs the default (unencrypted) TCP options,
+/// connecting to port 1883 on the given host.
+pub fn default_tcp_options(host: String) -> TransportOptions {
+  TcpOptions(host:, port: 1883, connect_timeout: 5000)
+}
+
+pub fn tcp_port(options: TransportOptions, port: Int) -> TransportOptions {
+  // TODO: This is planned to be in a separate package soon anyway
+  case options {
+    TcpOptions(..) as options -> TcpOptions(..options, port:)
+  }
+}
+
+pub fn tcp_connect_timeout(
+  options: TransportOptions,
+  connect_timeout: Int,
+) -> TransportOptions {
+  // TODO: This is planned to be in a separate package soon anyway
+  case options {
+    TcpOptions(..) as options -> TcpOptions(..options, connect_timeout:)
+  }
+}
+
+/// Constructs connect options from transport options, the given client id,
+/// and default settings for the rest of the options.
+pub fn connect_with_id(
+  transport_options: TransportOptions,
+  client_id: String,
+) -> ConnectOptions {
+  ConnectOptions(
+    transport_options:,
+    client_id:,
+    keep_alive_seconds: 15,
+    server_timeout_ms: 5000,
+  )
+}
+
+/// Builder function for specifying the keep-alive time in the connect options.
+pub fn keep_alive_seconds(
+  options: ConnectOptions,
+  keep_alive_seconds: Int,
+) -> ConnectOptions {
+  ConnectOptions(..options, keep_alive_seconds:)
+}
+
+/// Builder function for specifying the server operation timeout in the connect options.
+pub fn server_timeout_ms(
+  options: ConnectOptions,
+  server_timeout_ms: Int,
+) -> ConnectOptions {
+  ConnectOptions(..options, server_timeout_ms:)
+}
+
 /// Starts a new MQTT client with the given options.
 /// Does not connect to the server, until `connect` is called.
 pub fn start(connect_options: ConnectOptions) -> Client {

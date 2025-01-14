@@ -18,15 +18,11 @@ pub fn main() {
   let client_id = "spoke" <> string.inspect(int.random(999_999_999))
   let topic = "spoke-test"
 
-  let connect_options =
-    spoke.ConnectOptions(
-      spoke.TcpOptions("test.mosquitto.org", 1883, connect_timeout: 10_000),
-      client_id,
-      keep_alive_seconds: 10,
-      server_timeout_ms: 1000,
-    )
+  let client =
+    spoke.default_tcp_options("test.mosquitto.org")
+    |> spoke.connect_with_id(client_id)
+    |> spoke.start
 
-  let client = spoke.start(connect_options)
   spoke.connect(client, True)
 
   let assert Ok(_) =
@@ -72,6 +68,5 @@ Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 
 ### General improvements planned
 - Better documentation of public parts of code
-- More ergonomic building of options
 - Move TCP channel to separate package
 - Automated integration tests against actual server
