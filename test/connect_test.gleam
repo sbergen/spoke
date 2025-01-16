@@ -1,8 +1,10 @@
 import fake_server.{type ListeningServer}
 import gleam/erlang/process
+import gleam/option.{Some}
 import gleeunit/should
 import spoke.{ConnectionStateChanged}
 import spoke/internal/packet
+import spoke/internal/packet/server/incoming as server_in
 import spoke/internal/packet/server/outgoing as server_out
 
 const default_client_id = "fake-client-id"
@@ -111,6 +113,33 @@ pub fn timed_out_connect_test() {
 
   let assert Ok(ConnectionStateChanged(spoke.ConnectFailed(_))) =
     process.receive(spoke.updates(client), 10)
+}
+
+pub fn connect_with_will_test() {
+  let will =
+    spoke.PublishData("will-topic", <<"will data">>, spoke.AtLeastOnce, True)
+
+  let server = fake_server.start_server()
+  let client =
+    fake_server.default_options(server.port)
+    |> spoke.connect_with_id(default_client_id)
+    |> spoke.start
+
+  spoke.connect_with_will(client, True, will)
+
+  let server = fake_server.expect_connection_established(server)
+  fake_server.expect_packet_matching(server, fn(packet) {
+    let assert server_in.Connect(connect_data) = packet
+    case connect_data.will {
+      Some(#(
+        packet.MessageData("will-topic", <<"will data">>, True),
+        packet.QoS1,
+      )) -> True
+      _ -> False
+    }
+  })
+
+  spoke.disconnect(client)
 }
 
 fn connect_with_error(

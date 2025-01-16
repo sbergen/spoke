@@ -51,6 +51,7 @@ pub fn connect(
   clean_session: Bool,
   keep_alive_ms: Int,
   server_timeout_ms: Int,
+  will: Option(#(packet.MessageData, packet.QoS)),
 ) -> Result(Connection, String) {
   // Start linked, as this *really* shouldn't fail
   let ack_subject = process.new_subject()
@@ -59,7 +60,7 @@ pub fn connect(
       let messages = process.new_subject()
       let connect = process.new_subject()
       process.send(ack_subject, #(messages, connect))
-      establish_channel(messages, connect, clean_session)
+      establish_channel(messages, connect, clean_session, will)
     })
 
   // Start monitoring and unlink
@@ -159,6 +160,7 @@ fn establish_channel(
   mailbox: Subject(Message),
   connect: Subject(Config),
   clean_session: Bool,
+  will: Option(#(packet.MessageData, packet.QoS)),
 ) -> Nil {
   // If we can't receive in time, the parent is very stuck, so dying is fine
   let assert Ok(config) = process.receive(connect, 1000)
@@ -192,7 +194,7 @@ fn establish_channel(
       client_id: config.client_id,
       keep_alive_seconds: config.keep_alive_ms / 1000,
       auth: None,
-      will: None,
+      will:,
     )
 
   use state <- ok_or_exit(

@@ -186,7 +186,16 @@ pub fn updates(client: Client) -> Subject(Update) {
 /// Note that switching between `clean_session` values
 /// while already connecting is currently not well handled.
 pub fn connect(client: Client, clean_session: Bool) -> Nil {
-  process.send(client.subject, Connect(clean_session))
+  process.send(client.subject, Connect(clean_session, None))
+}
+
+/// Same as `connect`, but specifies a will message for this connection.
+pub fn connect_with_will(
+  client: Client,
+  clean_session: Bool,
+  will: PublishData,
+) -> Nil {
+  process.send(client.subject, Connect(clean_session, Some(will)))
 }
 
 /// Starts disconnecting from the MQTT server.
@@ -311,7 +320,7 @@ type OperationResult(a) =
   Result(a, OperationError)
 
 type Message {
-  Connect(Bool)
+  Connect(Bool, Option(PublishData))
   Publish(PublishData)
   Subscribe(
     List(SubscribeRequest),
@@ -361,7 +370,7 @@ fn init(
 
 fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
   case message {
-    Connect(clean_session) -> handle_connect(state, clean_session)
+    Connect(clean_session, will) -> handle_connect(state, clean_session, will)
     ProcessReceived(packet) -> process_packet(state, packet)
     Publish(data) -> handle_outgoing_publish(state, data)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
@@ -422,11 +431,18 @@ fn handle_connection_drop(
 fn handle_connect(
   state: State,
   clean_session: Bool,
+  will: Option(PublishData),
 ) -> actor.Next(Message, State) {
   use <- bool.guard(
     when: option.is_some(state.connection),
     return: actor.continue(state),
   )
+
+  let will =
+    option.map(will, fn(will) {
+      let data = packet.MessageData(will.topic, will.payload, will.retain)
+      #(data, to_packet_qos(will.qos))
+    })
 
   let config = state.config
   let conn =
@@ -436,6 +452,7 @@ fn handle_connect(
       clean_session,
       config.keep_alive,
       config.server_timeout,
+      will,
     )
 
   // [MQTT-3.1.2-6]
