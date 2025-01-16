@@ -7,8 +7,10 @@
 //// 
 //// Also, to simplify things, we keep the packet id also.
 
+import gleam/bit_array
 import gleam/dict.{type Dict}
 import gleam/dynamic/decode
+import gleam/int
 import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
@@ -46,13 +48,42 @@ pub fn new(clean_session: Bool) -> Session {
 }
 
 pub fn from_json(state: String) -> Result(Session, json.DecodeError) {
+  let decode_payload =
+    decode.string
+    |> decode.then(fn(str) {
+      case bit_array.base64_decode(str) {
+        Ok(payload) -> decode.success(payload)
+        Error(Nil) -> decode.failure(<<>>, "BitArray")
+      }
+    })
+
+  let decode_id_key =
+    decode.string
+    |> decode.then(fn(str) {
+      case int.parse(str) {
+        Ok(id) -> decode.success(id)
+        Error(Nil) -> decode.failure(0, "Int")
+      }
+    })
+
+  let decode_message = {
+    use topic <- decode.field("topic", decode.string)
+    use payload <- decode.field("payload", decode_payload)
+    use retain <- decode.field("retain", decode.bool)
+    decode.success(packet.MessageData(topic:, payload:, retain:))
+  }
+
   let core_decoder = {
     use packet_id <- decode.field("packet_id", decode.int)
+    use unacked_qos1 <- decode.field(
+      "unacked_qos1",
+      decode.dict(decode_id_key, decode_message),
+    )
 
     decode.success(Session(
       clean_session: False,
       packet_id:,
-      unacked_qos1: dict.new(),
+      unacked_qos1:,
       unreceived_qos2: dict.new(),
       unreleased_qos2: set.new(),
       incomplete_qos2: set.new(),
@@ -79,9 +110,20 @@ pub fn from_json(state: String) -> Result(Session, json.DecodeError) {
 }
 
 pub fn to_json(session: Session) -> String {
+  let encode_msg = fn(msg: packet.MessageData) {
+    json.object([
+      #("topic", json.string(msg.topic)),
+      #("payload", json.string(bit_array.base64_encode(msg.payload, True))),
+      #("retain", json.bool(msg.retain)),
+    ])
+  }
+
   let data = case session {
-    Session(False, packet_id, _, _, _, _) ->
-      Some([#("packet_id", json.int(packet_id))])
+    Session(False, packet_id, unacked_qos1, _, _, _) ->
+      Some([
+        #("packet_id", json.int(packet_id)),
+        #("unacked_qos1", json.dict(unacked_qos1, int.to_string, encode_msg)),
+      ])
     _ -> None
   }
 

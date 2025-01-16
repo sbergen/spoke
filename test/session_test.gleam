@@ -1,4 +1,5 @@
 import gleeunit/should
+import spoke/internal/packet
 import spoke/internal/session.{type Session}
 
 pub fn ephemeral_session_serialize_test() {
@@ -16,6 +17,11 @@ pub fn invalid_version_fails_deserialization_test() {
 pub fn non_ephemeral_session_persists_state_test() {
   let session = session.new(False)
   let #(session, _) = session.reserve_packet_id(session)
+  let #(session, _) =
+    session.start_qos1_publish(
+      session,
+      packet.MessageData("topic", <<"payload">>, False),
+    )
 
   session
   |> session.to_json

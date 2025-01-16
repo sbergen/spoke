@@ -1,6 +1,7 @@
 //// Data types shared between incoming and outgoing packets
 //// and/or server and client packets
 
+import gleam/dynamic/decode
 import gleam/option.{type Option}
 
 pub type QoS {
