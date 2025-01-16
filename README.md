@@ -1,6 +1,6 @@
 # spoke
 
-Spoke is a MQTT client package very early in development,
+Spoke is a MQTT 3.1.1 client package very early in development,
 written in Gleam.
 
 You should probably not yet use it for anything important,
@@ -69,4 +69,3 @@ Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ### General improvements planned
 - Better documentation of public parts of code
 - Move TCP channel to separate package
-- Automated integration tests against actual server
