@@ -488,7 +488,7 @@ fn handle_connect(
   // the Client and Server MUST discard any previous Session and start a new one.
   // This Session lasts as long as the Network Connection.
   // State data associated with this Session MUST NOT be reused in any subsequent Session.
-  let session = case clean_session || session.is_volatile(state.session) {
+  let session = case clean_session || session.is_ephemeral(state.session) {
     True -> session.new(clean_session)
     False -> state.session
   }

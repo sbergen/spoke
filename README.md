@@ -67,3 +67,4 @@ Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ### General improvements planned
 - Better documentation of public parts of code
 - Move TCP channel to separate package
+- Allow supervising the actor?

@@ -8,10 +8,15 @@
 //// Also, to simplify things, we keep the packet id also.
 
 import gleam/dict.{type Dict}
+import gleam/dynamic/decode
+import gleam/json
 import gleam/list
+import gleam/option.{None, Some}
 import gleam/set.{type Set}
 import spoke/internal/packet
 import spoke/internal/packet/client/outgoing
+
+const json_version = 1
 
 pub opaque type Session {
   Session(
@@ -40,7 +45,54 @@ pub fn new(clean_session: Bool) -> Session {
   )
 }
 
-pub fn is_volatile(session: Session) -> Bool {
+pub fn from_json(state: String) -> Result(Session, json.DecodeError) {
+  let core_decoder = {
+    use packet_id <- decode.field("packet_id", decode.int)
+
+    decode.success(Session(
+      clean_session: False,
+      packet_id:,
+      unacked_qos1: dict.new(),
+      unreceived_qos2: dict.new(),
+      unreleased_qos2: set.new(),
+      incomplete_qos2: set.new(),
+    ))
+  }
+
+  let decoder =
+    {
+      use version <- decode.field("version", decode.int)
+
+      case version {
+        1 -> decode.success(version)
+        _ -> decode.failure(version, "known version")
+      }
+    }
+    |> decode.then(fn(_version) {
+      {
+        use session <- decode.field("data", decode.optional(core_decoder))
+        decode.success(option.unwrap(session, new(True)))
+      }
+    })
+
+  json.parse(state, decoder)
+}
+
+pub fn to_json(session: Session) -> String {
+  let data = case session {
+    Session(False, packet_id, _, _, _, _) ->
+      Some([#("packet_id", json.int(packet_id))])
+    _ -> None
+  }
+
+  json.object([
+    #("version", json.int(json_version)),
+    #("data", json.nullable(data, json.object)),
+  ])
+  |> json.to_string
+}
+
+pub fn is_ephemeral(session: Session) -> Bool {
   session.clean_session
 }
 

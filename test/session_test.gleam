@@ -1,6 +1,28 @@
 import gleeunit/should
 import spoke/internal/session.{type Session}
 
+pub fn ephemeral_session_serialize_test() {
+  session.new(True)
+  |> session.to_json
+  |> session.from_json
+  |> should.equal(Ok(session.new(True)))
+}
+
+pub fn invalid_version_fails_deserialization_test() {
+  session.from_json("{ \"version\": 42 }")
+  |> should.be_error
+}
+
+pub fn non_ephemeral_session_persists_state_test() {
+  let session = session.new(False)
+  let #(session, _) = session.reserve_packet_id(session)
+
+  session
+  |> session.to_json
+  |> session.from_json
+  |> should.equal(Ok(session))
+}
+
 pub fn packet_id_increment_test() {
   let session = session.new(True)
 
