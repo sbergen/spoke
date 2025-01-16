@@ -21,6 +21,7 @@ pub fn main() -> Int {
     |> run_test("Receive after reconnect, QoS 2", fn() {
       receive_after_reconnect(spoke.ExactlyOnce)
     })
+    |> run_test("Will is published when client dies", will_disconnect)
 
   io.println("--------------------------")
   case failures {
@@ -104,6 +105,39 @@ fn receive_after_reconnect(qos: spoke.QoS) -> Nil {
     as "QoS > 0 message should be received when reconnecting without cleaning session"
 
   disconnect_and_wait(receiver_client)
+}
+
+fn will_disconnect() -> Nil {
+  let topic = "will_topic"
+
+  let client =
+    spoke.default_tcp_options("localhost")
+    |> spoke.connect_with_id("will_receiver")
+    |> spoke.start
+  connect_and_wait(client, True)
+  let assert Ok(_) =
+    spoke.subscribe(client, [spoke.SubscribeRequest(topic, spoke.AtMostOnce)])
+
+  process.start(linked: False, running: fn() {
+    let client =
+      spoke.default_tcp_options("localhost")
+      |> spoke.connect_with_id("will_sender")
+      |> spoke.start
+    let will =
+      spoke.PublishData(topic, <<"will message">>, spoke.AtLeastOnce, False)
+    spoke.connect_with_will(client, True, will)
+
+    // Subscribe with an invalid topic to get rejected
+    let _ =
+      spoke.subscribe(client, [spoke.SubscribeRequest("/#/", spoke.AtLeastOnce)])
+    process.sleep(100)
+  })
+
+  let assert Ok(spoke.ReceivedMessage(_, <<"will message">>, False)) =
+    process.receive(spoke.updates(client), 1000)
+    as "Expected to receive will message"
+
+  Nil
 }
 
 fn flush_server_state(client: spoke.Client) -> Nil {
