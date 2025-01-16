@@ -60,7 +60,7 @@ pub fn connect(options: ConnectOptions) -> BytesTree {
     Some(auth) -> {
       let payload =
         payload
-        |> bytes_tree.append(string(auth.user_name))
+        |> bytes_tree.append(string(auth.username))
 
       case auth.password {
         Some(password) -> {

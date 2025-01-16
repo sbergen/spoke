@@ -1,5 +1,6 @@
 import fake_server.{type ConnectedServer}
 import gleam/erlang/process
+import gleam/option.{None}
 import spoke.{AtMostOnce}
 import spoke/internal/packet/server/incoming as server_in
 import spoke/internal/packet/server/outgoing as server_out
@@ -79,6 +80,7 @@ fn set_up_connected() -> #(spoke.Client, ConnectedServer) {
   let client =
     spoke.start_with_ms_keep_alive(
       "ping-client",
+      None,
       keep_alive,
       server_timeout,
       fake_server.default_options(server.port),

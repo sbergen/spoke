@@ -17,7 +17,7 @@ pub type MessageData {
 
 // MQTT does not allow using only a password
 pub type AuthOptions {
-  AuthOptions(user_name: String, password: Option(BitArray))
+  AuthOptions(username: String, password: Option(BitArray))
 }
 
 pub type ConnectOptions {

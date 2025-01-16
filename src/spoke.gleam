@@ -23,7 +23,7 @@ pub type TransportOptions {
 }
 
 pub type AuthDetails {
-  AuthDetails(user_name: String, password: Option(BitArray))
+  AuthDetails(username: String, password: Option(BitArray))
 }
 
 pub type ConnectOptions {
@@ -171,9 +171,13 @@ pub fn server_timeout_ms(
 
 pub fn using_auth(
   options: ConnectOptions,
-  details: AuthDetails,
+  username: String,
+  password: Option(BitArray),
 ) -> ConnectOptions {
-  ConnectOptions(..options, authentication: Some(details))
+  ConnectOptions(
+    ..options,
+    authentication: Some(AuthDetails(username, password)),
+  )
 }
 
 /// Starts a new MQTT client with the given options.
@@ -181,6 +185,7 @@ pub fn using_auth(
 pub fn start(connect_options: ConnectOptions) -> Client {
   start_with_ms_keep_alive(
     connect_options.client_id,
+    connect_options.authentication,
     connect_options.keep_alive_seconds * 1000,
     connect_options.server_timeout_ms,
     connect_options.transport_options,
@@ -288,13 +293,15 @@ fn call_or_disconnect(
 @internal
 pub fn start_with_ms_keep_alive(
   client_id: String,
+  auth: Option(AuthDetails),
   keep_alive_ms: Int,
   server_timeout_ms: Int,
   transport_opts: TransportOptions,
 ) -> Client {
   let updates = process.new_subject()
   let connect = fn() { create_channel(transport_opts) }
-  let config = Config(client_id, keep_alive_ms, server_timeout_ms, connect)
+  let config =
+    Config(client_id, auth, keep_alive_ms, server_timeout_ms, connect)
   let assert Ok(client) =
     actor.start_spec(actor.Spec(fn() { init(config, updates) }, 100, run_client))
   Client(client, updates, config)
@@ -310,6 +317,7 @@ fn create_channel(options: TransportOptions) -> ChannelResult(ByteChannel) {
 type Config {
   Config(
     client_id: String,
+    auth: Option(AuthDetails),
     keep_alive: Int,
     server_timeout: Int,
     connect: fn() -> ChannelResult(ByteChannel),
@@ -452,6 +460,11 @@ fn handle_connect(
     return: actor.continue(state),
   )
 
+  let auth =
+    option.map(state.config.auth, fn(auth) {
+      packet.AuthOptions(auth.username, auth.password)
+    })
+
   let will =
     option.map(will, fn(will) {
       let data = packet.MessageData(will.topic, will.payload, will.retain)
@@ -466,6 +479,7 @@ fn handle_connect(
       clean_session,
       config.keep_alive,
       config.server_timeout,
+      auth,
       will,
     )
 

@@ -140,6 +140,28 @@ pub fn connect_with_will_test() {
   spoke.disconnect(client)
 }
 
+pub fn connect_with_auth_test() {
+  let server = fake_server.start_server()
+  let client =
+    fake_server.default_options(server.port)
+    |> spoke.connect_with_id(default_client_id)
+    |> spoke.using_auth("user", Some(<<"Hunter2">>))
+    |> spoke.start
+
+  spoke.connect(client, True)
+
+  let server = fake_server.expect_connection_established(server)
+  fake_server.expect_packet_matching(server, fn(packet) {
+    let assert server_in.Connect(connect_data) = packet
+    case connect_data.auth {
+      Some(packet.AuthOptions("user", Some(<<"Hunter2">>))) -> True
+      _ -> False
+    }
+  })
+
+  spoke.disconnect(client)
+}
+
 fn connect_with_error(
   error: packet.ConnectError,
   client_id: String,

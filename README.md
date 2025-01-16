@@ -58,7 +58,6 @@ Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ## Development status
 
 ### Missing MQTT 3.1.1 features
-- Auth
 - Persistent sessions across restarts
 
 ### Transport channels

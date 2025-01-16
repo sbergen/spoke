@@ -1,6 +1,7 @@
 import gleam/bit_array
 import gleam/bytes_tree.{type BytesTree}
 import gleam/erlang/process
+import gleam/option.{None}
 import gleam/string
 import gleeunit/should
 import glisten/socket.{type ListenSocket, type Socket}
@@ -38,6 +39,7 @@ pub fn set_up_connected_client_with_timeout(
   let client =
     spoke.start_with_ms_keep_alive(
       "ping-client",
+      None,
       1000,
       timeout,
       default_options(server.port),

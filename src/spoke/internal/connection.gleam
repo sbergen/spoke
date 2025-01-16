@@ -40,7 +40,6 @@ pub type Update {
   ReceivedPacket(incoming.Packet)
 }
 
-// TODO: Add auth, will, etc
 /// Starts the connection.
 /// The connection will be alive until there is a channel error,
 /// protocol violation, or explicitly disconnected.
@@ -51,6 +50,7 @@ pub fn connect(
   clean_session: Bool,
   keep_alive_ms: Int,
   server_timeout_ms: Int,
+  auth: Option(packet.AuthOptions),
   will: Option(#(packet.MessageData, packet.QoS)),
 ) -> Result(Connection, String) {
   // Start linked, as this *really* shouldn't fail
@@ -60,7 +60,7 @@ pub fn connect(
       let messages = process.new_subject()
       let connect = process.new_subject()
       process.send(ack_subject, #(messages, connect))
-      establish_channel(messages, connect, clean_session, will)
+      establish_channel(messages, connect, clean_session, auth, will)
     })
 
   // Start monitoring and unlink
@@ -160,6 +160,7 @@ fn establish_channel(
   mailbox: Subject(Message),
   connect: Subject(Config),
   clean_session: Bool,
+  auth: Option(packet.AuthOptions),
   will: Option(#(packet.MessageData, packet.QoS)),
 ) -> Nil {
   // If we can't receive in time, the parent is very stuck, so dying is fine
@@ -187,13 +188,12 @@ fn establish_channel(
       connection_state,
     )
 
-  // TODO auth, will
   let connect_options =
     packet.ConnectOptions(
       clean_session:,
       client_id: config.client_id,
       keep_alive_seconds: config.keep_alive_ms / 1000,
-      auth: None,
+      auth:,
       will:,
     )
 

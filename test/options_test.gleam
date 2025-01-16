@@ -19,7 +19,7 @@ pub fn connect_options_test() {
   ) =
     spoke.default_tcp_options("")
     |> spoke.connect_with_id("client-id")
-    |> spoke.using_auth(spoke.AuthDetails("user", Some(<<"Hunter2">>)))
+    |> spoke.using_auth("user", Some(<<"Hunter2">>))
     |> spoke.keep_alive_seconds(42)
     |> spoke.server_timeout_ms(420)
     as "Connect option modifiers should be properly applied"
