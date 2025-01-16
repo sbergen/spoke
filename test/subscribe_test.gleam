@@ -9,12 +9,9 @@ import spoke/internal/packet/server/outgoing as server_out
 
 pub fn subscribe_when_not_connected_returns_error_test() {
   let client =
-    spoke.start(spoke.ConnectOptions(
-      fake_server.default_options(1883),
-      "client-id",
-      10,
-      100,
-    ))
+    fake_server.default_options(1883)
+    |> spoke.connect_with_id("client-id")
+    |> spoke.start
 
   let assert Error(spoke.NotConnected) =
     spoke.subscribe(client, [spoke.SubscribeRequest("topic0", AtMostOnce)])

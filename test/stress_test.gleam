@@ -16,16 +16,12 @@ const tasks = 100
 pub fn main() {
   let client_id = "spoke"
 
-  let connect_opts =
-    spoke.ConnectOptions(
-      spoke.TcpOptions("localhost", 1883, connect_timeout: 100),
-      client_id,
-      keep_alive_seconds: 1,
-      server_timeout_ms: 100,
-    )
-
   io.println("Connecting & subscribing..")
-  let client = spoke.start(connect_opts)
+  let client =
+    spoke.default_tcp_options("localhost")
+    |> spoke.connect_with_id(client_id)
+    |> spoke.start
+
   spoke.connect(client, True)
 
   let updates = spoke.updates(client)

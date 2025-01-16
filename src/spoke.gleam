@@ -22,10 +22,16 @@ pub type TransportOptions {
   TcpOptions(host: String, port: Int, connect_timeout: Int)
 }
 
+pub type AuthDetails {
+  AuthDetails(user_name: String, password: Option(BitArray))
+}
+
 pub type ConnectOptions {
   ConnectOptions(
     transport_options: TransportOptions,
     client_id: String,
+    /// Optional username and (additionally optional) password
+    authentication: Option(AuthDetails),
     /// Keep-alive interval in seconds (MQTT spec doesn't allow more granular control)
     keep_alive_seconds: Int,
     /// "Reasonable amount of time" for the server to respond (including network latency),
@@ -141,6 +147,7 @@ pub fn connect_with_id(
   ConnectOptions(
     transport_options:,
     client_id:,
+    authentication: None,
     keep_alive_seconds: 15,
     server_timeout_ms: 5000,
   )
@@ -160,6 +167,13 @@ pub fn server_timeout_ms(
   server_timeout_ms: Int,
 ) -> ConnectOptions {
   ConnectOptions(..options, server_timeout_ms:)
+}
+
+pub fn using_auth(
+  options: ConnectOptions,
+  details: AuthDetails,
+) -> ConnectOptions {
+  ConnectOptions(..options, authentication: Some(details))
 }
 
 /// Starts a new MQTT client with the given options.

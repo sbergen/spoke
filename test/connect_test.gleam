@@ -99,14 +99,12 @@ pub fn channel_error_after_establish_fails_connect_test() {
 
 pub fn timed_out_connect_test() {
   let server = fake_server.start_server()
-  let connect_opts =
-    spoke.ConnectOptions(
-      fake_server.default_options(server.port),
-      default_client_id,
-      10,
-      5,
-    )
-  let client = spoke.start(connect_opts)
+  let client =
+    fake_server.default_options(server.port)
+    |> spoke.connect_with_id(default_client_id)
+    |> spoke.server_timeout_ms(5)
+    |> spoke.start
+
   spoke.connect(client, False)
 
   fake_server.expect_connection_established(server)
@@ -159,25 +157,17 @@ fn start_client_and_server(
 ) -> #(spoke.Client, ListeningServer) {
   let server = fake_server.start_server()
 
-  let connect_opts =
-    spoke.ConnectOptions(
-      fake_server.default_options(server.port),
-      client_id,
-      keep_alive,
-      100,
-    )
-  let client = spoke.start(connect_opts)
+  let client =
+    fake_server.default_options(server.port)
+    |> spoke.connect_with_id(client_id)
+    |> spoke.keep_alive_seconds(keep_alive)
+    |> spoke.start
 
   #(client, server)
 }
 
 fn start_client_with_defaults(port: Int) -> spoke.Client {
-  let connect_opts =
-    spoke.ConnectOptions(
-      fake_server.default_options(port),
-      default_client_id,
-      10,
-      100,
-    )
-  spoke.start(connect_opts)
+  fake_server.default_options(port)
+  |> spoke.connect_with_id(default_client_id)
+  |> spoke.start
 }
