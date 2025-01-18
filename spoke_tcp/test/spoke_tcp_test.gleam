@@ -1,8 +1,13 @@
+import echo_server
 import gleam/bytes_tree
 import gleam/erlang/process.{type Selector}
+import gleeunit
 import gleeunit/should
 import spoke/tcp
-import transport/echo_server
+
+pub fn main() {
+  gleeunit.main()
+}
 
 pub fn send_receive_and_shutdown_test() {
   let shutdowns = process.new_subject()

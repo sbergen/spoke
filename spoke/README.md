@@ -7,6 +7,12 @@ You should probably not yet use it for anything important,
 but feel free to try it out, and give feedback on anything!
 
 Example usage:
+
+```sh
+gleam add spoke
+gleam add spoke_tcp
+```
+
 ```gleam
 import gleam/erlang/process
 import gleam/int
@@ -55,6 +61,9 @@ assuming `test.mosquitto.org` is up (it's not rare for it to be down):
 ```
 Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ```
+
+Instead of using `spoke_tcp`, you can also bring your own transport channel.
+See `TransportChannelConnector` for the required functions to make this work.
 
 ## Development status
 

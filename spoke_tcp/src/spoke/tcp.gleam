@@ -4,6 +4,8 @@ import gleam/result
 import gleam/string
 import mug
 
+/// Send, receive, and shutdown functions,
+/// as defined in the main spoke package.
 pub type TransportChannel =
   #(
     fn(BytesTree) -> Result(Nil, String),
