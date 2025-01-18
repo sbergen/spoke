@@ -24,10 +24,18 @@ pub opaque type Session {
   Session(
     clean_session: Bool,
     packet_id: Int,
+    /// Published QoS 2 messages waiting for PubRec,
+    /// used for re-transmission of Publish.
     unacked_qos1: Dict(Int, packet.MessageData),
+    /// Published QoS 2 messages waiting for PubRec,
+    /// used for re-transmission of Publish.
     unreceived_qos2: Dict(Int, packet.MessageData),
+    /// Published QoS 2 message ids waiting for PubComp,
+    /// used for re-transmission of PubRel.
     unreleased_qos2: Set(Int),
-    incomplete_qos2: Set(Int),
+    /// Received QoS 2 message ids waiting for PubRel from publisher,
+    /// used for de-duplication.
+    incomplete_qos2_in: Set(Int),
   )
 }
 
@@ -43,7 +51,7 @@ pub fn new(clean_session: Bool) -> Session {
     unacked_qos1: dict.new(),
     unreceived_qos2: dict.new(),
     unreleased_qos2: set.new(),
-    incomplete_qos2: set.new(),
+    incomplete_qos2_in: set.new(),
   )
 }
 
@@ -86,7 +94,7 @@ pub fn from_json(state: String) -> Result(Session, json.DecodeError) {
       unacked_qos1:,
       unreceived_qos2: dict.new(),
       unreleased_qos2: set.new(),
-      incomplete_qos2: set.new(),
+      incomplete_qos2_in: set.new(),
     ))
   }
 
@@ -192,14 +200,15 @@ pub fn handle_pubcomp(session: Session, id: Int) -> Session {
   Session(..session, unreleased_qos2:)
 }
 
-/// Marks the packet id as unreleased.
-/// The second element in the return value indicates whether we should publish the message or not.
+/// Marks a received packet id as unreleased.
+/// The second element in the return value indicates whether we should
+/// publish the message to the client or not.
 pub fn start_qos2_receive(session: Session, packet_id: Int) -> #(Session, Bool) {
-  case set.contains(session.incomplete_qos2, packet_id) {
+  case set.contains(session.incomplete_qos2_in, packet_id) {
     True -> #(session, False)
     False -> {
-      let incomplete_qos2 = set.insert(session.incomplete_qos2, packet_id)
-      #(Session(..session, incomplete_qos2:), True)
+      let incomplete_qos2_in = set.insert(session.incomplete_qos2_in, packet_id)
+      #(Session(..session, incomplete_qos2_in:), True)
     }
   }
 }
@@ -215,8 +224,8 @@ pub fn handle_puback(session: Session, packet_id: Int) -> PubAckResult {
 }
 
 pub fn handle_pubrel(session: Session, packet_id: Int) -> Session {
-  let incomplete_qos2 = set.delete(session.incomplete_qos2, packet_id)
-  Session(..session, incomplete_qos2:)
+  let incomplete_qos2_in = set.delete(session.incomplete_qos2_in, packet_id)
+  Session(..session, incomplete_qos2_in:)
 }
 
 pub fn packets_to_send_after_connect(session: Session) -> List(outgoing.Packet) {
