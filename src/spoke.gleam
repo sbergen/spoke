@@ -12,7 +12,7 @@ import spoke/internal/packet.{type SubscribeResult}
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
 import spoke/internal/session.{type Session}
-import spoke/internal/transport.{type ByteChannel, type ChannelResult}
+import spoke/internal/transport.{type ByteChannel}
 import spoke/internal/transport/tcp
 
 pub opaque type Client {
@@ -336,7 +336,7 @@ pub fn start_session_with_ms_keep_alive(
   Client(client, updates, config)
 }
 
-fn create_channel(options: TransportOptions) -> ChannelResult(ByteChannel) {
+fn create_channel(options: TransportOptions) -> Result(ByteChannel, String) {
   case options {
     TcpOptions(host, port, connect_timeout) ->
       tcp.connect(host, port, connect_timeout)
@@ -349,7 +349,7 @@ type Config {
     auth: Option(AuthDetails),
     keep_alive: Int,
     server_timeout: Int,
-    connect: fn() -> ChannelResult(ByteChannel),
+    connect: fn() -> Result(ByteChannel, String),
   )
 }
 

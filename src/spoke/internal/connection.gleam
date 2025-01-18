@@ -23,7 +23,7 @@ import gleam/string
 import spoke/internal/packet
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
-import spoke/internal/transport.{type ByteChannel, type ChannelResult}
+import spoke/internal/transport.{type ByteChannel}
 import spoke/internal/transport/channel.{type EncodedChannel}
 
 pub opaque type Connection {
@@ -45,7 +45,7 @@ pub type Update {
 /// protocol violation, or explicitly disconnected.
 /// The ConnAck packet will be sent as an update if/when connected.
 pub fn connect(
-  create_channel: fn() -> ChannelResult(transport.ByteChannel),
+  create_channel: fn() -> Result(transport.ByteChannel, String),
   client_id: String,
   clean_session: Bool,
   keep_alive_ms: Int,
@@ -117,7 +117,7 @@ pub fn shutdown(connection: Connection) {
 
 type Config {
   Config(
-    create_channel: fn() -> ChannelResult(ByteChannel),
+    create_channel: fn() -> Result(ByteChannel, String),
     updates: Subject(Update),
     client_id: String,
     keep_alive_ms: Int,
@@ -127,7 +127,7 @@ type Config {
 
 type Message {
   Send(outgoing.Packet)
-  Received(#(BitArray, ChannelResult(List(incoming.Packet))))
+  Received(#(BitArray, Result(List(incoming.Packet), String)))
   ProcessReceived(incoming.Packet)
   SendPing
   ShutDown(Option(String))
@@ -167,7 +167,7 @@ fn establish_channel(
   let assert Ok(config) = process.receive(connect, 1000)
 
   use channel <- ok_or_exit(config.create_channel(), fn(e) {
-    "Failed to establish connection to server: " <> string.inspect(e)
+    "Failed to establish connection to server: " <> e
   })
   let channel = channel.as_encoded(channel)
 
@@ -199,7 +199,7 @@ fn establish_channel(
 
   use state <- ok_or_exit(
     send_packet(state, outgoing.Connect(connect_options)),
-    fn(e) { "Error sending connect packet to server: " <> string.inspect(e) },
+    fn(e) { "Error sending connect packet to server: " <> e },
   )
 
   run(state)
@@ -244,10 +244,10 @@ fn send_from_session(state: State, packet: outgoing.Packet) -> State {
 fn handle_receive(
   state: State,
   new_conn_state: BitArray,
-  packets: ChannelResult(List(incoming.Packet)),
+  packets: Result(List(incoming.Packet), String),
 ) -> State {
   use packets <- ok_or_exit(packets, fn(e) {
-    "Transport channel error while receiving: " <> string.inspect(e)
+    "Transport channel error while receiving: " <> e
   })
 
   // Schedule the packets to be processed,
@@ -366,9 +366,9 @@ fn send_packet_or_stop(
   if_success: fn(State) -> State,
 ) -> State {
   use state <- ok_or_exit(send_packet(state, packet), fn(e) {
-    "Transport channel error "
-    <> string.inspect(e)
-    <> " while sending packet "
+    "Transport channel error '"
+    <> e
+    <> "' while sending packet "
     <> string.inspect(packet)
   })
 
@@ -385,7 +385,7 @@ fn send_packet_or_stop(
 // it might simplify the Client implementation as it does not have to police the connected state.
 // The Client accepts that any data that it sends before it receives a CONNACK packet from the Server
 // will not be processed if the Server rejects the connection.
-fn send_packet(state: State, packet: outgoing.Packet) -> ChannelResult(State) {
+fn send_packet(state: State, packet: outgoing.Packet) -> Result(State, String) {
   case state.connection_state {
     ConnectingToServer(channel, ..) -> {
       // Don't start ping if connection has not yet finished

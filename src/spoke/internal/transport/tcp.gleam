@@ -3,18 +3,16 @@ import gleam/erlang/process
 import gleam/result
 import gleam/string
 import mug
-import spoke/internal/transport.{
-  type ByteChannel, type ChannelError, type ChannelResult,
-}
+import spoke/internal/transport.{type ByteChannel}
 
 pub fn connect(
   host: String,
   port port: Int,
   connect_timeout connect_timeout: Int,
-) -> ChannelResult(ByteChannel) {
+) -> Result(ByteChannel, String) {
   let options = mug.ConnectionOptions(host, port, connect_timeout)
   use socket <- result.try(
-    mug.connect(options) |> map_mug_error(transport.ConnectFailed),
+    mug.connect(options) |> map_mug_error("Connect error"),
   )
 
   let selector =
@@ -37,22 +35,19 @@ pub fn connect(
   )
 }
 
-fn send(socket: mug.Socket, data: BytesTree) -> ChannelResult(Nil) {
+fn send(socket: mug.Socket, data: BytesTree) -> Result(Nil, String) {
   mug.send_builder(socket, data)
-  |> map_mug_error(transport.TransportError)
+  |> map_mug_error("Send error")
 }
 
-fn map_tcp_message(msg: mug.TcpMessage) -> ChannelResult(BitArray) {
+fn map_tcp_message(msg: mug.TcpMessage) -> Result(BitArray, String) {
   case msg {
     mug.Packet(_, data) -> Ok(data)
-    mug.SocketClosed(_) -> Error(transport.ChannelClosed)
-    mug.TcpError(_, e) -> Error(transport.TransportError(string.inspect(e)))
+    mug.SocketClosed(_) -> Error("Channel closed")
+    mug.TcpError(_, e) -> Error("TCP error: " <> string.inspect(e))
   }
 }
 
-fn map_mug_error(
-  r: Result(a, mug.Error),
-  ctor: fn(String) -> ChannelError,
-) -> ChannelResult(a) {
-  result.map_error(r, fn(e) { ctor(string.inspect(e)) })
+fn map_mug_error(r: Result(a, mug.Error), reason: String) -> Result(a, String) {
+  result.map_error(r, fn(e) { reason <> ": " <> string.inspect(e) })
 }
