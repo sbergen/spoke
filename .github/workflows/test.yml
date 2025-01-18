@@ -8,7 +8,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  test-core:
     runs-on: ubuntu-latest
     
     defaults:
@@ -26,9 +26,27 @@ jobs:
       - uses: erlef/setup-beam@v1
         with:
           otp-version: "27"
-          gleam-version: "1.7.0-rc3"
+          gleam-version: "1.7.0"
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam test
       - run: gleam run -m integration_tests
+      - run: gleam format --check src test
+
+  test-tcp:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: spoke_tcp
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          gleam-version: "1.7.0"
+          rebar3-version: "3"
+      - run: gleam deps download
+      - run: gleam test
       - run: gleam format --check src test

@@ -1,5 +1,10 @@
 # spoke
 
+<!--
+[![Package Version](https://img.shields.io/hexpm/v/spoke)](https://hex.pm/packages/spoke)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/spoke/)
+-->
+
 Spoke is a MQTT 3.1.1 client package written in Gleam for the Erlang runtime.
 
 Example usage:
