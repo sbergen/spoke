@@ -1,10 +1,6 @@
 # spoke
 
-Spoke is a MQTT 3.1.1 client package very early in development,
-written in Gleam.
-
-You should probably not yet use it for anything important,
-but feel free to try it out, and give feedback on anything!
+Spoke is a MQTT 3.1.1 client package written in Gleam for the Erlang runtime.
 
 Example usage:
 
@@ -62,16 +58,21 @@ assuming `test.mosquitto.org` is up (it's not rare for it to be down):
 Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ```
 
+## Design choices
+
+Spoke aspires to be as high-level as possible, without being opinionated.
+This means that the only things you'll need to handle yourself are
+persistent session management and re-connections.
+If you don't care about persistent sessions or overloading the server,
+simply cleaning the session on each connect and
+immediately reconnecting on unexpected disconnects should give you a reliable client.
+
+## Transport channels
+
+The core `spoke` package is transport channel agnostic.
+At the time of writing, `spoke_tcp` is the only implementation of transport channels for spoke.
 Instead of using `spoke_tcp`, you can also bring your own transport channel.
 See `TransportChannelConnector` for the required functions to make this work.
 
-## Development status
-
-### Transport channels
-- [x] TCP
-- [ ] WebSocket
-
-### General improvements planned
-- Better documentation of public parts of code
-- Move TCP channel to separate package
-- Allow supervising the actor?
+If you'd have use for a WebSocket channel,
+please leave a feature request, and I might implement it.
