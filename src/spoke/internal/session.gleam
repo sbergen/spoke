@@ -82,19 +82,22 @@ pub fn from_json(state: String) -> Result(Session, json.DecodeError) {
   }
 
   let decode_message_dict = decode.dict(decode_id_key, decode_message)
+  let decode_id_set = decode.list(decode.int) |> decode.map(set.from_list)
 
   let core_decoder = {
     use packet_id <- decode.field("packet_id", decode.int)
     use unacked_qos1 <- decode.field("unacked_qos1", decode_message_dict)
     use unreceived_qos2 <- decode.field("unreceived_qos2", decode_message_dict)
+    use unreleased_qos2 <- decode.field("unreleased_qos2", decode_id_set)
+    use incomplete_qos2_in <- decode.field("incomplete_qos2_in", decode_id_set)
 
     decode.success(Session(
       clean_session: False,
       packet_id:,
       unacked_qos1:,
       unreceived_qos2:,
-      unreleased_qos2: set.new(),
-      incomplete_qos2_in: set.new(),
+      unreleased_qos2:,
+      incomplete_qos2_in:,
     ))
   }
 
@@ -127,13 +130,23 @@ pub fn to_json(session: Session) -> String {
   }
 
   let encode_message_dict = json.dict(_, int.to_string, encode_message)
+  let encode_id_set = fn(ids) { json.array(set.to_list(ids), json.int) }
 
   let data = case session {
-    Session(False, packet_id, unacked_qos1, unreceived_qos2, _, _) ->
+    Session(
+      False,
+      packet_id,
+      unacked_qos1,
+      unreceived_qos2,
+      unreleased_qos2,
+      incomplete_qos2_in,
+    ) ->
       Some([
         #("packet_id", json.int(packet_id)),
         #("unacked_qos1", encode_message_dict(unacked_qos1)),
         #("unreceived_qos2", encode_message_dict(unreceived_qos2)),
+        #("unreleased_qos2", encode_id_set(unreleased_qos2)),
+        #("incomplete_qos2_in", encode_id_set(incomplete_qos2_in)),
       ])
     _ -> None
   }

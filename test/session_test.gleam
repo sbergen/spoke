@@ -20,7 +20,9 @@ pub fn non_ephemeral_session_persists_state_test() {
   let session = session.new(False)
   let #(session, _) = session.reserve_packet_id(session)
   let #(session, _) = session.start_qos1_publish(session, message_data)
+  let #(session, _) = session.start_qos2_receive(session, 42)
   let #(session, _) = session.start_qos2_publish(session, message_data)
+  let session = session.handle_pubrec(session, 43)
 
   session
   |> session.to_json
