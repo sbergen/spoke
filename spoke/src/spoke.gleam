@@ -30,17 +30,29 @@ pub type TransportChannelConnector =
       String,
     )
 
+/// An opaque handle for the MQTT client.
+/// Can live across multiple sessions and connections,
+/// or resume sessions that were previously disconnected.
+/// Under the hood, the client is an OTP actor.
 pub opaque type Client {
   Client(subject: Subject(Message), updates: Subject(Update), config: Config)
 }
 
+/// Authentication details passed to the server when connecting.
+/// Remember that these are not encrypted,
+/// unless working with an encrypted transport channel.
 pub type AuthDetails {
   AuthDetails(username: String, password: Option(BitArray))
 }
 
+/// The set of options used to establish a connection to the server.
+/// Includes the set of data that should generally not change across
+/// multiple connect calls (if they are needed).
 pub type ConnectOptions {
   ConnectOptions(
+    /// Function to establish a transport channel.
     connector: TransportChannelConnector,
+    /// The MQTT client ID used when connecting to the server.
     client_id: String,
     /// Optional username and (additionally optional) password
     authentication: Option(AuthDetails),
@@ -52,11 +64,15 @@ pub type ConnectOptions {
   )
 }
 
+/// Represents a received message or change in the client.
 pub type Update {
+  /// A published message to a topic this client was subscribed to was received.
   ReceivedMessage(topic: String, payload: BitArray, retained: Bool)
+  /// The connection state of this client changed.
   ConnectionStateChanged(ConnectionState)
 }
 
+/// Represents the state of the connection to the server.
 pub type ConnectionState {
   /// Connecting to the server failed before we got a response
   /// to the connect packet.
@@ -76,20 +92,29 @@ pub type ConnectionState {
   DisconnectedUnexpectedly(reason: String)
 }
 
+/// A convenience record to hold all the data used when publishing messages.
 pub type PublishData {
   PublishData(topic: String, payload: BitArray, qos: QoS, retain: Bool)
 }
 
+/// Unified error type for operations that are completed in a blocking way.
 pub type OperationError {
+  /// The client was not connected when it was required.
   NotConnected
+  /// The operation did not complete in time.
   OperationTimedOut
+  /// We received unexpected data from the server, and will disconnect.
   ProtocolViolation
+  /// The client actor was killed while the operation was in progress.
   KilledDuringOperation
 }
 
+/// The result of a subscribe operation
 pub type Subscription {
+  /// The subscribe succeeded with the specified QoS level.
   SuccessfulSubscription(topic_filter: String, qos: QoS)
-  FailedSubscription
+  /// The server returned a failure for requested subscription.
+  FailedSubscription(topic_filter: String)
 }
 
 /// Quality of Service levels, as specified in the MQTT specification
@@ -123,6 +148,7 @@ pub type ConnectError {
   NotAuthorized
 }
 
+/// Utility record for the data required to request a subscription.
 pub type SubscribeRequest {
   SubscribeRequest(filter: String, qos: QoS)
 }
@@ -158,6 +184,7 @@ pub fn server_timeout_ms(
   ConnectOptions(..options, server_timeout_ms:)
 }
 
+/// Builder function for specifying the authentication details to be used when connecting.
 pub fn using_auth(
   options: ConnectOptions,
   username: String,
@@ -246,6 +273,9 @@ pub fn publish(client: Client, data: PublishData) -> Nil {
   process.send(client.subject, Publish(data))
 }
 
+/// Subscribes to the given topics.
+/// Will block until we get a response from the server,
+/// returning the result of the operation.
 pub fn subscribe(
   client: Client,
   topics: List(SubscribeRequest),
@@ -253,6 +283,9 @@ pub fn subscribe(
   call_or_disconnect(client, Subscribe(topics, _))
 }
 
+/// Unsubscribes from the given topics.
+/// Will block until we get a response from the server,
+/// returning the result of the operation.
 pub fn unsubscribe(
   client: Client,
   topics: List(String),
@@ -301,7 +334,7 @@ fn call_or_disconnect(
   |> result.flatten
 }
 
-// allows specifying less than 1 second keep-alive for testing
+/// Allows specifying less than 1 second keep-alive for testing.
 @internal
 pub fn start_session_with_ms_keep_alive(
   session: Session,
@@ -621,7 +654,7 @@ fn handle_suback(
     |> result.map(fn(qos) {
       SuccessfulSubscription(topic.filter, from_packet_qos(qos))
     })
-    |> result.unwrap(FailedSubscription)
+    |> result.unwrap(FailedSubscription(topic.filter))
   }
 
   process.send(pending_sub.reply_to, Ok(results))

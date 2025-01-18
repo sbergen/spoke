@@ -64,7 +64,7 @@ pub fn subscribe_failed_test() {
   results
   |> should.equal([
     spoke.SuccessfulSubscription("topic0", AtMostOnce),
-    spoke.FailedSubscription,
+    spoke.FailedSubscription("topic1"),
   ])
 
   fake_server.disconnect(client, socket)

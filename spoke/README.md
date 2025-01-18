@@ -5,7 +5,7 @@
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/spoke/)
 -->
 
-Spoke is a MQTT 3.1.1 client package written in Gleam for the Erlang runtime.
+Spoke is a MQTT 3.1.1 client written in Gleam for the Erlang runtime.
 
 Example usage:
 
