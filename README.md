@@ -13,13 +13,14 @@ import gleam/int
 import gleam/io
 import gleam/string
 import spoke
+import spoke/tcp
 
 pub fn main() {
   let client_id = "spoke" <> string.inspect(int.random(999_999_999))
   let topic = "spoke-test"
 
   let client =
-    spoke.default_tcp_options("test.mosquitto.org")
+    tcp.connector_with_defaults("test.mosquitto.org")
     |> spoke.connect_with_id(client_id)
     |> spoke.start_session
 

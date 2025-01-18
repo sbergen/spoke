@@ -8,6 +8,7 @@ import gleam/result
 import gleam/string
 import gleeunit/should
 import spoke
+import spoke/tcp
 
 pub fn main() -> Int {
   io.println("Running integration tests:")
@@ -34,7 +35,7 @@ pub fn main() -> Int {
 
 fn subscribe_and_publish_qos0() -> Nil {
   let client =
-    spoke.default_tcp_options("localhost")
+    tcp.connector_with_defaults("localhost")
     |> spoke.connect_with_id("subscribe_and_publish")
     |> spoke.start_session
   let updates = spoke.updates(client)
@@ -69,7 +70,7 @@ fn receive_after_reconnect(qos: spoke.QoS) -> Nil {
   let topic = "qos_topic"
 
   let receiver_client =
-    spoke.default_tcp_options("localhost")
+    tcp.connector_with_defaults("localhost")
     |> spoke.connect_with_id("qos_receiver")
     |> spoke.start_session
 
@@ -85,7 +86,7 @@ fn receive_after_reconnect(qos: spoke.QoS) -> Nil {
   // Send the message
 
   let sender_client =
-    spoke.default_tcp_options("localhost")
+    tcp.connector_with_defaults("localhost")
     |> spoke.connect_with_id("qos_sender")
     |> spoke.start_session
   connect_and_wait(sender_client, True)
@@ -111,7 +112,7 @@ fn will_disconnect() -> Nil {
   let topic = "will_topic"
 
   let client =
-    spoke.default_tcp_options("localhost")
+    tcp.connector_with_defaults("localhost")
     |> spoke.connect_with_id("will_receiver")
     |> spoke.start_session
   connect_and_wait(client, True)
@@ -120,7 +121,7 @@ fn will_disconnect() -> Nil {
 
   process.start(linked: False, running: fn() {
     let client =
-      spoke.default_tcp_options("localhost")
+      tcp.connector_with_defaults("localhost")
       |> spoke.connect_with_id("will_sender")
       |> spoke.start_session
     let will =

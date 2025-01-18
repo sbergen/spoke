@@ -9,7 +9,7 @@ import spoke/internal/packet/server/outgoing as server_out
 
 pub fn subscribe_when_not_connected_returns_error_test() {
   let client =
-    fake_server.default_options(1883)
+    fake_server.default_connector(1883)
     |> spoke.connect_with_id("client-id")
     |> spoke.start_session
 

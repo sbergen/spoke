@@ -1,28 +1,27 @@
 import gleam/bytes_tree
-import gleam/erlang/process
+import gleam/erlang/process.{type Selector}
 import gleeunit/should
-import spoke/internal/transport.{type ByteChannel}
-import spoke/internal/transport/tcp
+import spoke/tcp
 import transport/echo_server
 
 pub fn send_receive_and_shutdown_test() {
   let shutdowns = process.new_subject()
   let port = echo_server.start(fn() { process.send(shutdowns, Nil) })
-  let assert Ok(channel) =
-    tcp.connect("localhost", port: port, connect_timeout: 100)
+  let assert Ok(#(send, receive, shutdown)) =
+    tcp.connector("localhost", port: port, connect_timeout: 100)()
 
-  let assert Ok(_) = channel.send(bytes_tree.from_string("let's go!"))
-  receive_next(channel) |> should.equal(<<"let's go!">>)
+  let assert Ok(_) = send(bytes_tree.from_string("let's go!"))
+  receive_next(receive()) |> should.equal(<<"let's go!">>)
 
-  let assert Ok(_) = channel.send(bytes_tree.from_string("and again!"))
-  receive_next(channel) |> should.equal(<<"and again!">>)
+  let assert Ok(_) = send(bytes_tree.from_string("and again!"))
+  receive_next(receive()) |> should.equal(<<"and again!">>)
 
   let assert Error(_) = process.receive(shutdowns, 0)
-  channel.shutdown()
+  shutdown()
   let assert Ok(_) = process.receive(shutdowns, 10)
 }
 
-fn receive_next(channel: ByteChannel) -> BitArray {
-  let assert Ok(Ok(bytes)) = process.select(channel.selecting_next(), 100)
+fn receive_next(next: Selector(Result(BitArray, String))) -> BitArray {
+  let assert Ok(Ok(bytes)) = process.select(next, 100)
   bytes
 }

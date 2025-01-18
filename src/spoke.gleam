@@ -1,6 +1,7 @@
 import gleam/bool
+import gleam/bytes_tree.{type BytesTree}
 import gleam/dict.{type Dict}
-import gleam/erlang/process.{type Subject}
+import gleam/erlang/process.{type Selector, type Subject}
 import gleam/function
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -13,14 +14,24 @@ import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
 import spoke/internal/session.{type Session}
 import spoke/internal/transport.{type ByteChannel}
-import spoke/internal/transport/tcp
+
+/// A function that connects a transport channel and
+/// returns the send, receive, and shutdown functions or an error.
+/// NOTE: This only uses standard library and Erlang types,
+/// so that implementors do not need to depend on the Spoke package.
+pub type TransportChannelConnector =
+  fn() ->
+    Result(
+      #(
+        fn(BytesTree) -> Result(Nil, String),
+        fn() -> Selector(Result(BitArray, String)),
+        fn() -> Nil,
+      ),
+      String,
+    )
 
 pub opaque type Client {
   Client(subject: Subject(Message), updates: Subject(Update), config: Config)
-}
-
-pub type TransportOptions {
-  TcpOptions(host: String, port: Int, connect_timeout: Int)
 }
 
 pub type AuthDetails {
@@ -29,7 +40,7 @@ pub type AuthDetails {
 
 pub type ConnectOptions {
   ConnectOptions(
-    transport_options: TransportOptions,
+    connector: TransportChannelConnector,
     client_id: String,
     /// Optional username and (additionally optional) password
     authentication: Option(AuthDetails),
@@ -116,37 +127,14 @@ pub type SubscribeRequest {
   SubscribeRequest(filter: String, qos: QoS)
 }
 
-/// Constructs the default (unencrypted) TCP options,
-/// connecting to port 1883 on the given host.
-pub fn default_tcp_options(host: String) -> TransportOptions {
-  TcpOptions(host:, port: 1883, connect_timeout: 5000)
-}
-
-pub fn tcp_port(options: TransportOptions, port: Int) -> TransportOptions {
-  // TODO: This is planned to be in a separate package soon anyway
-  case options {
-    TcpOptions(..) as options -> TcpOptions(..options, port:)
-  }
-}
-
-pub fn tcp_connect_timeout(
-  options: TransportOptions,
-  connect_timeout: Int,
-) -> TransportOptions {
-  // TODO: This is planned to be in a separate package soon anyway
-  case options {
-    TcpOptions(..) as options -> TcpOptions(..options, connect_timeout:)
-  }
-}
-
 /// Constructs connect options from transport options, the given client id,
 /// and default settings for the rest of the options.
 pub fn connect_with_id(
-  transport_options: TransportOptions,
+  connector: TransportChannelConnector,
   client_id: String,
 ) -> ConnectOptions {
   ConnectOptions(
-    transport_options:,
+    connector:,
     client_id:,
     authentication: None,
     keep_alive_seconds: 15,
@@ -190,7 +178,7 @@ pub fn start_session(connect_options: ConnectOptions) -> Client {
     connect_options.authentication,
     connect_options.keep_alive_seconds * 1000,
     connect_options.server_timeout_ms,
-    connect_options.transport_options,
+    connect_options.connector,
   )
 }
 
@@ -211,7 +199,7 @@ pub fn restore_session(
     connect_options.authentication,
     connect_options.keep_alive_seconds * 1000,
     connect_options.server_timeout_ms,
-    connect_options.transport_options,
+    connect_options.connector,
   ))
 }
 
@@ -321,10 +309,14 @@ pub fn start_session_with_ms_keep_alive(
   auth: Option(AuthDetails),
   keep_alive_ms: Int,
   server_timeout_ms: Int,
-  transport_opts: TransportOptions,
+  connector: TransportChannelConnector,
 ) -> Client {
+  let connect = fn() {
+    use #(send, receive_next, shutdown) <- result.try(connector())
+    Ok(transport.ByteChannel(send, receive_next, shutdown))
+  }
+
   let updates = process.new_subject()
-  let connect = fn() { create_channel(transport_opts) }
   let config =
     Config(client_id, auth, keep_alive_ms, server_timeout_ms, connect)
   let assert Ok(client) =
@@ -334,13 +326,6 @@ pub fn start_session_with_ms_keep_alive(
       run_client,
     ))
   Client(client, updates, config)
-}
-
-fn create_channel(options: TransportOptions) -> Result(ByteChannel, String) {
-  case options {
-    TcpOptions(host, port, connect_timeout) ->
-      tcp.connect(host, port, connect_timeout)
-  }
 }
 
 type Config {

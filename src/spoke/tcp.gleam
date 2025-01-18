@@ -1,15 +1,41 @@
 import gleam/bytes_tree.{type BytesTree}
-import gleam/erlang/process
+import gleam/erlang/process.{type Selector}
 import gleam/result
 import gleam/string
 import mug
-import spoke/internal/transport.{type ByteChannel}
 
-pub fn connect(
-  host: String,
+pub type TransportChannel =
+  #(
+    fn(BytesTree) -> Result(Nil, String),
+    fn() -> Selector(Result(BitArray, String)),
+    fn() -> Nil,
+  )
+
+/// Re-definition of what spoke uses for transport channels
+/// (simplifies package dependencies).
+pub type TransportChannelConnector =
+  fn() -> Result(TransportChannel, String)
+
+/// Constructs an (unencrypted) TCP connector using the defaults of
+/// connecting to port 1883 on the given host.
+pub fn connector_with_defaults(host host: String) -> TransportChannelConnector {
+  connector(host, 1883, 5000)
+}
+
+/// Constructs an (unencrypted) TCP connector.
+pub fn connector(
+  host host: String,
   port port: Int,
   connect_timeout connect_timeout: Int,
-) -> Result(ByteChannel, String) {
+) -> TransportChannelConnector {
+  fn() { connect(host, port, connect_timeout) }
+}
+
+fn connect(
+  host: String,
+  port: Int,
+  connect_timeout: Int,
+) -> Result(TransportChannel, String) {
   let options = mug.ConnectionOptions(host, port, connect_timeout)
   use socket <- result.try(
     mug.connect(options) |> map_mug_error("Connect error"),
@@ -20,13 +46,13 @@ pub fn connect(
     |> mug.selecting_tcp_messages(map_tcp_message)
 
   Ok(
-    transport.ByteChannel(
-      send: send(socket, _),
-      selecting_next: fn() {
+    #(
+      send(socket, _),
+      fn() {
         mug.receive_next_packet_as_message(socket)
         selector
       },
-      shutdown: fn() {
+      fn() {
         // Nothing to do if this fails
         let _ = mug.shutdown(socket)
         Nil

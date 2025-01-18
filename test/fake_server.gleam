@@ -13,6 +13,7 @@ import spoke/internal/packet/decode
 import spoke/internal/packet/server/incoming
 import spoke/internal/packet/server/outgoing
 import spoke/internal/session
+import spoke/tcp as spoke_tcp
 
 const default_timeout = 200
 
@@ -44,7 +45,7 @@ pub fn set_up_connected_client_with_timeout(
       None,
       1000,
       timeout,
-      default_options(server.port),
+      default_connector(server.port),
     )
 
   let #(server, _) = connect_client(client, server, clean_session, False)
@@ -58,8 +59,8 @@ pub fn start_server() -> ListeningServer {
   ListeningServer(listener, port)
 }
 
-pub fn default_options(port: Int) {
-  spoke.TcpOptions("localhost", port, connect_timeout: 100)
+pub fn default_connector(port: Int) {
+  spoke_tcp.connector("localhost", port, connect_timeout: default_timeout)
 }
 
 /// Runs the full client connect process and returns the given response

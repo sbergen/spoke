@@ -5,6 +5,7 @@ import gleam/otp/task
 import gleam/set.{type Set}
 import gleam/string
 import spoke.{type Update, PublishData}
+import spoke/tcp
 
 const total_messages = 100_000
 
@@ -18,7 +19,7 @@ pub fn main() {
 
   io.println("Connecting & subscribing..")
   let client =
-    spoke.default_tcp_options("localhost")
+    tcp.connector_with_defaults("localhost")
     |> spoke.connect_with_id(client_id)
     |> spoke.start_session
 

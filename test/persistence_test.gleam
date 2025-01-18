@@ -6,7 +6,7 @@ import spoke/internal/packet/server/incoming as server_in
 pub fn restore_session_success_test() {
   let server = fake_server.start_server()
   let options =
-    fake_server.default_options(server.port)
+    fake_server.default_connector(server.port)
     |> spoke.connect_with_id("client")
 
   // First session, no need to even connect
@@ -29,7 +29,7 @@ pub fn restore_session_success_test() {
 
 pub fn restore_session_failure_test() {
   let options =
-    fake_server.default_options(1883)
+    fake_server.default_connector(1883)
     |> spoke.connect_with_id("client")
   let assert Error(_) = spoke.restore_session(options, "{ \"valid\": false }")
 }

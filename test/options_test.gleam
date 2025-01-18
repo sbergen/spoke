@@ -1,13 +1,6 @@
 import gleam/option.{Some}
 import spoke
-
-pub fn tcp_options_test() {
-  let assert spoke.TcpOptions("host", 42, 420) =
-    spoke.default_tcp_options("host")
-    |> spoke.tcp_port(42)
-    |> spoke.tcp_connect_timeout(420)
-    as "TCP option modifiers should be properly applied"
-}
+import spoke/tcp
 
 pub fn connect_options_test() {
   let assert spoke.ConnectOptions(
@@ -17,7 +10,7 @@ pub fn connect_options_test() {
     42,
     420,
   ) =
-    spoke.default_tcp_options("")
+    tcp.connector_with_defaults("")
     |> spoke.connect_with_id("client-id")
     |> spoke.using_auth("user", Some(<<"Hunter2">>))
     |> spoke.keep_alive_seconds(42)

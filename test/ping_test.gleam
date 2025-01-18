@@ -85,7 +85,7 @@ fn set_up_connected() -> #(spoke.Client, ConnectedServer) {
       None,
       keep_alive,
       server_timeout,
-      fake_server.default_options(server.port),
+      fake_server.default_connector(server.port),
     )
 
   let #(server, _) = fake_server.connect_client(client, server, True, False)
