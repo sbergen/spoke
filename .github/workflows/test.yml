@@ -10,11 +10,17 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: spoke
+
     services:
       mqtt-broker:
         image: emqx
         ports:
           - 1883:1883
+
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
