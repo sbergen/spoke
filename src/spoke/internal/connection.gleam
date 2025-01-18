@@ -23,8 +23,7 @@ import gleam/string
 import spoke/internal/packet
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
-import spoke/internal/transport.{type ByteChannel}
-import spoke/internal/transport/channel.{type EncodedChannel}
+import spoke/internal/transport.{type ByteChannel, type EncodedChannel}
 
 pub opaque type Connection {
   Connection(subject: Subject(Message), updates: Selector(Update))
@@ -169,7 +168,7 @@ fn establish_channel(
   use channel <- ok_or_exit(config.create_channel(), fn(e) {
     "Failed to establish connection to server: " <> e
   })
-  let channel = channel.as_encoded(channel)
+  let channel = transport.encode_channel(channel)
 
   let disconnect_timer =
     process.send_after(

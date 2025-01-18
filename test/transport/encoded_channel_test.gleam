@@ -4,8 +4,7 @@ import gleam/result
 import gleeunit/should
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
-import spoke/internal/transport
-import spoke/internal/transport/channel.{type EncodedChannel}
+import spoke/internal/transport.{type EncodedChannel}
 
 pub fn send_contained_packet_test() {
   let #(channel, sent) = set_up_send()
@@ -52,7 +51,7 @@ pub fn shutdown_shuts_down_underlying_channel_test() {
       selecting_next: fn() { panic },
       shutdown: fn() { process.send(shutdowns, Nil) },
     )
-    |> channel.as_encoded
+    |> transport.encode_channel
 
   channel.shutdown()
   let assert Ok(Nil) = process.receive(shutdowns, 10)
@@ -77,7 +76,7 @@ fn set_up_send() -> #(EncodedChannel, Subject(BitArray)) {
       shutdown: fn() { panic },
     )
 
-  #(channel.as_encoded(raw_channel), sent)
+  #(transport.encode_channel(raw_channel), sent)
 }
 
 fn set_up_receive() -> #(EncodedChannel, Subject(BitArray)) {
@@ -92,7 +91,7 @@ fn set_up_receive() -> #(EncodedChannel, Subject(BitArray)) {
       shutdown: fn() { panic },
     )
 
-  let channel = channel.as_encoded(raw_channel)
+  let channel = transport.encode_channel(raw_channel)
   #(channel, receive)
 }
 
