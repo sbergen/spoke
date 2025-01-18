@@ -103,7 +103,7 @@ pub fn timed_out_connect_test() {
     fake_server.default_options(server.port)
     |> spoke.connect_with_id(default_client_id)
     |> spoke.server_timeout_ms(5)
-    |> spoke.start
+    |> spoke.start_session
 
   spoke.connect(client, False)
 
@@ -121,7 +121,7 @@ pub fn connect_with_will_test() {
   let client =
     fake_server.default_options(server.port)
     |> spoke.connect_with_id(default_client_id)
-    |> spoke.start
+    |> spoke.start_session
 
   spoke.connect_with_will(client, True, will)
 
@@ -146,7 +146,7 @@ pub fn connect_with_auth_test() {
     fake_server.default_options(server.port)
     |> spoke.connect_with_id(default_client_id)
     |> spoke.using_auth("user", Some(<<"Hunter2">>))
-    |> spoke.start
+    |> spoke.start_session
 
   spoke.connect(client, True)
 
@@ -183,7 +183,7 @@ fn start_client_and_server(
     fake_server.default_options(server.port)
     |> spoke.connect_with_id(client_id)
     |> spoke.keep_alive_seconds(keep_alive)
-    |> spoke.start
+    |> spoke.start_session
 
   #(client, server)
 }
@@ -191,5 +191,5 @@ fn start_client_and_server(
 fn start_client_with_defaults(port: Int) -> spoke.Client {
   fake_server.default_options(port)
   |> spoke.connect_with_id(default_client_id)
-  |> spoke.start
+  |> spoke.start_session
 }

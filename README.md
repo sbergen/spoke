@@ -21,7 +21,7 @@ pub fn main() {
   let client =
     spoke.default_tcp_options("test.mosquitto.org")
     |> spoke.connect_with_id(client_id)
-    |> spoke.start
+    |> spoke.start_session
 
   spoke.connect(client, True)
 
@@ -56,9 +56,6 @@ Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ```
 
 ## Development status
-
-### Missing MQTT 3.1.1 features
-- Persistent sessions across restarts
 
 ### Transport channels
 - [x] TCP

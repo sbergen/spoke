@@ -36,7 +36,7 @@ fn subscribe_and_publish_qos0() -> Nil {
   let client =
     spoke.default_tcp_options("localhost")
     |> spoke.connect_with_id("subscribe_and_publish")
-    |> spoke.start
+    |> spoke.start_session
   let updates = spoke.updates(client)
 
   connect_and_wait(client, True)
@@ -71,7 +71,7 @@ fn receive_after_reconnect(qos: spoke.QoS) -> Nil {
   let receiver_client =
     spoke.default_tcp_options("localhost")
     |> spoke.connect_with_id("qos_receiver")
-    |> spoke.start
+    |> spoke.start_session
 
   // Connect and subscribe
   flush_server_state(receiver_client)
@@ -87,7 +87,7 @@ fn receive_after_reconnect(qos: spoke.QoS) -> Nil {
   let sender_client =
     spoke.default_tcp_options("localhost")
     |> spoke.connect_with_id("qos_sender")
-    |> spoke.start
+    |> spoke.start_session
   connect_and_wait(sender_client, True)
 
   spoke.publish(
@@ -113,7 +113,7 @@ fn will_disconnect() -> Nil {
   let client =
     spoke.default_tcp_options("localhost")
     |> spoke.connect_with_id("will_receiver")
-    |> spoke.start
+    |> spoke.start_session
   connect_and_wait(client, True)
   let assert Ok(_) =
     spoke.subscribe(client, [spoke.SubscribeRequest(topic, spoke.AtMostOnce)])
@@ -122,7 +122,7 @@ fn will_disconnect() -> Nil {
     let client =
       spoke.default_tcp_options("localhost")
       |> spoke.connect_with_id("will_sender")
-      |> spoke.start
+      |> spoke.start_session
     let will =
       spoke.PublishData(topic, <<"will message">>, spoke.AtLeastOnce, False)
     spoke.connect_with_will(client, True, will)

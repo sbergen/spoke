@@ -4,6 +4,7 @@ import gleam/option.{None}
 import spoke.{AtMostOnce}
 import spoke/internal/packet/server/incoming as server_in
 import spoke/internal/packet/server/outgoing as server_out
+import spoke/internal/session
 
 // The ping tests might be a bit flaky, as we are dealing with time.
 // I couldn't find any easy way to fake time,
@@ -78,7 +79,8 @@ fn set_up_connected() -> #(spoke.Client, ConnectedServer) {
   let server = fake_server.start_server()
 
   let client =
-    spoke.start_with_ms_keep_alive(
+    spoke.start_session_with_ms_keep_alive(
+      session.new(True),
       "ping-client",
       None,
       keep_alive,

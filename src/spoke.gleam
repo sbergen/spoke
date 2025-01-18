@@ -6,6 +6,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
+import gleam/string
 import spoke/internal/connection.{type Connection}
 import spoke/internal/packet.{type SubscribeResult}
 import spoke/internal/packet/client/incoming
@@ -180,16 +181,38 @@ pub fn using_auth(
   )
 }
 
-/// Starts a new MQTT client with the given options.
+/// Starts a new MQTT session with the given options.
 /// Does not connect to the server, until `connect` is called.
-pub fn start(connect_options: ConnectOptions) -> Client {
-  start_with_ms_keep_alive(
+pub fn start_session(connect_options: ConnectOptions) -> Client {
+  start_session_with_ms_keep_alive(
+    session.new(False),
     connect_options.client_id,
     connect_options.authentication,
     connect_options.keep_alive_seconds * 1000,
     connect_options.server_timeout_ms,
     connect_options.transport_options,
   )
+}
+
+/// Restores an MQTT session from a previously stored state,
+/// as returned by `disconnect`.
+/// Will return an error if the session state can not be restored
+/// from the provided string.
+/// Does not connect to the server, until `connect` is called.
+pub fn restore_session(
+  connect_options: ConnectOptions,
+  state: String,
+) -> Result(Client, String) {
+  session.from_json(state)
+  |> result.map_error(string.inspect)
+  |> result.map(start_session_with_ms_keep_alive(
+    _,
+    connect_options.client_id,
+    connect_options.authentication,
+    connect_options.keep_alive_seconds * 1000,
+    connect_options.server_timeout_ms,
+    connect_options.transport_options,
+  ))
 }
 
 /// Returns a `Subject` for receiving client updates
@@ -217,12 +240,13 @@ pub fn connect_with_will(
   process.send(client.subject, Connect(clean_session, Some(will)))
 }
 
-/// Starts disconnecting from the MQTT server.
-/// The connection state will be published as an update.
+/// Disconnects from the MQTT server.
+/// The connection state change will also be published as an update.
 /// If a connection is not established or being established,
 /// this will be a no-op.
-pub fn disconnect(client: Client) -> Nil {
-  process.send(client.subject, Disconnect)
+/// Returns the serialized session state to be potentially restored later.
+pub fn disconnect(client: Client) -> String {
+  process.call(client.subject, Disconnect(_), client.config.server_timeout)
 }
 
 /// Connects to the MQTT server.
@@ -291,7 +315,8 @@ fn call_or_disconnect(
 
 // allows specifying less than 1 second keep-alive for testing
 @internal
-pub fn start_with_ms_keep_alive(
+pub fn start_session_with_ms_keep_alive(
+  session: Session,
   client_id: String,
   auth: Option(AuthDetails),
   keep_alive_ms: Int,
@@ -303,7 +328,11 @@ pub fn start_with_ms_keep_alive(
   let config =
     Config(client_id, auth, keep_alive_ms, server_timeout_ms, connect)
   let assert Ok(client) =
-    actor.start_spec(actor.Spec(fn() { init(config, updates) }, 100, run_client))
+    actor.start_spec(actor.Spec(
+      fn() { init(config, session, updates) },
+      100,
+      run_client,
+    ))
   Client(client, updates, config)
 }
 
@@ -351,7 +380,7 @@ type Message {
   Unsubscribe(List(String), Subject(OperationResult(Nil)))
   ProcessReceived(incoming.Packet)
   ConnectionDropped(connection.Disconnect)
-  Disconnect
+  Disconnect(Subject(String))
   DropConnectionAndNotifyClient(String)
   GetPendingPublishes(Subject(Int))
   WaitForPublishesToFinish(Subject(Nil))
@@ -366,6 +395,7 @@ type PendingSubscription {
 
 fn init(
   config: Config,
+  session: Session,
   updates: Subject(Update),
 ) -> actor.InitResult(State, Message) {
   let self = process.new_subject()
@@ -377,7 +407,7 @@ fn init(
       updates:,
       connection: None,
       fully_connected: False,
-      session: session.new(False),
+      session:,
       pending_subs: dict.new(),
       pending_unsubs: dict.new(),
       publish_completion_listeners: [],
@@ -398,7 +428,7 @@ fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
     Unsubscribe(topics, reply_to) -> handle_unsubscribe(state, topics, reply_to)
     ConnectionDropped(reason) -> handle_connection_drop(state, reason)
-    Disconnect -> handle_disconnect(state)
+    Disconnect(reply_to) -> handle_disconnect(state, reply_to)
     DropConnectionAndNotifyClient(reason) ->
       drop_connection_and_notify(state, Some(reason))
     GetPendingPublishes(reply_to) -> get_pending_publishes(state, reply_to)
@@ -748,8 +778,11 @@ fn handle_incoming_publish(
   actor.continue(State(..state, session:))
 }
 
-fn handle_disconnect(state: State) -> actor.Next(Message, State) {
-  case state.connection {
+fn handle_disconnect(
+  state: State,
+  reply_to: Subject(String),
+) -> actor.Next(Message, State) {
+  let result = case state.connection {
     Some(connection) -> {
       connection.send(connection, outgoing.Disconnect)
       connection.shutdown(connection)
@@ -757,6 +790,9 @@ fn handle_disconnect(state: State) -> actor.Next(Message, State) {
     }
     None -> actor.continue(state)
   }
+
+  process.send(reply_to, session.to_json(state.session))
+  result
 }
 
 fn notify_if_publishes_finished(state: State) -> State {

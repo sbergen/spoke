@@ -9,7 +9,7 @@ pub fn subscribe_when_not_connected_returns_error_test() {
   let client =
     fake_server.default_options(1883)
     |> spoke.connect_with_id("client-id")
-    |> spoke.start
+    |> spoke.start_session
 
   let assert Error(spoke.NotConnected) = spoke.unsubscribe(client, ["topic"])
 }

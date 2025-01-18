@@ -12,6 +12,7 @@ import spoke/internal/packet
 import spoke/internal/packet/decode
 import spoke/internal/packet/server/incoming
 import spoke/internal/packet/server/outgoing
+import spoke/internal/session
 
 const default_timeout = 200
 
@@ -37,7 +38,8 @@ pub fn set_up_connected_client_with_timeout(
   let server = start_server()
 
   let client =
-    spoke.start_with_ms_keep_alive(
+    spoke.start_session_with_ms_keep_alive(
+      session.new(True),
       "ping-client",
       None,
       1000,

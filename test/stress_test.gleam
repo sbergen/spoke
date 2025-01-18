@@ -20,7 +20,7 @@ pub fn main() {
   let client =
     spoke.default_tcp_options("localhost")
     |> spoke.connect_with_id(client_id)
-    |> spoke.start
+    |> spoke.start_session
 
   spoke.connect(client, True)
 
