@@ -15,13 +15,12 @@ pub fn invalid_version_fails_deserialization_test() {
 }
 
 pub fn non_ephemeral_session_persists_state_test() {
+  let message_data = packet.MessageData("topic", <<"payload">>, False)
+
   let session = session.new(False)
   let #(session, _) = session.reserve_packet_id(session)
-  let #(session, _) =
-    session.start_qos1_publish(
-      session,
-      packet.MessageData("topic", <<"payload">>, False),
-    )
+  let #(session, _) = session.start_qos1_publish(session, message_data)
+  let #(session, _) = session.start_qos2_publish(session, message_data)
 
   session
   |> session.to_json

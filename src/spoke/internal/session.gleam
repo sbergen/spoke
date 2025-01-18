@@ -81,18 +81,18 @@ pub fn from_json(state: String) -> Result(Session, json.DecodeError) {
     decode.success(packet.MessageData(topic:, payload:, retain:))
   }
 
+  let decode_message_dict = decode.dict(decode_id_key, decode_message)
+
   let core_decoder = {
     use packet_id <- decode.field("packet_id", decode.int)
-    use unacked_qos1 <- decode.field(
-      "unacked_qos1",
-      decode.dict(decode_id_key, decode_message),
-    )
+    use unacked_qos1 <- decode.field("unacked_qos1", decode_message_dict)
+    use unreceived_qos2 <- decode.field("unreceived_qos2", decode_message_dict)
 
     decode.success(Session(
       clean_session: False,
       packet_id:,
       unacked_qos1:,
-      unreceived_qos2: dict.new(),
+      unreceived_qos2:,
       unreleased_qos2: set.new(),
       incomplete_qos2_in: set.new(),
     ))
@@ -118,7 +118,7 @@ pub fn from_json(state: String) -> Result(Session, json.DecodeError) {
 }
 
 pub fn to_json(session: Session) -> String {
-  let encode_msg = fn(msg: packet.MessageData) {
+  let encode_message = fn(msg: packet.MessageData) {
     json.object([
       #("topic", json.string(msg.topic)),
       #("payload", json.string(bit_array.base64_encode(msg.payload, True))),
@@ -126,11 +126,14 @@ pub fn to_json(session: Session) -> String {
     ])
   }
 
+  let encode_message_dict = json.dict(_, int.to_string, encode_message)
+
   let data = case session {
-    Session(False, packet_id, unacked_qos1, _, _, _) ->
+    Session(False, packet_id, unacked_qos1, unreceived_qos2, _, _) ->
       Some([
         #("packet_id", json.int(packet_id)),
-        #("unacked_qos1", json.dict(unacked_qos1, int.to_string, encode_msg)),
+        #("unacked_qos1", encode_message_dict(unacked_qos1)),
+        #("unreceived_qos2", encode_message_dict(unreceived_qos2)),
       ])
     _ -> None
   }
