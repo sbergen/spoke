@@ -1,0 +1,14 @@
+name: "Check changelog"
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+    paths:
+      - spoke/src/**
+
+jobs:
+  changelog:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: dangoslen/changelog-enforcer@v3
+      with:
+        missingUpdateErrorMessage: "Please update CHANGELOG.md or add the Skip-Changelog label if not needed!"
