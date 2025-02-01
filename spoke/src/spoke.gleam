@@ -232,6 +232,9 @@ pub fn restore_session(
 
 /// Returns a `Subject` for receiving client updates
 /// (received messages and connection state changes).
+/// NOTE: This function is provided for convenience
+/// as receiving updates only works from the process that created the client!
+/// Future versions of spoke might support receiving updates in multiple processes. 
 pub fn updates(client: Client) -> Subject(Update) {
   client.updates
 }
