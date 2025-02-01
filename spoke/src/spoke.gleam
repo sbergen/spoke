@@ -232,6 +232,9 @@ pub fn restore_session(
 
 /// Returns a `Subject` for receiving client updates
 /// (received messages and connection state changes).
+/// NOTE: This function is provided for convenience
+/// as receiving updates only works from the process that created the client!
+/// Future versions of spoke might support receiving updates in multiple processes. 
 pub fn updates(client: Client) -> Subject(Update) {
   client.updates
 }
@@ -361,6 +364,13 @@ pub fn start_session_with_ms_keep_alive(
   Client(client, updates, config)
 }
 
+/// For testability, as there should be no other way to crash the actor.
+@internal
+pub fn unlink_and_crash(client: Client) {
+  process.unlink(process.subject_owner(client.subject))
+  process.send(client.subject, Crash)
+}
+
 type Config {
   Config(
     client_id: String,
@@ -389,6 +399,7 @@ type OperationResult(a) =
   Result(a, OperationError)
 
 type Message {
+  Crash
   Connect(Bool, Option(PublishData))
   Publish(PublishData)
   Subscribe(
@@ -440,6 +451,7 @@ fn init(
 
 fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
   case message {
+    Crash -> panic as "Requested actor to crash"
     Connect(clean_session, will) -> handle_connect(state, clean_session, will)
     ProcessReceived(packet) -> process_packet(state, packet)
     Publish(data) -> handle_outgoing_publish(state, data)

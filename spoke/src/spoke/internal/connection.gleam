@@ -14,7 +14,7 @@
 
 import gleam/bool
 import gleam/dynamic
-import gleam/erlang/process.{type Selector, type Subject}
+import gleam/erlang/process.{type Pid, type Selector, type Subject}
 import gleam/function
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -54,12 +54,13 @@ pub fn connect(
 ) -> Result(Connection, String) {
   // Start linked, as this *really* shouldn't fail
   let ack_subject = process.new_subject()
+  let parent = process.self()
   let child =
     process.start(linked: True, running: fn() {
       let messages = process.new_subject()
       let connect = process.new_subject()
       process.send(ack_subject, #(messages, connect))
-      establish_channel(messages, connect, clean_session, auth, will)
+      establish_channel(parent, messages, connect, clean_session, auth, will)
     })
 
   // Start monitoring and unlink
@@ -135,6 +136,9 @@ type Message {
 type State {
   State(
     self: Subject(Message),
+    // "Constant" selector without channel messages
+    base_selector: Selector(Message),
+    // Current selector, including channel messages
     selector: Selector(Message),
     updates: Subject(Update),
     keep_alive_ms: Int,
@@ -156,6 +160,7 @@ type ConnectionState {
 }
 
 fn establish_channel(
+  parent: Pid,
   mailbox: Subject(Message),
   connect: Subject(Config),
   clean_session: Bool,
@@ -177,10 +182,18 @@ fn establish_channel(
       ShutDown(Some("Connect timed out")),
     )
   let connection_state = ConnectingToServer(channel, disconnect_timer)
+
+  let parent_monitor = process.monitor_process(parent)
+  let base_selector =
+    process.new_selector()
+    |> process.selecting_process_down(parent_monitor, fn(_) { ShutDown(None) })
+    |> process.selecting(mailbox, function.identity)
+
   let state =
     State(
       mailbox,
-      next_selector(channel, <<>>, mailbox),
+      base_selector,
+      next_selector(channel, <<>>, base_selector),
       config.updates,
       config.keep_alive_ms,
       config.server_timeout_ms,
@@ -255,7 +268,8 @@ fn handle_receive(
     process.send(state.self, ProcessReceived(packet))
   })
 
-  let selector = next_selector(get_channel(state), new_conn_state, state.self)
+  let selector =
+    next_selector(get_channel(state), new_conn_state, state.base_selector)
   State(..state, selector:)
 }
 
@@ -353,10 +367,10 @@ fn handle_pingresp(state: State) -> State {
 fn next_selector(
   channel: EncodedChannel,
   channel_state: BitArray,
-  self: Subject(Message),
+  base: Selector(Message),
 ) -> process.Selector(Message) {
   process.map_selector(channel.selecting_next(channel_state), Received(_))
-  |> process.selecting(self, function.identity)
+  |> process.merge_selector(base)
 }
 
 fn send_packet_or_stop(
