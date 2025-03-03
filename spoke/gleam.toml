@@ -15,5 +15,5 @@ gleam_json = ">= 2.3.0 and < 3.0.0"
 gleeunit = ">= 1.0.0 and < 2.0.0"
 glisten = ">= 7.0.0 and < 8.0.0"
 checkmark = ">= 1.0.0 and < 2.0.0"
-qcheck = ">= 0.0.6 and < 1.0.0"
+qcheck = ">= 1.0.0 and < 2.0.0"
 spoke_tcp = { path = "../spoke_tcp" }
