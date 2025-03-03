@@ -5,6 +5,7 @@
 //// This is sort of like double-entry bookkeeping.
 
 import gleam/bytes_tree
+import gleeunit/should
 import packet/generators
 import qcheck
 import spoke/internal/packet/client/incoming
@@ -14,54 +15,51 @@ import spoke/internal/packet/server/outgoing as server_out
 
 pub fn connect_roundtrip_test() {
   use expected_data <- qcheck.given(generators.connect_data())
-  let assert server_in.Connect(received_data) =
-    roundtrip_out(outgoing.Connect(expected_data))
 
-  received_data == expected_data
+  roundtrip_out(outgoing.Connect(expected_data))
+  |> should.equal(server_in.Connect(expected_data))
 }
 
 pub fn connack_roundtrip_test() {
   use expected_result <- qcheck.given(generators.connack_result())
-  let assert incoming.ConnAck(received_result) =
-    roundtrip_in(server_out.ConnAck(expected_result))
 
-  received_result == expected_result
+  roundtrip_in(server_out.ConnAck(expected_result))
+  |> should.equal(incoming.ConnAck(expected_result))
 }
 
 pub fn subscribe_roundtrip_test() {
   use #(id, requests) <- qcheck.given(generators.subscribe_request())
-  let assert server_in.Subscribe(rcv_id, rcv_requests) =
-    roundtrip_out(outgoing.Subscribe(id, requests))
 
-  rcv_id == id && rcv_requests == requests
+  roundtrip_out(outgoing.Subscribe(id, requests))
+  |> should.equal(server_in.Subscribe(id, requests))
 }
 
 pub fn suback_roundtrip_test() {
   use #(id, results) <- qcheck.given(generators.suback())
-  let assert incoming.SubAck(rcv_id, rcv_results) =
-    roundtrip_in(server_out.SubAck(id, results))
 
-  rcv_id == id && rcv_results == results
+  roundtrip_in(server_out.SubAck(id, results))
+  |> should.equal(incoming.SubAck(id, results))
 }
 
 pub fn unsubscribe_roundtrip_test() {
   use #(id, requests) <- qcheck.given(generators.unsubscribe_request())
-  let assert server_in.Unsubscribe(rcv_id, rcv_requests) =
-    roundtrip_out(outgoing.Unsubscribe(id, requests))
 
-  id == rcv_id && requests == rcv_requests
+  roundtrip_out(outgoing.Unsubscribe(id, requests))
+  |> should.equal(server_in.Unsubscribe(id, requests))
 }
 
 pub fn publish_out_roundtrip_test() {
   use data <- qcheck.given(generators.valid_publish_data())
-  let assert server_in.Publish(rcv_data) = roundtrip_out(outgoing.Publish(data))
-  rcv_data == data
+
+  roundtrip_out(outgoing.Publish(data))
+  |> should.equal(server_in.Publish(data))
 }
 
 pub fn publish_in_roundtrip_test() {
   use data <- qcheck.given(generators.valid_publish_data())
-  let assert incoming.Publish(rcv_data) = roundtrip_in(server_out.Publish(data))
-  rcv_data == data
+
+  roundtrip_in(server_out.Publish(data))
+  |> should.equal(incoming.Publish(data))
 }
 
 pub fn disconnect_roundtrip_test() {
@@ -78,64 +76,65 @@ pub fn pingresp_roundtrip_test() {
 
 pub fn unsuback_roundtrip_test() {
   use id <- qcheck.given(generators.packet_id())
-  let assert incoming.UnsubAck(rcv_id) = roundtrip_in(server_out.UnsubAck(id))
-  rcv_id == id
+
+  roundtrip_in(server_out.UnsubAck(id))
+  |> should.equal(incoming.UnsubAck(id))
 }
 
 pub fn puback_out_roundtrip_test() {
   use packet_id <- qcheck.given(generators.packet_id())
-  let assert server_in.PubAck(received_id) =
-    roundtrip_out(outgoing.PubAck(packet_id))
-  received_id == packet_id
+
+  roundtrip_out(outgoing.PubAck(packet_id))
+  |> should.equal(server_in.PubAck(packet_id))
 }
 
 pub fn pubrec_out_roundtrip_test() {
   use packet_id <- qcheck.given(generators.packet_id())
-  let assert server_in.PubRec(received_id) =
-    roundtrip_out(outgoing.PubRec(packet_id))
-  received_id == packet_id
+
+  roundtrip_out(outgoing.PubRec(packet_id))
+  |> should.equal(server_in.PubRec(packet_id))
 }
 
 pub fn pubrel_out_roundtrip_test() {
   use packet_id <- qcheck.given(generators.packet_id())
-  let assert server_in.PubRel(received_id) =
-    roundtrip_out(outgoing.PubRel(packet_id))
-  received_id == packet_id
+
+  roundtrip_out(outgoing.PubRel(packet_id))
+  |> should.equal(server_in.PubRel(packet_id))
 }
 
 pub fn pubcomp_out_roundtrip_test() {
   use packet_id <- qcheck.given(generators.packet_id())
-  let assert server_in.PubComp(received_id) =
-    roundtrip_out(outgoing.PubComp(packet_id))
-  received_id == packet_id
+
+  roundtrip_out(outgoing.PubComp(packet_id))
+  |> should.equal(server_in.PubComp(packet_id))
 }
 
 pub fn puback_in_roundtrip_test() {
   use packet_id <- qcheck.given(generators.packet_id())
-  let assert incoming.PubAck(received_id) =
-    roundtrip_in(server_out.PubAck(packet_id))
-  received_id == packet_id
+
+  roundtrip_in(server_out.PubAck(packet_id))
+  |> should.equal(incoming.PubAck(packet_id))
 }
 
 pub fn pubrec_in_roundtrip_test() {
   use packet_id <- qcheck.given(generators.packet_id())
-  let assert incoming.PubRec(received_id) =
-    roundtrip_in(server_out.PubRec(packet_id))
-  received_id == packet_id
+
+  roundtrip_in(server_out.PubRec(packet_id))
+  |> should.equal(incoming.PubRec(packet_id))
 }
 
 pub fn pubrel_in_roundtrip_test() {
   use packet_id <- qcheck.given(generators.packet_id())
-  let assert incoming.PubRel(received_id) =
-    roundtrip_in(server_out.PubRel(packet_id))
-  received_id == packet_id
+
+  roundtrip_in(server_out.PubRel(packet_id))
+  |> should.equal(incoming.PubRel(packet_id))
 }
 
 pub fn pubcomp_in_roundtrip_test() {
   use packet_id <- qcheck.given(generators.packet_id())
-  let assert incoming.PubComp(received_id) =
-    roundtrip_in(server_out.PubComp(packet_id))
-  received_id == packet_id
+
+  roundtrip_in(server_out.PubComp(packet_id))
+  |> should.equal(incoming.PubComp(packet_id))
 }
 
 /// Encodes outgoing packet, and decodes it as incoming server packet

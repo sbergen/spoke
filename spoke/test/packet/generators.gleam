@@ -18,10 +18,10 @@ pub fn connect_data() -> Generator(ConnectOptions) {
     ConnectOptions(clean_session, client_id, keep_alive_seconds, auth, will)
   })
   |> qcheck.apply(qcheck.bool())
-  |> qcheck.apply(qcheck.string_non_empty())
+  |> qcheck.apply(qcheck.non_empty_string())
   |> qcheck.apply(mqtt_int())
-  |> qcheck.apply(qcheck.option(auth_options()))
-  |> qcheck.apply(qcheck.option(will()))
+  |> qcheck.apply(qcheck.option_from(auth_options()))
+  |> qcheck.apply(qcheck.option_from(will()))
 }
 
 pub fn connack_result() -> Generator(ConnAckResult) {
@@ -53,19 +53,28 @@ pub fn subscribe_request() -> Generator(#(Int, List(SubscribeRequest))) {
     #(packet_id, requests)
   })
   |> qcheck.apply(packet_id())
-  |> qcheck.apply(qcheck.list_generic(one_subscribe_request(), 1, 5))
+  |> qcheck.apply(qcheck.generic_list(
+    one_subscribe_request(),
+    qcheck.bounded_int(1, 5),
+  ))
 }
 
 pub fn packet_id() -> Generator(Int) {
-  qcheck.int_uniform_inclusive(1, 65_535)
+  qcheck.bounded_int(1, 65_535)
 }
 
 pub fn unsubscribe_request() -> Generator(#(Int, List(String))) {
-  qcheck.tuple2(packet_id(), qcheck.list_generic(qcheck.string(), 1, 5))
+  qcheck.tuple2(
+    packet_id(),
+    qcheck.generic_list(qcheck.string(), qcheck.bounded_int(1, 5)),
+  )
 }
 
 pub fn suback() -> Generator(#(Int, List(SubscribeResult))) {
-  qcheck.tuple2(packet_id(), qcheck.list_generic(one_subscribe_result(), 1, 5))
+  qcheck.tuple2(
+    packet_id(),
+    qcheck.generic_list(one_subscribe_result(), qcheck.bounded_int(1, 5)),
+  )
 }
 
 pub fn valid_publish_data() -> Generator(PublishData) {
@@ -102,7 +111,7 @@ fn message_data() -> Generator(MessageData) {
     use retain <- qcheck.parameter
     MessageData(topic, payload, retain)
   })
-  |> qcheck.apply(qcheck.string_non_empty())
+  |> qcheck.apply(qcheck.non_empty_string())
   |> qcheck.apply(bit_array())
   |> qcheck.apply(qcheck.bool())
 }
@@ -135,7 +144,7 @@ fn auth_options() -> Generator(AuthOptions) {
     AuthOptions(username, password)
   })
   |> qcheck.apply(qcheck.string())
-  |> qcheck.apply(qcheck.option(bit_array()))
+  |> qcheck.apply(qcheck.option_from(bit_array()))
 }
 
 fn qos() -> Generator(QoS) {
@@ -148,12 +157,12 @@ fn bit_array() -> Generator(BitArray) {
 }
 
 fn mqtt_int() -> Generator(Int) {
-  qcheck.int_uniform_inclusive(0, 65_535)
+  qcheck.bounded_int(0, 65_535)
 }
 
 fn from_list(values: List(a)) -> Generator(a) {
   let max_index = list.length(values) - 1
-  use i <- qcheck.map(qcheck.int_uniform_inclusive(0, max_index))
+  use i <- qcheck.map(qcheck.bounded_int(0, max_index))
   case list.drop(values, i) {
     [val, ..] -> val
     [] -> panic as "qcheck returned invalid value!"
