@@ -316,22 +316,18 @@ fn handle_connack(state: State, status: packet.ConnAckResult) -> State {
 fn send_ping(state: State) -> State {
   case state.connection_state {
     Connected(channel, ping, disconnect) -> {
-      // We should also not be waiting for a ping response,
-      // but in case scheduling is delayed (or we have short timeouts in tests),
-      // this might still happen.
-      // In this case, just keep waiting for the current disconnect timeout,
-      // and skip this send.
-      case disconnect, process.cancel_timer(ping) {
-        _, process.Cancelled(time_remaining) ->
-          stop_abnormal(
-            "A ping scheduling overlap happened, previous time remaining: "
-            <> string.inspect(time_remaining),
-          )
-        Some(_), _ ->
+      // In case we send a packet while the ping timer has expired,
+      // but this hasn't run yet (message is in mailbox),
+      // we'll have a new timer already started here.
+      // Cancel any possible timer, as we are sending a ping now!
+      process.cancel_timer(ping)
+
+      case disconnect {
+        Some(_) ->
           stop_abnormal(
             "A ping was scheduled while waiting for a ping response",
           )
-        None, _ -> {
+        None -> {
           use state <- send_packet_or_stop(state, outgoing.PingReq)
           let disconnect =
             process.send_after(
@@ -369,7 +365,7 @@ fn next_selector(
   channel_state: BitArray,
   base: Selector(Message),
 ) -> process.Selector(Message) {
-  process.map_selector(channel.selecting_next(channel_state), Received(_))
+  process.map_selector(channel.selecting_next(channel_state), Received)
   |> process.merge_selector(base)
 }
 
