@@ -316,13 +316,16 @@ pub fn pending_publishes(client: Client) -> Int {
 
 /// Wait for all pending QoS > 0 publishes to complete.
 /// Returns an error if the operation times out,
-/// or client is killed while waiting.
+/// or panics if the client is killed while waiting.
 pub fn wait_for_publishes_to_finish(
   client: Client,
   timeout: Int,
 ) -> Result(Nil, Nil) {
-  process.try_call(client.subject, WaitForPublishesToFinish, timeout)
-  |> result.replace_error(Nil)
+  process.call(
+    client.subject,
+    WaitForPublishesToFinish(_, timeout),
+    timeout * 2,
+  )
 }
 
 /// Allows specifying less than 1 second keep-alive for testing.
@@ -379,7 +382,7 @@ type State {
     session: Session,
     pending_subs: Dict(Int, PendingSubscription),
     pending_unsubs: Dict(Int, PendingUnsubscribe),
-    publish_completion_listeners: List(Subject(Nil)),
+    publish_completion_listeners: Dict(Subject(Result(Nil, Nil)), process.Timer),
   )
 }
 
@@ -402,7 +405,8 @@ type Message {
   Disconnect(Subject(String))
   DropConnectionAndNotifyClient(String)
   GetPendingPublishes(Subject(Int))
-  WaitForPublishesToFinish(Subject(Nil))
+  WaitForPublishesToFinish(Subject(Result(Nil, Nil)), Int)
+  WaitForPublishesTimeout(Subject(Result(Nil, Nil)))
 }
 
 type PendingSubscription {
@@ -437,7 +441,7 @@ fn init(
       session:,
       pending_subs: dict.new(),
       pending_unsubs: dict.new(),
-      publish_completion_listeners: [],
+      publish_completion_listeners: dict.new(),
     )
 
   let selector =
@@ -462,8 +466,10 @@ fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
     DropConnectionAndNotifyClient(reason) ->
       drop_connection_and_notify(state, Some(reason))
     GetPendingPublishes(reply_to) -> get_pending_publishes(state, reply_to)
-    WaitForPublishesToFinish(reply_to) ->
-      handle_wait_for_publishes_to_finish(state, reply_to)
+    WaitForPublishesToFinish(reply_to, timeout) ->
+      handle_wait_for_publishes_to_finish(state, reply_to, timeout)
+    WaitForPublishesTimeout(reply_to) ->
+      handle_wait_for_publishes_timeout(state, reply_to)
   }
 }
 
@@ -476,12 +482,37 @@ fn get_pending_publishes(
   actor.continue(state)
 }
 
-fn handle_wait_for_publishes_to_finish(state: State, reply_to: Subject(Nil)) {
-  let publish_completion_listeners = [
-    reply_to,
-    ..state.publish_completion_listeners
-  ]
+fn handle_wait_for_publishes_to_finish(
+  state: State,
+  reply_to: Subject(Result(Nil, Nil)),
+  timeout: Int,
+) {
+  let timeout =
+    process.send_after(state.self, timeout, WaitForPublishesTimeout(reply_to))
+
+  let publish_completion_listeners =
+    state.publish_completion_listeners
+    |> dict.insert(reply_to, timeout)
+
   actor.continue(State(..state, publish_completion_listeners:))
+}
+
+fn handle_wait_for_publishes_timeout(
+  state: State,
+  reply_to: Subject(Result(Nil, Nil)),
+) {
+  case dict.get(state.publish_completion_listeners, reply_to) {
+    // If the listener was already removed,
+    // the timeout was in the mailbox while publishes finished.
+    Error(_) -> actor.continue(state)
+    Ok(timer) -> {
+      process.cancel_timer(timer)
+      process.send(reply_to, Error(Nil))
+      let publish_completion_listeners =
+        dict.delete(state.publish_completion_listeners, reply_to)
+      actor.continue(State(..state, publish_completion_listeners:))
+    }
+  }
 }
 
 fn handle_connection_drop(
@@ -885,10 +916,11 @@ fn notify_if_publishes_finished(state: State) -> State {
   case session.pending_publishes(state.session) {
     0 -> {
       {
-        use listener <- list.each(state.publish_completion_listeners)
-        process.send(listener, Nil)
+        use listener, timer <- dict.each(state.publish_completion_listeners)
+        process.cancel_timer(timer)
+        process.send(listener, Ok(Nil))
       }
-      State(..state, publish_completion_listeners: [])
+      State(..state, publish_completion_listeners: dict.new())
     }
     _ -> state
   }
