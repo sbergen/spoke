@@ -8,8 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Changed
-- `wait_for_publishes_to_finish` will panic instead of returning an error
-  if the client is killed during this time.
+- `subscribe`, `unsubscribe`, and `wait_for_publishes_to_finish`
+  will panic instead of returning `Error(KilledDuringOperation)`
+  if the client is killed during the call.
+  `KilledDuringOperation` is removed.
   This is due to `try_call` being removed from `gleam_erlang`.
 
 ## [1.0.2] - 2025-04-16

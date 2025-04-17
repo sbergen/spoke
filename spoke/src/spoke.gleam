@@ -105,8 +105,6 @@ pub type OperationError {
   OperationTimedOut
   /// We received unexpected data from the server, and will disconnect.
   ProtocolViolation
-  /// The client actor was killed while the operation was in progress.
-  KilledDuringOperation
 }
 
 /// The result of a subscribe operation
