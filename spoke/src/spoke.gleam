@@ -105,8 +105,6 @@ pub type OperationError {
   OperationTimedOut
   /// We received unexpected data from the server, and will disconnect.
   ProtocolViolation
-  /// The client actor was killed while the operation was in progress.
-  KilledDuringOperation
 }
 
 /// The result of a subscribe operation
@@ -264,7 +262,7 @@ pub fn connect_with_will(
 /// this will be a no-op.
 /// Returns the serialized session state to be potentially restored later.
 pub fn disconnect(client: Client) -> String {
-  process.call(client.subject, Disconnect(_), client.config.server_timeout)
+  process.call(client.subject, Disconnect, client.config.server_timeout)
 }
 
 /// Connects to the MQTT server.
@@ -283,7 +281,11 @@ pub fn subscribe(
   client: Client,
   topics: List(SubscribeRequest),
 ) -> Result(List(Subscription), OperationError) {
-  call_or_disconnect(client, Subscribe(topics, _))
+  process.call(
+    client.subject,
+    Subscribe(topics, _),
+    client.config.server_timeout * 2,
+  )
 }
 
 /// Unsubscribes from the given topics.
@@ -293,7 +295,11 @@ pub fn unsubscribe(
   client: Client,
   topics: List(String),
 ) -> Result(Nil, OperationError) {
-  call_or_disconnect(client, Unsubscribe(topics, _))
+  process.call(
+    client.subject,
+    Unsubscribe(topics, _),
+    client.config.server_timeout * 2,
+  )
 }
 
 /// Returns the number of QoS > 0 publishes that haven't yet been completely published.
@@ -301,40 +307,23 @@ pub fn unsubscribe(
 pub fn pending_publishes(client: Client) -> Int {
   process.call(
     client.subject,
-    GetPendingPublishes(_),
+    GetPendingPublishes,
     client.config.server_timeout,
   )
 }
 
 /// Wait for all pending QoS > 0 publishes to complete.
 /// Returns an error if the operation times out,
-/// or client is killed while waiting.
+/// or panics if the client is killed while waiting.
 pub fn wait_for_publishes_to_finish(
   client: Client,
   timeout: Int,
 ) -> Result(Nil, Nil) {
-  process.try_call(client.subject, WaitForPublishesToFinish(_), timeout)
-  |> result.replace_error(Nil)
-}
-
-fn call_or_disconnect(
-  client: Client,
-  make_request: fn(Subject(Result(result, OperationError))) -> Message,
-) {
-  process.try_call(client.subject, make_request, client.config.server_timeout)
-  |> result.map_error(fn(e) {
-    case e {
-      process.CallTimeout -> {
-        process.send(
-          client.subject,
-          DropConnectionAndNotifyClient("Operation timed out"),
-        )
-        OperationTimedOut
-      }
-      process.CalleeDown(_) -> KilledDuringOperation
-    }
-  })
-  |> result.flatten
+  process.call(
+    client.subject,
+    WaitForPublishesToFinish(_, timeout),
+    timeout * 2,
+  )
 }
 
 /// Allows specifying less than 1 second keep-alive for testing.
@@ -390,8 +379,8 @@ type State {
     fully_connected: Bool,
     session: Session,
     pending_subs: Dict(Int, PendingSubscription),
-    pending_unsubs: Dict(Int, Subject(OperationResult(Nil))),
-    publish_completion_listeners: List(Subject(Nil)),
+    pending_unsubs: Dict(Int, PendingUnsubscribe),
+    publish_completion_listeners: Dict(Subject(Result(Nil, Nil)), process.Timer),
   )
 }
 
@@ -406,19 +395,30 @@ type Message {
     List(SubscribeRequest),
     Subject(OperationResult(List(Subscription))),
   )
+  SubscribeTimeout(Int)
   Unsubscribe(List(String), Subject(OperationResult(Nil)))
+  UnsubscribeTimeout(Int)
   ProcessReceived(incoming.Packet)
   ConnectionDropped(connection.Disconnect)
   Disconnect(Subject(String))
   DropConnectionAndNotifyClient(String)
   GetPendingPublishes(Subject(Int))
-  WaitForPublishesToFinish(Subject(Nil))
+  WaitForPublishesToFinish(Subject(Result(Nil, Nil)), Int)
+  WaitForPublishesTimeout(Subject(Result(Nil, Nil)))
 }
 
 type PendingSubscription {
   PendingSubscription(
     topics: List(SubscribeRequest),
     reply_to: Subject(OperationResult(List(Subscription))),
+    timeout: process.Timer,
+  )
+}
+
+type PendingUnsubscribe {
+  PendingUnsubscribe(
+    reply_to: Subject(OperationResult(Nil)),
+    timeout: process.Timer,
   )
 }
 
@@ -439,7 +439,7 @@ fn init(
       session:,
       pending_subs: dict.new(),
       pending_unsubs: dict.new(),
-      publish_completion_listeners: [],
+      publish_completion_listeners: dict.new(),
     )
 
   let selector =
@@ -456,14 +456,18 @@ fn run_client(message: Message, state: State) -> actor.Next(Message, State) {
     ProcessReceived(packet) -> process_packet(state, packet)
     Publish(data) -> handle_outgoing_publish(state, data)
     Subscribe(topics, reply_to) -> handle_subscribe(state, topics, reply_to)
+    SubscribeTimeout(id) -> handle_subscribe_timeout(state, id)
     Unsubscribe(topics, reply_to) -> handle_unsubscribe(state, topics, reply_to)
+    UnsubscribeTimeout(id) -> handle_unsubscribe_timeout(state, id)
     ConnectionDropped(reason) -> handle_connection_drop(state, reason)
     Disconnect(reply_to) -> handle_disconnect(state, reply_to)
     DropConnectionAndNotifyClient(reason) ->
       drop_connection_and_notify(state, Some(reason))
     GetPendingPublishes(reply_to) -> get_pending_publishes(state, reply_to)
-    WaitForPublishesToFinish(reply_to) ->
-      handle_wait_for_publishes_to_finish(state, reply_to)
+    WaitForPublishesToFinish(reply_to, timeout) ->
+      handle_wait_for_publishes_to_finish(state, reply_to, timeout)
+    WaitForPublishesTimeout(reply_to) ->
+      handle_wait_for_publishes_timeout(state, reply_to)
   }
 }
 
@@ -476,12 +480,37 @@ fn get_pending_publishes(
   actor.continue(state)
 }
 
-fn handle_wait_for_publishes_to_finish(state: State, reply_to: Subject(Nil)) {
-  let publish_completion_listeners = [
-    reply_to,
-    ..state.publish_completion_listeners
-  ]
+fn handle_wait_for_publishes_to_finish(
+  state: State,
+  reply_to: Subject(Result(Nil, Nil)),
+  timeout: Int,
+) {
+  let timeout =
+    process.send_after(state.self, timeout, WaitForPublishesTimeout(reply_to))
+
+  let publish_completion_listeners =
+    state.publish_completion_listeners
+    |> dict.insert(reply_to, timeout)
+
   actor.continue(State(..state, publish_completion_listeners:))
+}
+
+fn handle_wait_for_publishes_timeout(
+  state: State,
+  reply_to: Subject(Result(Nil, Nil)),
+) {
+  case dict.get(state.publish_completion_listeners, reply_to) {
+    // If the listener was already removed,
+    // the timeout was in the mailbox while publishes finished.
+    Error(_) -> actor.continue(state)
+    Ok(timer) -> {
+      process.cancel_timer(timer)
+      process.send(reply_to, Error(Nil))
+      let publish_completion_listeners =
+        dict.delete(state.publish_completion_listeners, reply_to)
+      actor.continue(State(..state, publish_completion_listeners:))
+    }
+  }
 }
 
 fn handle_connection_drop(
@@ -650,6 +679,8 @@ fn handle_suback(
     "Received invalid packet id in subscribe ack"
   })
 
+  process.cancel_timer(pending_sub.timeout)
+
   use pairs <- ok_or_drop_connection(
     state,
     list.strict_zip(pending_sub.topics, results),
@@ -678,7 +709,8 @@ fn handle_unsuback(state: State, id: Int) -> actor.Next(Message, State) {
   use pending_unsub <- ok_or_drop_connection(state, dict.get(unsubs, id), fn(_) {
     "Received invalid packet id in unsubscribe ack"
   })
-  process.send(pending_unsub, Ok(Nil))
+  process.cancel_timer(pending_unsub.timeout)
+  process.send(pending_unsub.reply_to, Ok(Nil))
   actor.continue(State(..state, pending_unsubs: dict.delete(unsubs, id)))
 }
 
@@ -736,7 +768,13 @@ fn handle_subscribe(
   })
 
   let #(session, id) = session.reserve_packet_id(state.session)
-  let pending_sub = PendingSubscription(topics, reply_to)
+  let timeout =
+    process.send_after(
+      state.self,
+      state.config.server_timeout,
+      SubscribeTimeout(id),
+    )
+  let pending_sub = PendingSubscription(topics, reply_to, timeout)
   let pending_subs = state.pending_subs |> dict.insert(id, pending_sub)
 
   let topics = {
@@ -746,6 +784,24 @@ fn handle_subscribe(
   connection.send(connection, outgoing.Subscribe(id, topics))
 
   actor.continue(State(..state, session:, pending_subs:))
+}
+
+fn handle_subscribe_timeout(state: State, id: Int) -> actor.Next(Message, State) {
+  let pending_subs = state.pending_subs
+
+  case dict.get(pending_subs, id) {
+    // If the key was not found, it means that the suback
+    // and timeout were in the mailbox at the same time.
+    Error(_) -> actor.continue(state)
+    Ok(PendingSubscription(_, reply_to, _)) -> {
+      process.send(reply_to, Error(OperationTimedOut))
+      let pending_subs = dict.delete(pending_subs, id)
+      drop_connection_and_notify(
+        State(..state, pending_subs:),
+        Some("Subscribe timed out"),
+      )
+    }
+  }
 }
 
 fn handle_unsubscribe(
@@ -759,11 +815,40 @@ fn handle_unsubscribe(
   })
 
   let #(session, id) = session.reserve_packet_id(state.session)
-  let pending_unsubs = state.pending_unsubs |> dict.insert(id, reply_to)
+  let timeout =
+    process.send_after(
+      state.self,
+      state.config.server_timeout,
+      UnsubscribeTimeout(id),
+    )
+  let pending_unsubs =
+    state.pending_unsubs
+    |> dict.insert(id, PendingUnsubscribe(reply_to, timeout))
 
   connection.send(connection, outgoing.Unsubscribe(id, topics))
 
   actor.continue(State(..state, session:, pending_unsubs:))
+}
+
+fn handle_unsubscribe_timeout(
+  state: State,
+  id: Int,
+) -> actor.Next(Message, State) {
+  let pending_unsubs = state.pending_unsubs
+
+  case dict.get(pending_unsubs, id) {
+    // If the key was not found, it means that the unsuback
+    // and timeout were in the mailbox at the same time.
+    Error(_) -> actor.continue(state)
+    Ok(PendingUnsubscribe(reply_to, _)) -> {
+      process.send(reply_to, Error(OperationTimedOut))
+      let pending_unsubs = dict.delete(pending_unsubs, id)
+      drop_connection_and_notify(
+        State(..state, pending_unsubs:),
+        Some("Unsubscribe timed out"),
+      )
+    }
+  }
 }
 
 fn handle_incoming_publish(
@@ -829,10 +914,11 @@ fn notify_if_publishes_finished(state: State) -> State {
   case session.pending_publishes(state.session) {
     0 -> {
       {
-        use listener <- list.each(state.publish_completion_listeners)
-        process.send(listener, Nil)
+        use listener, timer <- dict.each(state.publish_completion_listeners)
+        process.cancel_timer(timer)
+        process.send(listener, Ok(Nil))
       }
-      State(..state, publish_completion_listeners: [])
+      State(..state, publish_completion_listeners: dict.new())
     }
     _ -> state
   }
