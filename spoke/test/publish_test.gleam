@@ -200,3 +200,17 @@ pub fn previous_clean_session_is_discarded_test() {
 
   fake_server.disconnect(client, server)
 }
+
+pub fn wait_for_publishes_timeout_test() {
+  let #(client, server) =
+    fake_server.set_up_connected_client(clean_session: True)
+
+  let data = spoke.PublishData("topic", <<"payload">>, spoke.AtLeastOnce, False)
+  spoke.publish(client, data)
+
+  let assert Error(Nil) = spoke.wait_for_publishes_to_finish(client, 10)
+    as "waiting for publishes should time out if not acked"
+
+  fake_server.drop_incoming_data(server)
+  fake_server.disconnect(client, server)
+}
