@@ -12,6 +12,7 @@
 //// which should immediately close the channel
 //// according to the MQTT specification.
 
+import gleam/bit_array
 import gleam/bool
 import gleam/dynamic
 import gleam/erlang/process.{type Pid, type Selector, type Subject}
@@ -23,7 +24,7 @@ import gleam/string
 import spoke/internal/packet
 import spoke/internal/packet/client/incoming
 import spoke/internal/packet/client/outgoing
-import spoke/internal/transport.{type ByteChannel, type EncodedChannel}
+import spoke/internal/transport.{type ByteChannel}
 
 pub opaque type Connection {
   Connection(subject: Subject(Message), updates: Selector(Update))
@@ -100,6 +101,15 @@ pub fn connect(
   Ok(Connection(messages, updates))
 }
 
+// TODO: Call this from the client
+// pub fn received_data(
+//   connection: Connection,
+//   data: Result(BitArray, String),
+// ) -> Connection {
+//   process.send(connection.subject, Received(data))
+//   connection
+// }
+
 /// Gets the updates `Selector` from the connection
 pub fn updates(connection: Connection) -> Selector(Update) {
   connection.updates
@@ -127,7 +137,7 @@ type Config {
 
 type Message {
   Send(outgoing.Packet)
-  Received(#(BitArray, Result(List(incoming.Packet), String)))
+  Received(Result(BitArray, String))
   ProcessReceived(incoming.Packet)
   SendPing
   ShutDown(Option(String))
@@ -144,14 +154,15 @@ type State {
     keep_alive_ms: Int,
     server_timeout_ms: Int,
     connection_state: ConnectionState,
+    channel: ByteChannel,
+    leftover_data: BitArray,
   )
 }
 
 type ConnectionState {
   /// Connect packet has been sent, but we haven't gotten a connack
-  ConnectingToServer(channel: EncodedChannel, disconnect_timer: process.Timer)
+  ConnectingToServer(disconnect_timer: process.Timer)
   Connected(
-    channel: EncodedChannel,
     /// Timer for sending the next ping request
     ping_timer: process.Timer,
     /// Timer for shutting down the connection if a ping is not responded to in time
@@ -173,7 +184,6 @@ fn establish_channel(
   use channel <- ok_or_exit(config.create_channel(), fn(e) {
     "Failed to establish connection to server: " <> e
   })
-  let channel = transport.encode_channel(channel)
 
   let disconnect_timer =
     process.send_after(
@@ -181,7 +191,7 @@ fn establish_channel(
       config.server_timeout_ms,
       ShutDown(Some("Connect timed out")),
     )
-  let connection_state = ConnectingToServer(channel, disconnect_timer)
+  let connection_state = ConnectingToServer(disconnect_timer)
 
   let parent_monitor = process.monitor_process(parent)
   let base_selector =
@@ -193,11 +203,13 @@ fn establish_channel(
     State(
       mailbox,
       base_selector,
-      next_selector(channel, <<>>, base_selector),
+      next_selector(channel, base_selector),
       config.updates,
       config.keep_alive_ms,
       config.server_timeout_ms,
       connection_state,
+      channel,
+      <<>>,
     )
 
   let connect_options =
@@ -231,8 +243,7 @@ fn ok_or_exit(
 fn run(state: State) -> Nil {
   let message = process.select_forever(state.selector)
   let state = case message {
-    Received(#(new_channel_state, packets)) ->
-      handle_receive(state, new_channel_state, packets)
+    Received(data) -> handle_receive(state, data)
     ProcessReceived(packet) -> process_packet(state, packet)
     Send(packet) -> send_from_session(state, packet)
     SendPing -> send_ping(state)
@@ -243,7 +254,7 @@ fn run(state: State) -> Nil {
 }
 
 fn shut_down(state: State, reason: Option(String)) -> State {
-  get_channel(state).shutdown()
+  state.channel.shutdown()
   stop(reason)
 }
 
@@ -253,13 +264,16 @@ fn send_from_session(state: State, packet: outgoing.Packet) -> State {
   state
 }
 
-fn handle_receive(
-  state: State,
-  new_conn_state: BitArray,
-  packets: Result(List(incoming.Packet), String),
-) -> State {
-  use packets <- ok_or_exit(packets, fn(e) {
+fn handle_receive(state: State, data: Result(BitArray, String)) -> State {
+  use data <- ok_or_exit(data, fn(e) {
     "Transport channel error while receiving: " <> e
+  })
+
+  let data = bit_array.append(state.leftover_data, data)
+  let #(leftover_data, packets) = transport.decode(data)
+
+  use packets <- ok_or_exit(packets, fn(e) {
+    "Decoding error while receiving: " <> e
   })
 
   // Schedule the packets to be processed,
@@ -268,9 +282,8 @@ fn handle_receive(
     process.send(state.self, ProcessReceived(packet))
   })
 
-  let selector =
-    next_selector(get_channel(state), new_conn_state, state.base_selector)
-  State(..state, selector:)
+  let selector = next_selector(state.channel, state.base_selector)
+  State(..state, selector:, leftover_data:)
 }
 
 fn process_packet(state: State, packet: incoming.Packet) -> State {
@@ -288,7 +301,7 @@ fn send_to_session(state: State, packet: incoming.Packet) -> State {
 
 fn handle_connack(state: State, status: packet.ConnAckResult) -> State {
   case state.connection_state {
-    ConnectingToServer(channel, disconnect_timer) -> {
+    ConnectingToServer(disconnect_timer) -> {
       process.cancel_timer(disconnect_timer)
 
       // Send the connack to the session, so that it knows the result
@@ -296,8 +309,7 @@ fn handle_connack(state: State, status: packet.ConnAckResult) -> State {
 
       case status {
         Ok(_session_present) -> {
-          let connection_state =
-            Connected(channel, start_ping_timeout(state), None)
+          let connection_state = Connected(start_ping_timeout(state), None)
           State(..state, connection_state:)
         }
         Error(_) -> {
@@ -315,7 +327,7 @@ fn handle_connack(state: State, status: packet.ConnAckResult) -> State {
 
 fn send_ping(state: State) -> State {
   case state.connection_state {
-    Connected(channel, ping, disconnect) -> {
+    Connected(ping, disconnect) -> {
       // In case we send a packet while the ping timer has expired,
       // but this hasn't run yet (message is in mailbox),
       // we'll have a new timer already started here.
@@ -335,10 +347,7 @@ fn send_ping(state: State) -> State {
               state.server_timeout_ms,
               ShutDown(Some("Ping timeout")),
             )
-          State(
-            ..state,
-            connection_state: Connected(channel, ping, Some(disconnect)),
-          )
+          State(..state, connection_state: Connected(ping, Some(disconnect)))
         }
       }
     }
@@ -349,11 +358,11 @@ fn send_ping(state: State) -> State {
 
 fn handle_pingresp(state: State) -> State {
   case state.connection_state {
-    Connected(channel, ping, Some(shutdown_timer)) -> {
+    Connected(ping, Some(shutdown_timer)) -> {
       process.cancel_timer(shutdown_timer)
-      State(..state, connection_state: Connected(channel, ping, None))
+      State(..state, connection_state: Connected(ping, None))
     }
-    Connected(_, _, None) ->
+    Connected(_, None) ->
       stop_abnormal("No shutdown timer active when receiving PingResp")
     ConnectingToServer(..) -> stop_abnormal("Got unexpected PingResp")
   }
@@ -361,11 +370,10 @@ fn handle_pingresp(state: State) -> State {
 
 /// Selects the next incoming packet from the channel & any messages sent to self.
 fn next_selector(
-  channel: EncodedChannel,
-  channel_state: BitArray,
+  channel: ByteChannel,
   base: Selector(Message),
 ) -> process.Selector(Message) {
-  process.map_selector(channel.selecting_next(channel_state), Received)
+  process.map_selector(channel.selecting_next(), Received)
   |> process.merge_selector(base)
 }
 
@@ -395,30 +403,28 @@ fn send_packet_or_stop(
 // The Client accepts that any data that it sends before it receives a CONNACK packet from the Server
 // will not be processed if the Server rejects the connection.
 fn send_packet(state: State, packet: outgoing.Packet) -> Result(State, String) {
+  use data <- result.try(
+    outgoing.encode_packet(packet)
+    |> result.map_error(fn(e) { "Encode error: " <> string.inspect(e) }),
+  )
+
+  use _ <- result.try(state.channel.send(data))
+
   case state.connection_state {
-    ConnectingToServer(channel, ..) -> {
+    ConnectingToServer(..) -> {
       // Don't start ping if connection has not yet finished
-      use _ <- result.try(channel.send(packet))
       Ok(state)
     }
-    Connected(channel, ping, disconnect) -> {
-      use _ <- result.try(channel.send(packet))
+    Connected(ping, disconnect) -> {
       process.cancel_timer(ping)
       let ping = start_ping_timeout(state)
-      Ok(State(..state, connection_state: Connected(channel, ping, disconnect)))
+      Ok(State(..state, connection_state: Connected(ping, disconnect)))
     }
   }
 }
 
 fn start_ping_timeout(state: State) -> process.Timer {
   process.send_after(state.self, state.keep_alive_ms, SendPing)
-}
-
-fn get_channel(state: State) -> EncodedChannel {
-  case state.connection_state {
-    Connected(channel, ..) -> channel
-    ConnectingToServer(channel, ..) -> channel
-  }
 }
 
 fn stop_abnormal(reason: String) {
