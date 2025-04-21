@@ -19,6 +19,31 @@ pub type DecodeError {
   VarIntTooLarge
 }
 
+/// Decodes all packets from a chunk of binary data.
+/// Returns a list of decoded packets and the leftover data
+/// or the first error if there is invalid data.
+pub fn all(
+  data: BitArray,
+  decoder: fn(BitArray) -> Result(#(packet, BitArray), DecodeError),
+) -> Result(#(List(packet), BitArray), DecodeError) {
+  case all_recursive(data, decoder, []) {
+    Ok(#(result, rest)) -> Ok(#(list.reverse(result), rest))
+    Error(e) -> Error(e)
+  }
+}
+
+fn all_recursive(
+  data: BitArray,
+  decoder: fn(BitArray) -> Result(#(packet, BitArray), DecodeError),
+  packets: List(packet),
+) -> Result(#(List(packet), BitArray), DecodeError) {
+  case decoder(data) {
+    Error(DataTooShort) -> Ok(#(packets, data))
+    Error(e) -> Error(e)
+    Ok(#(packet, rest)) -> all_recursive(rest, decoder, [packet, ..packets])
+  }
+}
+
 pub fn connect(
   flags: BitArray,
   data: BitArray,
@@ -165,7 +190,7 @@ pub fn publish(
       use #(make_data, data) <- try(case qos {
         QoS0 -> {
           use _ <- try(dup |> must_equal(0))
-          Ok(#(packet.PublishDataQoS0(_), data))
+          Ok(#(packet.PublishDataQoS0, data))
         }
         QoS1 -> {
           use #(id, data) <- try(integer(data))

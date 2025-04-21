@@ -1,4 +1,6 @@
+import gleam/bit_array
 import gleeunit/should
+import spoke/internal/packet/client/incoming
 import spoke/internal/packet/decode
 
 pub fn decode_string_too_short_test() {
@@ -30,4 +32,31 @@ pub fn decode_varint_too_short_data_test() {
 pub fn decode_varint_too_large_test() {
   decode.varint(<<0xFF, 0xFF, 0xFF, 0xFF, 1>>)
   |> should.equal(Error(decode.VarIntTooLarge))
+}
+
+pub fn all_contained_packets_test() {
+  let assert Ok(#([incoming.PingResp], <<>>)) =
+    decode.all(<<13:4, 0:4, 0:8>>, incoming.decode_packet)
+}
+
+pub fn all_split_packet_test() {
+  let assert Ok(#([], leftover)) =
+    decode.all(<<13:4, 0:4>>, incoming.decode_packet)
+
+  let data = bit_array.append(leftover, <<0:8>>)
+  let assert Ok(#([incoming.PingResp], <<>>)) =
+    decode.all(data, incoming.decode_packet)
+}
+
+pub fn all_multiple_packets_test() {
+  let connack = <<2:4, 0:4, 2:8, 0:16>>
+  let pingresp = <<13:4, 0:4, 0:8>>
+
+  let assert Ok(#([incoming.ConnAck(_), incoming.PingResp], <<>>)) =
+    decode.all(<<connack:bits, pingresp:bits>>, incoming.decode_packet)
+}
+
+pub fn all_invalid_data_test() {
+  let assert Error(decode.InvalidPacketIdentifier(_)) =
+    decode.all(<<13:4, 0:4, 0:8, 0xdeadbeef>>, incoming.decode_packet)
 }
