@@ -44,6 +44,7 @@ pub type PubAckResult {
   InvalidPubAckId
 }
 
+// TODO: Don't use Bool here
 pub fn new(clean_session: Bool) -> Session {
   Session(
     clean_session:,

@@ -1,0 +1,12 @@
+---
+version: 1.2.7
+title: Connect and Disconnect
+---
+  --> Perform(Connect(ConnectOptions(False, "my-client", 15, Some(AuthOptions("username", Some("password"))), None)))
+<--   [OpenTransport]
+  --> TransportEstablished
+<--   [SendData(Connect(ConnectOptions(False, "my-client", 15, Some(AuthOptions("username", Some("password"))), None)))]
+  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+<--   [ReceivedConnectResponse(Ok(SessionNotPresent))]
+  --> Perform(Disconnect)
+<--   [SendData(Disconnect), CloseTransport]
