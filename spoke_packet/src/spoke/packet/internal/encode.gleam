@@ -5,16 +5,12 @@ import gleam/bytes_tree.{type BytesTree}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import spoke/packet.{
-  type ConnectOptions, type QoS, type SubscribeRequest, type SubscribeResult,
-  QoS0, QoS1, QoS2,
+  type ConnectOptions, type EncodeError, type QoS, type SubscribeRequest,
+  type SubscribeResult, EmptySubscribeList, EmptyUnsubscribeList, QoS0, QoS1,
+  QoS2,
 }
 
 const protocol_level: Int = 4
-
-pub type EncodeError {
-  EmptySubscribeList
-  EmptyUnsubscribeList
-}
 
 pub fn connect(options: ConnectOptions) -> BytesTree {
   // TODO what to do with this?

@@ -2,9 +2,9 @@
 
 import gleam/bytes_tree.{type BytesTree}
 import spoke/packet.{
-  type ConnectOptions, type PublishData, type SubscribeRequest,
+  type ConnectOptions, type EncodeError, type PublishData, type SubscribeRequest,
 }
-import spoke/packet/encode.{type EncodeError}
+import spoke/packet/internal/encode
 
 pub type Packet {
   Connect(ConnectOptions)

@@ -78,3 +78,19 @@ pub type SessionPresence {
 /// ([MQTT 3.2](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718033))
 pub type ConnAckResult =
   Result(SessionPresence, ConnectError)
+
+/// An error that can be encountered during decoding.
+pub type DecodeError {
+  InvalidPacketIdentifier(Int)
+  DataTooShort
+  InvalidData
+  InvalidUTF8
+  InvalidQoS
+  VarIntTooLarge
+}
+
+/// An error that can be encountered during encoding.
+pub type EncodeError {
+  EmptySubscribeList
+  EmptyUnsubscribeList
+}

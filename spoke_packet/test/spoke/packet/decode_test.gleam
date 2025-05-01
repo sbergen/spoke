@@ -1,14 +1,15 @@
 import gleam/bit_array
 import gleeunit/should
+import spoke/packet
 import spoke/packet/client/incoming
-import spoke/packet/decode
+import spoke/packet/internal/decode
 
 pub fn decode_string_too_short_test() {
-  let assert Error(decode.DataTooShort) = decode.string(<<8:16, 0>>)
+  let assert Error(packet.DataTooShort) = decode.string(<<8:16, 0>>)
 }
 
 pub fn decode_string_invalid_data_test() {
-  let assert Error(decode.InvalidUTF8) = decode.string(<<2:16, 0xc3, 0x28>>)
+  let assert Error(packet.InvalidUTF8) = decode.string(<<2:16, 0xc3, 0x28>>)
 }
 
 pub fn decode_varint_small_test() {
@@ -26,12 +27,12 @@ pub fn decode_varint_large_test() {
 }
 
 pub fn decode_varint_too_short_data_test() {
-  decode.varint(<<1:1, 0:7>>) |> should.equal(Error(decode.DataTooShort))
+  decode.varint(<<1:1, 0:7>>) |> should.equal(Error(packet.DataTooShort))
 }
 
 pub fn decode_varint_too_large_test() {
   decode.varint(<<0xFF, 0xFF, 0xFF, 0xFF, 1>>)
-  |> should.equal(Error(decode.VarIntTooLarge))
+  |> should.equal(Error(packet.VarIntTooLarge))
 }
 
 pub fn all_contained_packets_test() {
@@ -57,6 +58,6 @@ pub fn all_multiple_packets_test() {
 }
 
 pub fn all_invalid_data_test() {
-  let assert Error(decode.InvalidPacketIdentifier(_)) =
+  let assert Error(packet.InvalidPacketIdentifier(_)) =
     decode.all(<<13:4, 0:4, 0:8, 0xdeadbeef>>, incoming.decode_packet)
 }

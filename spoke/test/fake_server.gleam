@@ -10,7 +10,6 @@ import glisten/tcp
 import spoke
 import spoke/internal/session
 import spoke/packet.{SessionNotPresent, SessionPresent}
-import spoke/packet/decode
 import spoke/packet/server/incoming
 import spoke/packet/server/outgoing
 import spoke/tcp as spoke_tcp
@@ -279,7 +278,7 @@ fn receive_packet(
 ) -> #(ConnectedServer, incoming.Packet) {
   case incoming.decode_packet(server.leftover) {
     Ok(#(packet, leftover)) -> #(ConnectedServer(..server, leftover:), packet)
-    Error(decode.DataTooShort) -> {
+    Error(packet.DataTooShort) -> {
       let assert Ok(new_data) = tcp.receive_timeout(server.socket, 0, timeout)
       let data = bit_array.append(server.leftover, new_data)
       let assert Ok(#(packet, leftover)) = incoming.decode_packet(data)

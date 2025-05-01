@@ -5,18 +5,10 @@ import gleam/list
 import gleam/option.{None, Some}
 import gleam/result.{try}
 import spoke/packet.{
-  type ConnAckResult, type ConnectOptions, type PublishData, type QoS,
-  type SubscribeRequest, type SubscribeResult, QoS0, QoS1, QoS2,
-  SubscribeRequest,
-}
-
-pub type DecodeError {
-  InvalidPacketIdentifier(Int)
-  DataTooShort
-  InvalidData
-  InvalidUTF8
-  InvalidQoS
-  VarIntTooLarge
+  type ConnAckResult, type ConnectOptions, type DecodeError, type PublishData,
+  type QoS, type SubscribeRequest, type SubscribeResult, DataTooShort,
+  InvalidData, InvalidQoS, InvalidUTF8, QoS0, QoS1, QoS2, SubscribeRequest,
+  VarIntTooLarge,
 }
 
 /// Decodes all packets from a chunk of binary data.

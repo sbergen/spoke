@@ -3,8 +3,10 @@
 //// but I might split the packets into a separate packages at some point.
 
 import gleam/bytes_tree.{type BytesTree}
-import spoke/packet.{type ConnAckResult, type PublishData, type SubscribeResult}
-import spoke/packet/encode.{type EncodeError}
+import spoke/packet.{
+  type ConnAckResult, type EncodeError, type PublishData, type SubscribeResult,
+}
+import spoke/packet/internal/encode
 
 pub type Packet {
   ConnAck(ConnAckResult)

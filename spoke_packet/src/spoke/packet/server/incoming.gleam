@@ -3,9 +3,9 @@
 //// but I might split the packets into a separate packages at some point.
 
 import spoke/packet.{
-  type ConnectOptions, type PublishData, type SubscribeRequest,
+  type ConnectOptions, type DecodeError, type PublishData, type SubscribeRequest,
 }
-import spoke/packet/decode.{type DecodeError}
+import spoke/packet/internal/decode
 
 pub type Packet {
   Connect(ConnectOptions)
@@ -20,6 +20,18 @@ pub type Packet {
   Disconnect
 }
 
+/// Decodes all packets from a chunk of binary data.
+/// Returns a list of decoded packets and the leftover data,
+/// or the first error if the data is invalid.
+pub fn decode_all(
+  bytes: BitArray,
+) -> Result(#(List(Packet), BitArray), DecodeError) {
+  decode.all(bytes, decode_packet)
+}
+
+/// Decodes a single packet from a chunk of binary data.
+/// Returns the decoded packet and the leftover data,
+/// or the first error if the data is invalid.
 pub fn decode_packet(
   bytes: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {
@@ -36,8 +48,8 @@ pub fn decode_packet(
         10 -> decode.unsubscribe(flags, rest, Unsubscribe)
         12 -> decode.zero_length(flags, rest, PingReq)
         14 -> decode.zero_length(flags, rest, Disconnect)
-        _ -> Error(decode.InvalidPacketIdentifier(id))
+        _ -> Error(packet.InvalidPacketIdentifier(id))
       }
-    _ -> Error(decode.DataTooShort)
+    _ -> Error(packet.DataTooShort)
   }
 }

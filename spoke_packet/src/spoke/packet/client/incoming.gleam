@@ -1,7 +1,9 @@
 //// Incoming packets for a MQTT client
 
-import spoke/packet.{type ConnAckResult, type PublishData, type SubscribeResult}
-import spoke/packet/decode.{type DecodeError}
+import spoke/packet.{
+  type ConnAckResult, type DecodeError, type PublishData, type SubscribeResult,
+}
+import spoke/packet/internal/decode
 
 pub type Packet {
   ConnAck(ConnAckResult)
@@ -15,6 +17,18 @@ pub type Packet {
   PingResp
 }
 
+/// Decodes all packets from a chunk of binary data.
+/// Returns a list of decoded packets and the leftover data,
+/// or the first error if the data is invalid.
+pub fn decode_all(
+  bytes: BitArray,
+) -> Result(#(List(Packet), BitArray), DecodeError) {
+  decode.all(bytes, decode_packet)
+}
+
+/// Decodes a single packet from a chunk of binary data.
+/// Returns the decoded packet and the leftover data,
+/// or the first error if the data is invalid.
 pub fn decode_packet(
   bytes: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {
@@ -30,8 +44,8 @@ pub fn decode_packet(
         9 -> decode.suback(flags, rest, SubAck)
         11 -> decode.only_packet_id(flags, rest, 0, UnsubAck)
         13 -> decode.zero_length(flags, rest, PingResp)
-        _ -> Error(decode.InvalidPacketIdentifier(id))
+        _ -> Error(packet.InvalidPacketIdentifier(id))
       }
-    _ -> Error(decode.DataTooShort)
+    _ -> Error(packet.DataTooShort)
   }
 }
