@@ -8,8 +8,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor
 import gleam/result
 import gleam/string
+import spoke/core/internal/session.{type Session}
 import spoke/internal/connection.{type Connection}
-import spoke/internal/session.{type Session}
 import spoke/internal/transport.{type ByteChannel}
 import spoke/packet.{type SubscribeResult}
 import spoke/packet/client/incoming

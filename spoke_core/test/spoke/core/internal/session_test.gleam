@@ -1,5 +1,5 @@
 import gleeunit/should
-import spoke/internal/session.{type Session}
+import spoke/core/internal/session.{type Session}
 import spoke/packet
 
 pub fn ephemeral_session_serialize_test() {

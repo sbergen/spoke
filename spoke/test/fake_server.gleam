@@ -8,7 +8,7 @@ import glisten/socket.{type ListenSocket, type Socket}
 import glisten/socket/options.{ActiveMode, Passive}
 import glisten/tcp
 import spoke
-import spoke/internal/session
+import spoke/core/internal/session
 import spoke/packet.{SessionNotPresent, SessionPresent}
 import spoke/packet/server/incoming
 import spoke/packet/server/outgoing

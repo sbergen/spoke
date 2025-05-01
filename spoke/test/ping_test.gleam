@@ -2,7 +2,7 @@ import fake_server.{type ConnectedServer}
 import gleam/erlang/process
 import gleam/option.{None}
 import spoke.{AtMostOnce}
-import spoke/internal/session
+import spoke/core/internal/session
 import spoke/packet
 import spoke/packet/server/incoming as server_in
 import spoke/packet/server/outgoing as server_out
