@@ -1,10 +1,10 @@
 //// Outgoing packets for a MQTT client
 
 import gleam/bytes_tree.{type BytesTree}
-import spoke/internal/packet.{
+import spoke/packet.{
   type ConnectOptions, type PublishData, type SubscribeRequest,
 }
-import spoke/internal/packet/encode.{type EncodeError}
+import spoke/packet/encode.{type EncodeError}
 
 pub type Packet {
   Connect(ConnectOptions)

@@ -1,7 +1,7 @@
 import gleam/bit_array
 import gleeunit/should
-import spoke/internal/packet/client/incoming
-import spoke/internal/packet/decode
+import spoke/packet/client/incoming
+import spoke/packet/decode
 
 pub fn decode_string_too_short_test() {
   let assert Error(decode.DataTooShort) = decode.string(<<8:16, 0>>)

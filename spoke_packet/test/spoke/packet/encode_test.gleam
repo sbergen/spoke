@@ -1,6 +1,6 @@
 import gleeunit/should
-import spoke/internal/packet/decode
-import spoke/internal/packet/encode
+import spoke/packet/decode
+import spoke/packet/encode
 
 // The string tests use the decode module,
 // but that should be good enough to ensure they keep functioning correctly.

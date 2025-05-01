@@ -8,11 +8,11 @@ import glisten/socket.{type ListenSocket, type Socket}
 import glisten/socket/options.{ActiveMode, Passive}
 import glisten/tcp
 import spoke
-import spoke/internal/packet
-import spoke/internal/packet/decode
-import spoke/internal/packet/server/incoming
-import spoke/internal/packet/server/outgoing
 import spoke/internal/session
+import spoke/packet.{SessionNotPresent, SessionPresent}
+import spoke/packet/decode
+import spoke/packet/server/incoming
+import spoke/packet/server/outgoing
 import spoke/tcp as spoke_tcp
 
 const default_timeout = 200
@@ -48,7 +48,8 @@ pub fn set_up_connected_client_with_timeout(
       default_connector(server.port),
     )
 
-  let #(server, _) = connect_client(client, server, clean_session, False)
+  let #(server, _) =
+    connect_client(client, server, clean_session, SessionNotPresent)
 
   #(client, server)
 }
@@ -68,7 +69,7 @@ pub fn connect_client(
   client: spoke.Client,
   server: ListeningServer,
   clean_session: Bool,
-  session_present: Bool,
+  session_present: packet.SessionPresence,
 ) -> #(ConnectedServer, packet.ConnectOptions) {
   spoke.connect(client, clean_session)
 
@@ -95,7 +96,11 @@ pub fn connect_client(
       }
   }
 
-  is_session_present |> should.equal(session_present)
+  is_session_present
+  |> should.equal(case session_present {
+    SessionNotPresent -> False
+    SessionPresent -> True
+  })
 
   #(server, details)
 }
@@ -140,7 +145,7 @@ pub fn reconnect(
   client: spoke.Client,
   server: ListeningServer,
   clean_session: Bool,
-  session_present: Bool,
+  session_present: packet.SessionPresence,
 ) -> ConnectedServer {
   let #(server, _) =
     connect_client(client, server, clean_session, session_present)

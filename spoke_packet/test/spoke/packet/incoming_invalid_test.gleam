@@ -1,7 +1,7 @@
 import gleeunit/should
-import spoke/internal/packet/client/incoming
-import spoke/internal/packet/decode.{InvalidData}
-import spoke/internal/packet/encode
+import spoke/packet/client/incoming
+import spoke/packet/decode.{InvalidData}
+import spoke/packet/encode
 
 pub fn decode_too_short_test() {
   incoming.decode_packet(<<0:7>>)

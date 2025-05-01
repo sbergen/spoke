@@ -4,7 +4,7 @@ import gleam/bit_array
 import gleam/bytes_tree.{type BytesTree}
 import gleam/list
 import gleam/option.{type Option, None, Some}
-import spoke/internal/packet.{
+import spoke/packet.{
   type ConnectOptions, type QoS, type SubscribeRequest, type SubscribeResult,
   QoS0, QoS1, QoS2,
 }
@@ -156,8 +156,8 @@ pub fn unsubscribe(
 
 pub fn connack(result: packet.ConnAckResult) -> BytesTree {
   let header = case result {
-    Ok(True) -> <<1, 0>>
-    Ok(False) -> <<0, 0>>
+    Ok(packet.SessionPresent) -> <<1, 0>>
+    Ok(packet.SessionNotPresent) -> <<0, 0>>
     Error(e) -> <<0, encode_connack_error(e):8>>
   }
   encode_parts(2, flags: <<0:4>>, header: header, payload: bytes_tree.new())

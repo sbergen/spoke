@@ -21,11 +21,11 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
-import spoke/internal/packet
-import spoke/internal/packet/client/incoming
-import spoke/internal/packet/client/outgoing
-import spoke/internal/packet/decode
 import spoke/internal/transport.{type ByteChannel}
+import spoke/packet
+import spoke/packet/client/incoming
+import spoke/packet/client/outgoing
+import spoke/packet/decode
 
 pub opaque type Connection {
   Connection(subject: Subject(Message), updates: Selector(Update))

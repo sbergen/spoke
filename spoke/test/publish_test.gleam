@@ -1,9 +1,9 @@
 import fake_server
 import gleam/erlang/process
 import spoke.{AtMostOnce}
-import spoke/internal/packet
-import spoke/internal/packet/server/incoming as server_in
-import spoke/internal/packet/server/outgoing as server_out
+import spoke/packet.{SessionNotPresent, SessionPresent}
+import spoke/packet/server/incoming as server_in
+import spoke/packet/server/outgoing as server_out
 
 pub fn publish_qos0_test() {
   let #(client, server) =
@@ -57,7 +57,7 @@ pub fn resend_qos1_after_disconnected_test() {
   // Consume disconnect update:
   let assert Ok(_) = process.receive(spoke.updates(client), 100)
 
-  let server = fake_server.reconnect(client, server, False, True)
+  let server = fake_server.reconnect(client, server, False, SessionPresent)
 
   // Expect re-transmission after reconnect, since no ack was received
   let expected_msg = packet.MessageData("topic", <<"payload">>, retain: False)
@@ -121,7 +121,7 @@ pub fn publish_qos2_resend_test() {
   let server = fake_server.close_connection(server)
   // Consume disconnect update:
   let assert Ok(_) = process.receive(spoke.updates(client), 100)
-  let server = fake_server.reconnect(client, server, False, True)
+  let server = fake_server.reconnect(client, server, False, SessionPresent)
 
   // Should resend after reconnecting
   let expected =
@@ -153,7 +153,7 @@ pub fn publish_qos2_rerelease_test() {
   let server = fake_server.close_connection(server)
   // Consume disconnect update:
   let assert Ok(_) = process.receive(spoke.updates(client), 100)
-  let server = fake_server.reconnect(client, server, False, True)
+  let server = fake_server.reconnect(client, server, False, SessionPresent)
 
   let server = fake_server.expect_packet(server, server_in.PubRel(1))
   fake_server.send_response(server, server_out.PubComp(1))
@@ -174,7 +174,7 @@ pub fn clean_session_after_disconnected_test() {
   // Consume disconnect update:
   let assert Ok(_) = process.receive(spoke.updates(client), 100)
 
-  let server = fake_server.reconnect(client, server, True, False)
+  let server = fake_server.reconnect(client, server, True, SessionNotPresent)
 
   let assert 0 = spoke.pending_publishes(client)
     as "the packet should be discarded, when clean_session is set to True"
@@ -193,7 +193,7 @@ pub fn previous_clean_session_is_discarded_test() {
   // Consume disconnect update:
   let assert Ok(_) = process.receive(spoke.updates(client), 100)
 
-  let server = fake_server.reconnect(client, server, False, False)
+  let server = fake_server.reconnect(client, server, False, SessionNotPresent)
 
   let assert 0 = spoke.pending_publishes(client)
     as "the packet should be discarded, when clean_session was set to True in previous session"

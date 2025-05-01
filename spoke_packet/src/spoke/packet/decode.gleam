@@ -4,7 +4,7 @@ import gleam/bit_array
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result.{try}
-import spoke/internal/packet.{
+import spoke/packet.{
   type ConnAckResult, type ConnectOptions, type PublishData, type QoS,
   type SubscribeRequest, type SubscribeResult, QoS0, QoS1, QoS2,
   SubscribeRequest,
@@ -355,7 +355,13 @@ fn decode_connack_code(
   code: Int,
 ) -> Result(ConnAckResult, DecodeError) {
   case code {
-    0 -> Ok(Ok(session_present == 1))
+    0 ->
+      Ok(
+        Ok(case session_present {
+          1 -> packet.SessionPresent
+          _ -> packet.SessionNotPresent
+        }),
+      )
     1 -> Ok(Error(packet.UnacceptableProtocolVersion))
     2 -> Ok(Error(packet.IdentifierRefused))
     3 -> Ok(Error(packet.ServerUnavailable))

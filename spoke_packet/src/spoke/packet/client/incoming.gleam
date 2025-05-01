@@ -1,9 +1,7 @@
 //// Incoming packets for a MQTT client
 
-import spoke/internal/packet.{
-  type ConnAckResult, type PublishData, type SubscribeResult,
-}
-import spoke/internal/packet/decode.{type DecodeError}
+import spoke/packet.{type ConnAckResult, type PublishData, type SubscribeResult}
+import spoke/packet/decode.{type DecodeError}
 
 pub type Packet {
   ConnAck(ConnAckResult)

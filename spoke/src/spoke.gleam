@@ -9,11 +9,11 @@ import gleam/otp/actor
 import gleam/result
 import gleam/string
 import spoke/internal/connection.{type Connection}
-import spoke/internal/packet.{type SubscribeResult}
-import spoke/internal/packet/client/incoming
-import spoke/internal/packet/client/outgoing
 import spoke/internal/session.{type Session}
 import spoke/internal/transport.{type ByteChannel}
+import spoke/packet.{type SubscribeResult}
+import spoke/packet/client/incoming
+import spoke/packet/client/outgoing
 
 /// A function that connects a transport channel and
 /// returns the send, receive, and shutdown functions or an error.
@@ -661,7 +661,8 @@ fn handle_connack(
   result: packet.ConnAckResult,
 ) -> actor.Next(Message, State) {
   let update = case result {
-    Ok(session_present) -> ConnectAccepted(session_present)
+    Ok(session_present) ->
+      ConnectAccepted(session_present == packet.SessionPresent)
     Error(e) -> ConnectRejected(from_packet_connect_error(e))
   }
   process.send(state.updates, ConnectionStateChanged(update))

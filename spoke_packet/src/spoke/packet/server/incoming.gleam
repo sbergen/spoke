@@ -2,10 +2,10 @@
 //// Note that these are currently used only for testing,
 //// but I might split the packets into a separate packages at some point.
 
-import spoke/internal/packet.{
+import spoke/packet.{
   type ConnectOptions, type PublishData, type SubscribeRequest,
 }
-import spoke/internal/packet/decode.{type DecodeError}
+import spoke/packet/decode.{type DecodeError}
 
 pub type Packet {
   Connect(ConnectOptions)
