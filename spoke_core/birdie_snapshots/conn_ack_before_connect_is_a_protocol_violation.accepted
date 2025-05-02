@@ -1,0 +1,8 @@
+---
+version: 1.2.7
+title: ConnAck before Connect is a protocol violation
+---
+  --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+<--   [OpenTransport]
+  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+<--   [ProtocolViolation("Received data before sending CONNECT"), CloseTransport]

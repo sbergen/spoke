@@ -1,8 +1,8 @@
 ---
 version: 1.2.7
-title: Reconnect after failure
+title: Reconnect after connect failure
 ---
-<flushed previous operations>
+<flushed failed auth>
   --> Perform(Connect(ConnectOptions(False, "my-client", 15, Some(AuthOptions("username", Some("password"))), None)))
 <--   [OpenTransport]
   --> TransportEstablished

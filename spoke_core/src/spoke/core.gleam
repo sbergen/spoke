@@ -10,12 +10,15 @@ import spoke/packet/client/outgoing
 type ConnectionState {
   NotConnected
   Connecting(options: packet.ConnectOptions)
-  Connected(leftover_data: BitArray)
+  Connected(leftover_data: BitArray, acked: Bool)
 }
 
 pub opaque type State {
   State(session: Session, connection: ConnectionState)
 }
+
+pub type Timestamp =
+  Int
 
 pub type OperationId =
   Int
@@ -39,6 +42,7 @@ pub type Output {
   SendData(BytesTree)
   ReceivedMessage(packet.MessageData)
   ReceivedConnectResponse(packet.ConnAckResult)
+  ProtocolViolation(String)
 }
 
 pub type Next {
@@ -49,7 +53,7 @@ pub fn new() -> State {
   State(session.new(False), NotConnected)
 }
 
-pub fn tick(state: State, time: Int, input: Input) -> Next {
+pub fn tick(state: State, time: Timestamp, input: Input) -> Next {
   case input {
     ReceivedData(data) -> receive(state, data)
     Tick -> todo
@@ -82,53 +86,80 @@ fn connect(state: State, options: packet.ConnectOptions) -> Next {
 }
 
 fn disconnect(state: State) -> Next {
-  Next(State(..state, connection: NotConnected), [
-    send(outgoing.Disconnect),
-    CloseTransport,
-  ])
+  let output = [CloseTransport]
+
+  let output = case state.connection {
+    Connected(_, True) -> [send(outgoing.Disconnect), ..output]
+    _ -> output
+  }
+
+  Next(State(..state, connection: NotConnected), output)
 }
 
 fn transport_established(state: State) -> Next {
   // TODO: Handle errors
   let assert Connecting(options) = state.connection
-
-  // TODO: Start pings
   let connect_packet = outgoing.Connect(options)
-  Next(State(..state, connection: Connected(<<>>)), [send(connect_packet)])
+  Next(State(..state, connection: Connected(<<>>, False)), [
+    send(connect_packet),
+  ])
 }
 
 fn receive(state: State, data: BitArray) -> Next {
-  // TODO: Handle errors
-  let assert Connected(leftover_data) = state.connection
-  let data = bit_array.append(leftover_data, data)
-  let assert Ok(#(packets, leftover_data)) = incoming.decode_all(data)
-  let state = State(..state, connection: Connected(leftover_data))
+  case state.connection {
+    Connected(leftover_data, acked) -> {
+      let data = bit_array.append(leftover_data, data)
+      let assert Ok(#(packets, leftover_data)) = incoming.decode_all(data)
 
-  let Next(state, outputs) = {
-    use Next(state, outputs), packet <- list.fold(packets, Next(state, []))
+      let state = State(..state, connection: Connected(leftover_data, acked))
 
-    case packet {
-      incoming.ConnAck(result) -> handle_connack(state, result, outputs)
-      incoming.PingResp -> todo
-      incoming.PubAck(_) -> todo
-      incoming.PubComp(_) -> todo
-      incoming.PubRec(_) -> todo
-      incoming.PubRel(_) -> todo
-      incoming.Publish(_) -> todo
-      incoming.SubAck(_, _) -> todo
-      incoming.UnsubAck(_) -> todo
+      let Next(state, outputs) = {
+        use Next(state, outputs), packet <- list.fold(packets, Next(state, []))
+
+        case packet, acked {
+          incoming.ConnAck(result), False ->
+            handle_connack(state, result, outputs, leftover_data)
+
+          incoming.ConnAck(_), True ->
+            protocol_violation(state, "Got CONNACK while already connected")
+
+          _, False ->
+            protocol_violation(
+              state,
+              "The first packet sent from the Server to the Client MUST be a CONNACK Packet",
+            )
+          incoming.PingResp, True -> todo
+          incoming.PubAck(_), True -> todo
+          incoming.PubComp(_), True -> todo
+          incoming.PubRec(_), True -> todo
+          incoming.PubRel(_), True -> todo
+          incoming.Publish(_), True -> todo
+          incoming.SubAck(_, _), True -> todo
+          incoming.UnsubAck(_), True -> todo
+        }
+      }
+
+      Next(state, list.reverse(outputs))
     }
-  }
 
-  Next(state, list.reverse(outputs))
+    Connecting(_) ->
+      protocol_violation(state, "Received data before sending CONNECT")
+
+    NotConnected ->
+      protocol_violation(state, "Received data while not connected")
+  }
 }
 
 fn handle_connack(
   state: State,
   result: packet.ConnAckResult,
   outputs: List(Output),
+  leftover_data: BitArray,
 ) -> Next {
+  let state = State(..state, connection: Connected(leftover_data, True))
   let outputs = [ReceivedConnectResponse(result), ..outputs]
+
+  // TODO: Start pings
 
   // If a server sends a CONNACK packet containing a non-zero return code
   // it MUST then close the Network Connection.
@@ -142,6 +173,13 @@ fn handle_connack(
 
 fn noop(state: State) -> Next {
   Next(state, [])
+}
+
+fn protocol_violation(state: State, error: String) -> Next {
+  Next(State(..state, connection: NotConnected), [
+    ProtocolViolation(error),
+    CloseTransport,
+  ])
 }
 
 fn send(packet: outgoing.Packet) -> Output {

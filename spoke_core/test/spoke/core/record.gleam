@@ -3,12 +3,12 @@ import gleam/bytes_tree
 import gleam/dynamic.{type Dynamic}
 import gleam/list
 import gleam/string
-import spoke/core
+import spoke/core.{type Timestamp}
 import spoke/packet/server/incoming as server_in
 import spoke/packet/server/outgoing as server_out
 
 pub opaque type Recorder {
-  Recorder(state: core.State, time: Int, log: String)
+  Recorder(state: core.State, time: Timestamp, log: String)
 }
 
 pub fn new() -> Recorder {
@@ -31,8 +31,8 @@ pub fn received(recorder: Recorder, packet: server_out.Packet) -> Recorder {
   input_preformatted(recorder, input, string.inspect(ReceivedPacket(packet)))
 }
 
-pub fn flush(recorder: Recorder) -> Recorder {
-  Recorder(..recorder, log: "<flushed previous operations>\n")
+pub fn flush(recorder: Recorder, what: String) -> Recorder {
+  Recorder(..recorder, log: "<flushed " <> what <> ">\n")
 }
 
 pub fn snap(recorder: Recorder, title: String) -> Nil {
