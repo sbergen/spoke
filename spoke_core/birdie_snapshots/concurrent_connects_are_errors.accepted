@@ -1,0 +1,14 @@
+---
+version: 1.2.7
+title: Concurrent connects are errors
+---
+  --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+<--   [OpenTransport]
+  --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  !!  Already connecting
+  --> TransportEstablished
+<--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
+  --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  !!  Already connected
+  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+<--   [ReceivedConnectResponse(Ok(SessionNotPresent))]

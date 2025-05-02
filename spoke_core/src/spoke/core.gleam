@@ -7,16 +7,6 @@ import spoke/packet
 import spoke/packet/client/incoming
 import spoke/packet/client/outgoing
 
-type ConnectionState {
-  NotConnected
-  Connecting(options: packet.ConnectOptions)
-  Connected(leftover_data: BitArray, acked: Bool)
-}
-
-pub opaque type State {
-  State(session: Session, connection: ConnectionState)
-}
-
 pub type Timestamp =
   Int
 
@@ -39,50 +29,64 @@ pub type Input {
 pub type Output {
   OpenTransport
   CloseTransport
+  CloseTransportUnexpectedly(String)
   SendData(BytesTree)
   ReceivedMessage(packet.MessageData)
   ReceivedConnectResponse(packet.ConnAckResult)
-  ProtocolViolation(String)
 }
 
 pub type Next {
   Next(state: State, outputs: List(Output))
 }
 
+type ConnectionState {
+  NotConnected
+  Connecting(options: packet.ConnectOptions)
+  Connected(leftover_data: BitArray, acked: Bool)
+}
+
+pub opaque type State {
+  State(session: Session, connection: ConnectionState)
+}
+
 pub fn new() -> State {
   State(session.new(False), NotConnected)
 }
 
-pub fn tick(state: State, time: Timestamp, input: Input) -> Next {
+pub fn tick(state: State, time: Timestamp, input: Input) -> Result(Next, String) {
   case input {
-    ReceivedData(data) -> receive(state, data)
+    ReceivedData(data) -> Ok(receive(state, data))
     Tick -> todo
     TransportEstablished -> transport_established(state)
     TransportFailed(_) -> todo
     Perform(action) ->
       case action {
         Connect(options) -> connect(state, options)
-        Disconnect -> disconnect(state)
+        Disconnect -> Ok(disconnect(state))
       }
   }
 }
 
-fn connect(state: State, options: packet.ConnectOptions) -> Next {
-  use <- bool.guard(when: state.connection != NotConnected, return: noop(state))
+fn connect(state: State, options: packet.ConnectOptions) -> Result(Next, String) {
+  case state.connection {
+    Connected(_, _) -> Error("Already connected")
+    Connecting(_) -> Error("Already connecting")
+    NotConnected -> {
+      // [MQTT-3.1.2-6]
+      // If CleanSession is set to 1,
+      // the Client and Server MUST discard any previous Session and start a new one.
+      // This Session lasts as long as the Network Connection.
+      // State data associated with this Session MUST NOT be reused in any subsequent Session.
+      let session = case
+        options.clean_session || session.is_ephemeral(state.session)
+      {
+        True -> session.new(options.clean_session)
+        False -> state.session
+      }
 
-  // [MQTT-3.1.2-6]
-  // If CleanSession is set to 1,
-  // the Client and Server MUST discard any previous Session and start a new one.
-  // This Session lasts as long as the Network Connection.
-  // State data associated with this Session MUST NOT be reused in any subsequent Session.
-  let session = case
-    options.clean_session || session.is_ephemeral(state.session)
-  {
-    True -> session.new(options.clean_session)
-    False -> state.session
+      Ok(Next(State(session, Connecting(options)), [OpenTransport]))
+    }
   }
-
-  Next(State(session, Connecting(options)), [OpenTransport])
 }
 
 fn disconnect(state: State) -> Next {
@@ -96,13 +100,19 @@ fn disconnect(state: State) -> Next {
   Next(State(..state, connection: NotConnected), output)
 }
 
-fn transport_established(state: State) -> Next {
-  // TODO: Handle errors
-  let assert Connecting(options) = state.connection
-  let connect_packet = outgoing.Connect(options)
-  Next(State(..state, connection: Connected(<<>>, False)), [
-    send(connect_packet),
-  ])
+fn transport_established(state: State) -> Result(Next, String) {
+  case state.connection {
+    Connecting(options) -> {
+      let connect_packet = outgoing.Connect(options)
+      Ok(
+        Next(State(..state, connection: Connected(<<>>, False)), [
+          send(connect_packet),
+        ]),
+      )
+    }
+    Connected(_, _) -> Error("Already connected")
+    NotConnected -> Error("Not connecting")
+  }
 }
 
 fn receive(state: State, data: BitArray) -> Next {
@@ -121,10 +131,10 @@ fn receive(state: State, data: BitArray) -> Next {
             handle_connack(state, result, outputs, leftover_data)
 
           incoming.ConnAck(_), True ->
-            protocol_violation(state, "Got CONNACK while already connected")
+            kill_connection(state, "Got CONNACK while already connected")
 
           _, False ->
-            protocol_violation(
+            kill_connection(
               state,
               "The first packet sent from the Server to the Client MUST be a CONNACK Packet",
             )
@@ -143,10 +153,9 @@ fn receive(state: State, data: BitArray) -> Next {
     }
 
     Connecting(_) ->
-      protocol_violation(state, "Received data before sending CONNECT")
+      kill_connection(state, "Received data before sending CONNECT")
 
-    NotConnected ->
-      protocol_violation(state, "Received data while not connected")
+    NotConnected -> kill_connection(state, "Received data while not connected")
   }
 }
 
@@ -175,10 +184,9 @@ fn noop(state: State) -> Next {
   Next(state, [])
 }
 
-fn protocol_violation(state: State, error: String) -> Next {
+fn kill_connection(state: State, error: String) -> Next {
   Next(State(..state, connection: NotConnected), [
-    ProtocolViolation(error),
-    CloseTransport,
+    CloseTransportUnexpectedly(error),
   ])
 }
 

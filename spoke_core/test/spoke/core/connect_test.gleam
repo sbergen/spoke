@@ -33,12 +33,29 @@ pub fn reconnect_after_protocol_violation_test() {
   |> record.snap("Reconnect after protocol violation")
 }
 
+pub fn disconnect_before_establish_test() {
+  record.new()
+  |> record.input(Perform(Connect(default_options())))
+  |> record.input(Perform(Disconnect))
+  |> record.snap("Disconnect before connection established")
+}
+
 pub fn disconnect_while_connecting_test() {
   record.new()
   |> record.input(Perform(Connect(default_options())))
   |> record.input(TransportEstablished)
   |> record.input(Perform(Disconnect))
   |> record.snap("Disconnect while connecting")
+}
+
+pub fn concurrent_connect_test() {
+  record.new()
+  |> record.input(Perform(Connect(default_options())))
+  |> record.input(Perform(Connect(default_options())))
+  |> record.input(TransportEstablished)
+  |> record.input(Perform(Connect(default_options())))
+  |> record.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
+  |> record.snap("Concurrent connects are errors")
 }
 
 pub fn double_connack_test() {

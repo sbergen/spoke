@@ -44,12 +44,23 @@ fn input_preformatted(
   input: core.Input,
   input_string: String,
 ) -> Recorder {
-  let core.Next(state, outputs) =
-    core.tick(recorder.state, recorder.time, input)
   let log = recorder.log <> "  --> " <> input_string <> "\n"
-  let log =
-    log <> "<--   " <> string.inspect(list.map(outputs, format_output)) <> "\n"
-  Recorder(..recorder, state:, log:)
+
+  case core.tick(recorder.state, recorder.time, input) {
+    Ok(core.Next(state, outputs)) -> {
+      let log =
+        log
+        <> "<--   "
+        <> string.inspect(list.map(outputs, format_output))
+        <> "\n"
+      Recorder(..recorder, state:, log:)
+    }
+
+    Error(error) -> {
+      let log = log <> "  !!  " <> error <> "\n"
+      Recorder(..recorder, log:)
+    }
+  }
 }
 
 fn format_output(output: core.Output) -> Dynamic {

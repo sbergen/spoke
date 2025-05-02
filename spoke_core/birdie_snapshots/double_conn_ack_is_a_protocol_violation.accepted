@@ -9,4 +9,4 @@ title: Double ConnAck is a protocol violation
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
 <--   [ReceivedConnectResponse(Ok(SessionNotPresent))]
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   [CloseTransport, ProtocolViolation("Got CONNACK while already connected")]
+<--   [CloseTransportUnexpectedly("Got CONNACK while already connected")]
