@@ -2,6 +2,7 @@ import birdie
 import gleam/bytes_tree
 import gleam/dynamic.{type Dynamic}
 import gleam/list
+import gleam/option.{Some}
 import gleam/string
 import spoke/core.{type Timestamp}
 import spoke/packet/server/incoming as server_in
@@ -17,8 +18,30 @@ pub fn new() -> Recorder {
 
 pub fn time_advance(recorder: Recorder, duration: Int) -> Recorder {
   let time = recorder.time + duration
-  let log = recorder.log <> "... " <> string.inspect(time) <> " ms:\n"
-  Recorder(..recorder, log:, time:)
+  let recorder = {
+    let log = recorder.log <> "...   " <> string.inspect(time) <> " ms:\n"
+    Recorder(..recorder, log:, time:)
+  }
+
+  case core.next_tick(recorder.state) {
+    Some(next) if next <= time ->
+      recorder |> input(core.Tick) |> assert_ticks_exhausted
+    _ -> recorder
+  }
+}
+
+fn assert_ticks_exhausted(recorder: Recorder) -> Recorder {
+  case core.next_tick(recorder.state) {
+    Some(next) if next <= recorder.time -> {
+      let log =
+        recorder.log
+        <> "!!!!! Next tick at "
+        <> string.inspect(next)
+        <> " !!!!!\n"
+      Recorder(..recorder, log:)
+    }
+    _ -> recorder
+  }
 }
 
 pub fn input(recorder: Recorder, input: core.Input) -> Recorder {

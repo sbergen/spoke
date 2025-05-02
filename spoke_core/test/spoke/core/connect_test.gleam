@@ -55,6 +55,7 @@ pub fn concurrent_connect_test() {
   |> record.input(TransportEstablished)
   |> record.input(Perform(Connect(default_options())))
   |> record.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
+  |> record.input(Perform(Connect(default_options())))
   |> record.snap("Concurrent connects are errors")
 }
 

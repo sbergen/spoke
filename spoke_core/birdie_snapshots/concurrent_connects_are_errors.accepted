@@ -9,6 +9,8 @@ title: Concurrent connects are errors
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
   --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  !!  Already connected
+  !!  Already connecting
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
 <--   [ReceivedConnectResponse(Ok(SessionNotPresent))]
+  --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  !!  Already connected
