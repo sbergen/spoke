@@ -19,7 +19,7 @@ pub fn new() -> Recorder {
 pub fn time_advance(recorder: Recorder, duration: Int) -> Recorder {
   let time = recorder.time + duration
   let recorder = {
-    let log = recorder.log <> "...   " <> string.inspect(time) <> " ms:\n"
+    let log = recorder.log <> "  ... " <> string.inspect(time) <> " ms:\n"
     Recorder(..recorder, log:, time:)
   }
 

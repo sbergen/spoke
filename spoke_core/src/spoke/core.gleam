@@ -80,18 +80,16 @@ fn next_ping(state: State) -> Option(Int) {
 }
 
 fn handle_tick(state: State, time: Timestamp) -> Next {
-  case next_ping(state) {
-    Some(ping_time) if ping_time <= time -> {
-      case state.connection {
-        Connected(connection) -> {
-          let connection = connection.sent_ping(connection)
-          Next(State(..state, connection: Connected(connection)), [
+  case state.connection {
+    Connected(c, ..) ->
+      case connection.next_ping(c) {
+        Some(ping_time) if ping_time <= time -> {
+          Next(State(..state, connection: Connected(connection.sent_ping(c))), [
             send(outgoing.PingReq),
           ])
         }
         _ -> noop(state)
       }
-    }
     _ -> noop(state)
   }
 }

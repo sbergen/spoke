@@ -3,15 +3,15 @@ version: 1.2.7
 title: Pings are sent when no other activity
 ---
 <flushed connect and handshake>
-...   9999 ms:
-...   10000 ms:
+  ... 9999 ms:
+  ... 10000 ms:
   --> Tick
 <--   [SendData(PingReq)]
-...   10100 ms:
+  ... 10100 ms:
   --> ReceivedPacket(PingResp)
 <--   []
-...   20099 ms:
-...   20100 ms:
+  ... 20099 ms:
+  ... 20100 ms:
   --> Tick
 <--   [SendData(PingReq)]
-...   20200 ms:
+  ... 20200 ms:
