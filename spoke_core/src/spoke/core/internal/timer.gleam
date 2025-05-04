@@ -43,15 +43,13 @@ pub fn drain(
   init: s,
   do: fn(s, Timer(a)) -> s,
 ) -> #(s, TimerPool(a)) {
-  let #(result, timers) =
-    pool.timers
+  let #(before, after) =
+    list.partition(pool.timers, fn(timer) { timer.deadline <= until })
+
+  let result =
+    before
     |> list.sort(fn(a, b) { int.compare(a.deadline, b.deadline) })
-    |> list.fold(#(init, []), fn(acc, timer) {
-      let #(state, timers) = acc
-      case timer.deadline <= until {
-        True -> #(do(state, timer), timers)
-        False -> #(state, [timer, ..timers])
-      }
-    })
-  #(result, TimerPool(timers))
+    |> list.fold(init, fn(state, timer) { do(state, timer) })
+
+  #(result, TimerPool(after))
 }
