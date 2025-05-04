@@ -1,6 +1,7 @@
 import gleam/option.{None}
 import spoke/core.{Connect, Perform, TransportEstablished}
 import spoke/core/record.{type Recorder}
+import spoke/mqtt
 import spoke/packet
 import spoke/packet/server/outgoing as server_out
 
@@ -17,10 +18,10 @@ pub fn pings_when_no_activity_test() {
 }
 
 fn set_up_connected(keep_alive: Int) -> Recorder {
-  let options =
-    packet.ConnectOptions(False, "my-client", keep_alive, None, None)
-  record.new()
-  |> record.input(Perform(Connect(options)))
+  mqtt.connect_with_id(0, "ping-client")
+  |> mqtt.keep_alive_seconds(keep_alive)
+  |> record.from_options()
+  |> record.input(Perform(Connect(True, None)))
   |> record.input(TransportEstablished)
   |> record.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> record.flush("connect and handshake")

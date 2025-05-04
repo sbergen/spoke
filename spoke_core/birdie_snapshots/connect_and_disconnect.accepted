@@ -2,10 +2,10 @@
 version: 1.2.7
 title: Connect and Disconnect
 ---
-  --> Perform(Connect(ConnectOptions(False, "my-client", 15, Some(AuthOptions("username", Some("password"))), None)))
+  --> Perform(Connect(False, Some(PublishData("will/topic", "will-data", AtLeastOnce, False))))
 <--   [OpenTransport]
   --> TransportEstablished
-<--   [SendData(Connect(ConnectOptions(False, "my-client", 15, Some(AuthOptions("username", Some("password"))), None)))]
+<--   [SendData(Connect(ConnectOptions(False, "ping-client", 15, Some(AuthOptions("username", Some("password"))), Some(#(MessageData("will/topic", "will-data", False), QoS1)))))]
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
 <--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))]
   --> Perform(Disconnect)

@@ -1,3 +1,5 @@
+//// Conversions that exist only/mostly because we separate packet types from public types.
+
 import gleam/option.{type Option}
 import spoke/mqtt
 import spoke/packet
@@ -20,7 +22,12 @@ pub fn to_auth_options(
   packet.AuthOptions(options.username, options.password)
 }
 
-pub fn to_packet_qos(qos: mqtt.QoS) -> packet.QoS {
+pub fn to_will(data: mqtt.PublishData) -> #(packet.MessageData, packet.QoS) {
+  let msg_data = packet.MessageData(data.topic, data.payload, data.retain)
+  #(msg_data, to_packet_qos(data.qos))
+}
+
+fn to_packet_qos(qos: mqtt.QoS) -> packet.QoS {
   case qos {
     mqtt.AtMostOnce -> packet.QoS0
     mqtt.AtLeastOnce -> packet.QoS1
@@ -28,7 +35,7 @@ pub fn to_packet_qos(qos: mqtt.QoS) -> packet.QoS {
   }
 }
 
-pub fn from_packet_qos(qos: packet.QoS) -> mqtt.QoS {
+fn from_packet_qos(qos: packet.QoS) -> mqtt.QoS {
   case qos {
     packet.QoS0 -> mqtt.AtMostOnce
     packet.QoS1 -> mqtt.AtLeastOnce

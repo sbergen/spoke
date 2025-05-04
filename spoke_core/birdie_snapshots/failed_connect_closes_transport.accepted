@@ -2,7 +2,7 @@
 version: 1.2.7
 title: Failed connect closes transport
 ---
-  --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  --> Perform(Connect(False, None))
 <--   [OpenTransport]
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]

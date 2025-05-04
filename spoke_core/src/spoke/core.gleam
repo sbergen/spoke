@@ -17,7 +17,7 @@ pub type OperationId =
   Int
 
 pub type Command {
-  Connect(packet.ConnectOptions)
+  Connect(clean_session: Bool, will: Option(mqtt.PublishData))
   Disconnect
 }
 
@@ -65,7 +65,7 @@ pub fn update(
     TransportClosed -> transport_closed(state)
     Perform(action) ->
       case action {
-        Connect(options) -> connect(state, time, options)
+        Connect(options, will) -> connect(state, time, options, will)
         Disconnect -> disconnect(state)
       }
   })
@@ -87,8 +87,8 @@ type Options {
 
 type ConnectionState {
   NotConnected
-  Connecting(options: packet.ConnectOptions)
-  WaitingForConnAck(Connection)
+  Connecting(deadline: Timestamp, options: packet.ConnectOptions)
+  WaitingForConnAck(deadline: Timestamp, connection: Connection)
   Connected(Connection)
   Disconnecting
 }
@@ -121,7 +121,8 @@ fn handle_tick(state: State, time: Timestamp) -> Next {
 fn connect(
   state: State,
   time: Timestamp,
-  options: packet.ConnectOptions,
+  clean_session: Bool,
+  will: Option(mqtt.PublishData),
 ) -> Result(Next, String) {
   case state.connection {
     NotConnected -> {
@@ -130,15 +131,23 @@ fn connect(
       // the Client and Server MUST discard any previous Session and start a new one.
       // This Session lasts as long as the Network Connection.
       // State data associated with this Session MUST NOT be reused in any subsequent Session.
-      let session = case
-        options.clean_session || session.is_ephemeral(state.session)
-      {
-        True -> session.new(options.clean_session)
+      let session = case clean_session || session.is_ephemeral(state.session) {
+        True -> session.new(clean_session)
         False -> state.session
       }
 
+      let deadline = time + state.options.server_timeout
+      let options =
+        packet.ConnectOptions(
+          clean_session:,
+          client_id: state.options.client_id,
+          keep_alive_seconds: state.options.keep_alive / 1000,
+          auth: state.options.authentication,
+          will: option.map(will, convert.to_will),
+        )
+
       Ok(
-        #(State(..state, session:, connection: Connecting(options)), [
+        #(State(..state, session:, connection: Connecting(deadline, options)), [
           OpenTransport,
         ]),
       )
@@ -149,8 +158,8 @@ fn connect(
 
 fn disconnect(state: State) -> Result(Next, String) {
   let outputs = case state.connection {
-    Connecting(_) -> Some([CloseTransport])
-    WaitingForConnAck(_) -> Some([CloseTransport])
+    Connecting(..) -> Some([CloseTransport])
+    WaitingForConnAck(..) -> Some([CloseTransport])
     Connected(_) -> Some([send(outgoing.Disconnect), CloseTransport])
     Disconnecting -> None
     NotConnected -> None
@@ -164,12 +173,12 @@ fn disconnect(state: State) -> Result(Next, String) {
 
 fn transport_established(state: State, time: Timestamp) -> Result(Next, String) {
   case state.connection {
-    Connecting(options) -> {
-      let connect_packet = outgoing.Connect(options)
+    Connecting(deadline, options) -> {
       let keep_alive = options.keep_alive_seconds * 1000
-      let connection = WaitingForConnAck(connection.new(time, keep_alive))
+      let connection = connection.new(time, keep_alive)
+      let connection = WaitingForConnAck(deadline, connection)
 
-      Ok(#(State(..state, connection:), [send(connect_packet)]))
+      Ok(#(State(..state, connection:), [send(outgoing.Connect(options))]))
     }
     _ -> unexpected_connection_state(state, "establishing transport")
   }
@@ -193,8 +202,8 @@ fn transport_failed(state: State, error: String) -> Next {
     NotConnected -> None
     Connected(_) -> Some(mqtt.DisconnectedUnexpectedly(error))
     Disconnecting -> Some(mqtt.DisconnectedUnexpectedly(error))
-    Connecting(_) -> Some(mqtt.ConnectFailed(error))
-    WaitingForConnAck(_) -> Some(mqtt.ConnectFailed(error))
+    Connecting(..) -> Some(mqtt.ConnectFailed(error))
+    WaitingForConnAck(..) -> Some(mqtt.ConnectFailed(error))
   }
 
   let updates = case change {
@@ -207,7 +216,7 @@ fn transport_failed(state: State, error: String) -> Next {
 
 fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
   case state.connection {
-    WaitingForConnAck(connection) -> {
+    WaitingForConnAck(_deadline, connection) -> {
       let assert Ok(#(connection, packet)) =
         connection.receive_one(connection, time, data)
       let state = State(..state, connection: Connected(connection))
@@ -267,7 +276,7 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
       #(state, outputs |> list.reverse |> list.flatten)
     }
 
-    Connecting(_) ->
+    Connecting(..) ->
       kill_connection(state, "Received data before sending CONNECT")
 
     // These can easily happen if e.g. multiple receives are in the mailbox/event queue,
@@ -298,10 +307,10 @@ fn unexpected_connection_state(
     <> ": "
     <> case state.connection {
       Connected(_) -> "Connected"
-      Connecting(_) -> "Connecting"
+      Connecting(..) -> "Connecting"
       Disconnecting -> "Disconnecting"
       NotConnected -> "Not connected"
-      WaitingForConnAck(_) -> "Waiting for CONNACK"
+      WaitingForConnAck(..) -> "Waiting for CONNACK"
     },
   )
 }

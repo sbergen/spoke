@@ -18,8 +18,11 @@ pub opaque type Recorder {
   )
 }
 
-pub fn new() -> Recorder {
-  let options = mqtt.connect_with_id(0, "fake-client")
+pub fn default() -> Recorder {
+  from_options(mqtt.connect_with_id(0, "my-client"))
+}
+
+pub fn from_options(options: mqtt.ConnectOptions(_)) -> Recorder {
   Recorder(core.new(options), None, 0, "")
 }
 

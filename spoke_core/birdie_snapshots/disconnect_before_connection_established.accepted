@@ -2,7 +2,7 @@
 version: 1.2.7
 title: Disconnect before connection established
 ---
-  --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  --> Perform(Connect(False, None))
 <--   [OpenTransport]
   --> Perform(Disconnect)
 <--   [CloseTransport]

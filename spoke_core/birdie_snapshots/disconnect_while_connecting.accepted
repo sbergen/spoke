@@ -2,7 +2,7 @@
 version: 1.2.7
 title: Disconnect while connecting
 ---
-  --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  --> Perform(Connect(False, None))
 <--   [OpenTransport]
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
