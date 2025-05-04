@@ -101,15 +101,6 @@ pub fn connect(
   Ok(Connection(messages, updates))
 }
 
-// TODO: Call this from the client
-// pub fn received_data(
-//   connection: Connection,
-//   data: Result(BitArray, String),
-// ) -> Connection {
-//   process.send(connection.subject, Received(data))
-//   connection
-// }
-
 /// Gets the updates `Selector` from the connection
 pub fn updates(connection: Connection) -> Selector(Update) {
   connection.updates
