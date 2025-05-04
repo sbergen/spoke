@@ -111,15 +111,11 @@ fn next_tick(state: State) -> Option(Int) {
   }
 }
 
-fn handle_tick(state: State, time: Timestamp) -> Next {
+fn handle_tick(state: State, now: Timestamp) -> Next {
   case state.connection {
     Connected(timers, connection) -> {
       let #(#(state, outputs), timers) = {
-        use #(state, outputs), timer <- timer.drain(
-          timers,
-          time,
-          #(state, [[]]),
-        )
+        use #(state, outputs), timer <- timer.drain(timers, now, #(state, [[]]))
         case timer.data {
           SendPing -> #(state, [[send(outgoing.PingReq)], ..outputs])
         }
@@ -130,10 +126,22 @@ fn handle_tick(state: State, time: Timestamp) -> Next {
         outputs |> list.reverse |> list.flatten,
       )
     }
-    Connecting(deadline, _) -> todo
-    WaitingForConnAck(deadline, _) -> todo
+    Connecting(deadline, _) -> maybe_time_out_connection(state, now, deadline)
+    WaitingForConnAck(deadline, _) ->
+      maybe_time_out_connection(state, now, deadline)
     Disconnecting -> noop(state)
     NotConnected -> noop(state)
+  }
+}
+
+fn maybe_time_out_connection(
+  state: State,
+  now: Timestamp,
+  deadline: Timestamp,
+) -> Next {
+  case now >= deadline {
+    True -> server_timeout(state)
+    False -> noop(state)
   }
 }
 
@@ -212,6 +220,11 @@ fn transport_closed(state: State) -> Result(Next, String) {
   }
 }
 
+fn server_timeout(state: State) -> Next {
+  let #(state, outputs) = transport_failed(state, "Operation timed out")
+  #(state, [CloseTransport, ..outputs])
+}
+
 fn transport_failed(state: State, error: String) -> Next {
   let change = case state.connection {
     // If we're already disconnected, just ignore this
@@ -222,12 +235,12 @@ fn transport_failed(state: State, error: String) -> Next {
     WaitingForConnAck(..) -> Some(mqtt.ConnectFailed(error))
   }
 
-  let updates = case change {
+  let outputs = case change {
     None -> []
     Some(change) -> [Publish(ConnectionStateChanged(change))]
   }
 
-  #(State(..state, connection: NotConnected), updates)
+  #(State(..state, connection: NotConnected), outputs)
 }
 
 fn receive(state: State, now: Timestamp, data: BitArray) -> Next {

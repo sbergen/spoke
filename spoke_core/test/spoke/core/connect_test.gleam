@@ -113,6 +113,21 @@ pub fn transport_error_while_disconnecting_test() {
   |> record.snap("Transport failure while disconnecting is published")
 }
 
+pub fn connect_timeout_test() {
+  mqtt.connect_with_id(0, "my-client")
+  |> mqtt.server_timeout_ms(1000)
+  |> record.from_options()
+  |> record.input(Perform(Connect(False, None)))
+  |> record.time_advance(999)
+  |> record.time_advance(1)
+  |> record.input(Perform(Connect(False, None)))
+  |> record.time_advance(500)
+  |> record.input(TransportEstablished)
+  |> record.time_advance(499)
+  |> record.time_advance(1)
+  |> record.snap("Connect can time out at all stages")
+}
+
 fn protocol_violation_after_connect(recorder: Recorder) -> Recorder {
   recorder
   |> record.input(Perform(Connect(False, None)))
