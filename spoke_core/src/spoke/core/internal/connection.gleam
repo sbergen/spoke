@@ -50,7 +50,7 @@ pub fn receive_all(
   data: BitArray,
 ) -> Result(#(Connection, List(incoming.Packet)), packet.DecodeError) {
   let data = bit_array.append(connection.leftover_data, data)
-  use #(packets, leftover_data) <- result.try(incoming.decode_all(data))
+  use #(packets, leftover_data) <- result.try(incoming.decode_packets(data))
   Ok(#(next(connection, time, leftover_data), packets))
 }
 
