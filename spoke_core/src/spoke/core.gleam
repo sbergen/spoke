@@ -24,6 +24,7 @@ pub type Input {
   Tick
   TransportEstablished
   TransportFailed(String)
+  TransportClosed
   ReceivedData(BitArray)
 }
 
@@ -46,6 +47,7 @@ type ConnectionState {
   Connecting(options: packet.ConnectOptions)
   WaitingForConnAck(Connection)
   Connected(Connection)
+  Disconnecting
 }
 
 pub opaque type State {
@@ -68,11 +70,12 @@ pub fn update(
     ReceivedData(data) -> Ok(receive(state, time, data))
     Tick -> Ok(handle_tick(state, time))
     TransportEstablished -> transport_established(state, time)
-    TransportFailed(_) -> todo
+    TransportFailed(error) -> Ok(transport_failed(state, error))
+    TransportClosed -> transport_closed(state)
     Perform(action) ->
       case action {
         Connect(options) -> connect(state, time, options)
-        Disconnect -> Ok(disconnect(state))
+        Disconnect -> disconnect(state)
       }
   })
 
@@ -107,9 +110,6 @@ fn connect(
   options: packet.ConnectOptions,
 ) -> Result(Next, String) {
   case state.connection {
-    Connected(..) -> Error("Already connected")
-    Connecting(_) -> Error("Already connecting")
-    WaitingForConnAck(_) -> Error("Already connecting")
     NotConnected -> {
       // [MQTT-3.1.2-6]
       // If CleanSession is set to 1,
@@ -125,18 +125,23 @@ fn connect(
 
       Ok(#(State(session, Connecting(options)), [OpenTransport]))
     }
+    _ -> unexpected_connection_state(state, "connecting")
   }
 }
 
-fn disconnect(state: State) -> Next {
-  let output = [CloseTransport]
-
-  let output = case state.connection {
-    Connected(..) -> [send(outgoing.Disconnect), ..output]
-    _ -> output
+fn disconnect(state: State) -> Result(Next, String) {
+  let outputs = case state.connection {
+    Connecting(_) -> Some([CloseTransport])
+    WaitingForConnAck(_) -> Some([CloseTransport])
+    Connected(_) -> Some([send(outgoing.Disconnect), CloseTransport])
+    Disconnecting -> None
+    NotConnected -> None
   }
 
-  #(State(..state, connection: NotConnected), output)
+  case outputs {
+    Some(outputs) -> Ok(#(State(..state, connection: Disconnecting), outputs))
+    None -> unexpected_connection_state(state, "disconnecting")
+  }
 }
 
 fn transport_established(state: State, time: Timestamp) -> Result(Next, String) {
@@ -148,9 +153,25 @@ fn transport_established(state: State, time: Timestamp) -> Result(Next, String) 
 
       Ok(#(State(..state, connection:), [send(connect_packet)]))
     }
-    WaitingForConnAck(..) -> Error("Already connecting")
-    Connected(..) -> Error("Already connected")
-    NotConnected -> Error("Not connecting")
+    _ -> unexpected_connection_state(state, "establishing transport")
+  }
+}
+
+fn transport_closed(state: State) -> Result(Next, String) {
+  case state.connection {
+    Disconnecting ->
+      Ok(#(State(..state, connection: NotConnected), [Publish(Disconnected)]))
+    _ -> unexpected_connection_state(state, "closing transport expectedly")
+  }
+}
+
+fn transport_failed(state: State, error: String) -> Next {
+  case state.connection {
+    // If we're already disconnected, just ignore this
+    NotConnected -> noop(state)
+    _ -> #(State(..state, connection: NotConnected), [
+      Publish(DisconnectedUnexpectedly(error)),
+    ])
   }
 }
 
@@ -217,9 +238,10 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
     Connecting(_) ->
       kill_connection(state, "Received data before sending CONNECT")
 
-    // This can easily happen if e.g. multiple receives are in the inbox/event queue,
+    // These can easily happen if e.g. multiple receives are in the mailbox/event queue,
     // so we just ignore it.
     NotConnected -> noop(state)
+    Disconnecting -> noop(state)
   }
 }
 
@@ -232,6 +254,24 @@ fn kill_connection(state: State, error: String) -> Next {
 
 fn noop(state: State) -> Next {
   #(state, [])
+}
+
+fn unexpected_connection_state(
+  state: State,
+  operation: String,
+) -> Result(Next, String) {
+  Error(
+    "Unexpected connection state when "
+    <> operation
+    <> ": "
+    <> case state.connection {
+      Connected(_) -> "Connected"
+      Connecting(_) -> "Connecting"
+      Disconnecting -> "Disconnecting"
+      NotConnected -> "Not connected"
+      WaitingForConnAck(_) -> "Waiting for CONNACK"
+    },
+  )
 }
 
 fn send(packet: outgoing.Packet) -> Output {

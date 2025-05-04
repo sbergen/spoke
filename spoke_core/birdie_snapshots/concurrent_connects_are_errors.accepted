@@ -5,12 +5,12 @@ title: Concurrent connects are errors
   --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
 <--   [OpenTransport]
   --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  !!  Already connecting
+  !!  Unexpected connection state when connecting: Connecting
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
   --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  !!  Already connecting
+  !!  Unexpected connection state when connecting: Waiting for CONNACK
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
 <--   [Publish(ReceivedConnectResponse(Ok(SessionNotPresent)))]
   --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  !!  Already connected
+  !!  Unexpected connection state when connecting: Connected

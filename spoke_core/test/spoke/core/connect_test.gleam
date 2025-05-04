@@ -1,5 +1,8 @@
 import gleam/option.{None, Some}
-import spoke/core.{Connect, Disconnect, Perform, TransportEstablished}
+import spoke/core.{
+  Connect, Disconnect, Perform, TransportClosed, TransportEstablished,
+  TransportFailed,
+}
 import spoke/core/record.{type Recorder}
 import spoke/packet
 import spoke/packet/server/outgoing as server_out
@@ -8,6 +11,7 @@ pub fn connect_and_disconnect_test() {
   record.new()
   |> connect_with_password()
   |> record.input(Perform(Disconnect))
+  |> record.input(TransportClosed)
   |> record.snap("Connect and Disconnect")
 }
 
@@ -27,9 +31,9 @@ pub fn reconnect_after_failure_test() {
 
 pub fn reconnect_after_protocol_violation_test() {
   record.new()
-  |> receive_ping_after_connect
+  |> protocol_violation_after_connect
   |> record.flush("protocol violation")
-  |> connect_with_password()
+  |> connect_with_defaults()
   |> record.snap("Reconnect after protocol violation")
 }
 
@@ -77,11 +81,30 @@ pub fn connack_before_connect_test() {
 
 pub fn connack_must_be_first_test() {
   record.new()
-  |> receive_ping_after_connect
+  |> protocol_violation_after_connect
   |> record.snap("First packet from server MUST be ConnAck")
 }
 
-fn receive_ping_after_connect(recorder: Recorder) -> Recorder {
+pub fn transport_error_during_connect_test() {
+  record.new()
+  |> record.input(Perform(Connect(default_options())))
+  |> record.input(TransportFailed("Fake failure"))
+  |> record.input(Perform(Connect(default_options())))
+  |> record.input(TransportEstablished)
+  |> record.input(TransportFailed("Fake failure"))
+  |> record.snap("Transport failure during connect is published")
+}
+
+pub fn transport_error_while_disconnecting_test() {
+  record.new()
+  |> connect_with_defaults()
+  |> record.flush("connect")
+  |> record.input(Perform(Disconnect))
+  |> record.input(TransportFailed("Fake failure"))
+  |> record.snap("Transport failure while disconnecting is published")
+}
+
+fn protocol_violation_after_connect(recorder: Recorder) -> Recorder {
   recorder
   |> record.input(Perform(Connect(default_options())))
   |> record.input(TransportEstablished)
@@ -96,15 +119,24 @@ fn fail_auth(recorder: Recorder) -> Recorder {
 }
 
 fn connect_with_password(recorder: Recorder) -> Recorder {
-  let options =
-    packet.ConnectOptions(
-      False,
-      "my-client",
-      15,
-      Some(packet.AuthOptions("username", Some(<<"password">>))),
-      None,
-    )
+  recorder
+  |> connect_with_options(packet.ConnectOptions(
+    False,
+    "my-client",
+    15,
+    Some(packet.AuthOptions("username", Some(<<"password">>))),
+    None,
+  ))
+}
 
+fn connect_with_defaults(recorder: Recorder) -> Recorder {
+  recorder |> connect_with_options(default_options())
+}
+
+fn connect_with_options(
+  recorder: Recorder,
+  options: packet.ConnectOptions,
+) -> Recorder {
   recorder
   |> record.input(Perform(Connect(options)))
   |> record.input(TransportEstablished)

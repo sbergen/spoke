@@ -1,0 +1,9 @@
+---
+version: 1.2.7
+title: Transport failure while disconnecting is published
+---
+<flushed connect>
+  --> Perform(Disconnect)
+<--   [SendData(Disconnect), CloseTransport]
+  --> TransportFailed("Fake failure")
+<--   [Publish(DisconnectedUnexpectedly("Fake failure"))]

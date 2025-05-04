@@ -10,3 +10,5 @@ title: Connect and Disconnect
 <--   [Publish(ReceivedConnectResponse(Ok(SessionNotPresent)))]
   --> Perform(Disconnect)
 <--   [SendData(Disconnect), CloseTransport]
+  --> TransportClosed
+<--   [Publish(Disconnected)]
