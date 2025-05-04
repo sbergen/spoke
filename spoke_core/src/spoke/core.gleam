@@ -4,6 +4,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import spoke/core/internal/connection.{type Connection}
 import spoke/core/internal/session.{type Session}
+import spoke/mqtt.{ConnectionStateChanged}
+import spoke/mqtt/convert
 import spoke/packet
 import spoke/packet/client/incoming
 import spoke/packet/client/outgoing
@@ -28,15 +30,8 @@ pub type Input {
   ReceivedData(BitArray)
 }
 
-pub type Update {
-  ReceivedMessage(packet.MessageData)
-  ReceivedConnectResponse(packet.ConnAckResult)
-  Disconnected
-  DisconnectedUnexpectedly(String)
-}
-
 pub type Output {
-  Publish(Update)
+  Publish(mqtt.Update)
   OpenTransport
   CloseTransport
   SendData(BytesTree)
@@ -160,19 +155,31 @@ fn transport_established(state: State, time: Timestamp) -> Result(Next, String) 
 fn transport_closed(state: State) -> Result(Next, String) {
   case state.connection {
     Disconnecting ->
-      Ok(#(State(..state, connection: NotConnected), [Publish(Disconnected)]))
+      Ok(
+        #(State(..state, connection: NotConnected), [
+          Publish(ConnectionStateChanged(mqtt.Disconnected)),
+        ]),
+      )
     _ -> unexpected_connection_state(state, "closing transport expectedly")
   }
 }
 
 fn transport_failed(state: State, error: String) -> Next {
-  case state.connection {
+  let change = case state.connection {
     // If we're already disconnected, just ignore this
-    NotConnected -> noop(state)
-    _ -> #(State(..state, connection: NotConnected), [
-      Publish(DisconnectedUnexpectedly(error)),
-    ])
+    NotConnected -> None
+    Connected(_) -> Some(mqtt.DisconnectedUnexpectedly(error))
+    Disconnecting -> Some(mqtt.DisconnectedUnexpectedly(error))
+    Connecting(_) -> Some(mqtt.ConnectFailed(error))
+    WaitingForConnAck(_) -> Some(mqtt.ConnectFailed(error))
   }
+
+  let updates = case change {
+    None -> []
+    Some(change) -> [Publish(ConnectionStateChanged(change))]
+  }
+
+  #(State(..state, connection: NotConnected), updates)
 }
 
 fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
@@ -188,12 +195,14 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
           // If a server sends a CONNACK packet containing a non-zero return code
           // it MUST then close the Network Connection.
           // We play it safe and close it anyway.
+          let update =
+            ConnectionStateChanged(convert.to_connection_state(result))
           case result {
             Ok(_) -> #(State(..state, connection: Connected(connection)), [
-              Publish(ReceivedConnectResponse(result)),
+              Publish(update),
             ])
             Error(_) -> #(State(..state, connection: NotConnected), [
-              Publish(ReceivedConnectResponse(result)),
+              Publish(update),
               CloseTransport,
             ])
           }
@@ -248,7 +257,7 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
 fn kill_connection(state: State, error: String) -> Next {
   #(State(..state, connection: NotConnected), [
     CloseTransport,
-    Publish(DisconnectedUnexpectedly(error)),
+    Publish(ConnectionStateChanged(mqtt.DisconnectedUnexpectedly(error))),
   ])
 }
 

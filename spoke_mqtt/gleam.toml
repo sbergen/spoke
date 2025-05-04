@@ -1,4 +1,4 @@
-name = "spoke_core"
+name = "spoke_mqtt"
 version = "1.0.0"
 
 # Fill out these fields if you intend to generate HTML documentation or publish
@@ -14,10 +14,7 @@ version = "1.0.0"
 
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
-gleam_json = ">= 2.3.0 and < 3.0.0"
 spoke_packet = { path = "../spoke_packet" }
-spoke_mqtt = { path = "../spoke_mqtt" }
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
-birdie = ">= 1.2.7 and < 2.0.0"

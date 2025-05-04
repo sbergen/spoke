@@ -5,10 +5,10 @@ title: Transport failure during connect is published
   --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
 <--   [OpenTransport]
   --> TransportFailed("Fake failure")
-<--   [Publish(DisconnectedUnexpectedly("Fake failure"))]
+<--   [Publish(ConnectionStateChanged(ConnectFailed("Fake failure")))]
   --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
 <--   [OpenTransport]
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
   --> TransportFailed("Fake failure")
-<--   [Publish(DisconnectedUnexpectedly("Fake failure"))]
+<--   [Publish(ConnectionStateChanged(ConnectFailed("Fake failure")))]

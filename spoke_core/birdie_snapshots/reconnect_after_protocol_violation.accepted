@@ -8,4 +8,4 @@ title: Reconnect after protocol violation
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   [Publish(ReceivedConnectResponse(Ok(SessionNotPresent)))]
+<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))]

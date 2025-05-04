@@ -7,8 +7,8 @@ title: Connect and Disconnect
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(False, "my-client", 15, Some(AuthOptions("username", Some("password"))), None)))]
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   [Publish(ReceivedConnectResponse(Ok(SessionNotPresent)))]
+<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))]
   --> Perform(Disconnect)
 <--   [SendData(Disconnect), CloseTransport]
   --> TransportClosed
-<--   [Publish(Disconnected)]
+<--   [Publish(ConnectionStateChanged(Disconnected))]
