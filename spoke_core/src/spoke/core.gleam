@@ -3,9 +3,9 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import spoke/core/internal/connection.{type Connection}
+import spoke/core/internal/convert
 import spoke/core/internal/session.{type Session}
 import spoke/mqtt.{ConnectionStateChanged}
-import spoke/mqtt/convert
 import spoke/packet
 import spoke/packet/client/incoming
 import spoke/packet/client/outgoing
@@ -37,23 +37,19 @@ pub type Output {
   SendData(BytesTree)
 }
 
-type ConnectionState {
-  NotConnected
-  Connecting(options: packet.ConnectOptions)
-  WaitingForConnAck(Connection)
-  Connected(Connection)
-  Disconnecting
-}
-
 pub opaque type State {
-  State(session: Session, connection: ConnectionState)
+  State(options: Options, session: Session, connection: ConnectionState)
 }
 
-type Next =
-  #(State, List(Output))
-
-pub fn new() -> State {
-  State(session.new(False), NotConnected)
+pub fn new(options: mqtt.ConnectOptions(_)) -> State {
+  let options =
+    Options(
+      client_id: options.client_id,
+      authentication: convert.to_auth_options(options.authentication),
+      keep_alive: options.keep_alive_seconds * 1000,
+      server_timeout: options.server_timeout_ms,
+    )
+  State(options, session.new(False), NotConnected)
 }
 
 pub fn update(
@@ -76,6 +72,29 @@ pub fn update(
 
   #(state, next_ping(state), outputs)
 }
+
+//--- Privates ---------------------------------------------------------------//
+
+// Drops the transport options and the generics from the public type
+type Options {
+  Options(
+    client_id: String,
+    authentication: Option(packet.AuthOptions),
+    keep_alive: Int,
+    server_timeout: Int,
+  )
+}
+
+type ConnectionState {
+  NotConnected
+  Connecting(options: packet.ConnectOptions)
+  WaitingForConnAck(Connection)
+  Connected(Connection)
+  Disconnecting
+}
+
+type Next =
+  #(State, List(Output))
 
 fn next_ping(state: State) -> Option(Int) {
   case state.connection {
@@ -118,7 +137,11 @@ fn connect(
         False -> state.session
       }
 
-      Ok(#(State(session, Connecting(options)), [OpenTransport]))
+      Ok(
+        #(State(..state, session:, connection: Connecting(options)), [
+          OpenTransport,
+        ]),
+      )
     }
     _ -> unexpected_connection_state(state, "connecting")
   }

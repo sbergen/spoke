@@ -1,7 +1,4 @@
-//// Conversions between `spoke/packet` and `spoke/mqtt` types.
-//// These exist mostly so that high-level packages don't need to
-//// expose any types from the `spoke_packet` package.
-
+import gleam/option.{type Option}
 import spoke/mqtt
 import spoke/packet
 
@@ -14,6 +11,13 @@ pub fn to_connection_state(result: packet.ConnAckResult) -> mqtt.ConnectionState
       })
     Error(error) -> mqtt.ConnectRejected(from_packet_connect_error(error))
   }
+}
+
+pub fn to_auth_options(
+  options: Option(mqtt.AuthDetails),
+) -> Option(packet.AuthOptions) {
+  use options <- option.map(options)
+  packet.AuthOptions(options.username, options.password)
 }
 
 pub fn to_packet_qos(qos: mqtt.QoS) -> packet.QoS {

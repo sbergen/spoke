@@ -5,6 +5,7 @@ import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/string
 import spoke/core.{type Timestamp}
+import spoke/mqtt
 import spoke/packet/server/incoming as server_in
 import spoke/packet/server/outgoing as server_out
 
@@ -18,7 +19,8 @@ pub opaque type Recorder {
 }
 
 pub fn new() -> Recorder {
-  Recorder(core.new(), None, 0, "")
+  let options = mqtt.connect_with_id(0, "fake-client")
+  Recorder(core.new(options), None, 0, "")
 }
 
 pub fn time_advance(recorder: Recorder, duration: Int) -> Recorder {

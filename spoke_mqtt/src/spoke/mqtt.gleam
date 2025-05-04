@@ -2,6 +2,34 @@
 //// This makes it possible to write common code for different targets,
 //// and reduces code duplication.
 
+import gleam/option.{type Option, None, Some}
+
+/// Authentication details passed to the server when connecting.
+/// Remember that these are not encrypted,
+/// unless working with an encrypted transport channel.
+pub type AuthDetails {
+  AuthDetails(username: String, password: Option(BitArray))
+}
+
+/// The set of options used to establish a connection to the server.
+/// Includes the set of data that should generally not change across
+/// multiple connect calls (if they are needed).
+pub type ConnectOptions(t) {
+  ConnectOptions(
+    /// Transport options, specific to runtime.  
+    transport_options: t,
+    /// The MQTT client ID used when connecting to the server.
+    client_id: String,
+    /// Optional username and (additionally optional) password
+    authentication: Option(AuthDetails),
+    /// Keep-alive interval in seconds (MQTT spec doesn't allow more granular control)
+    keep_alive_seconds: Int,
+    /// "Reasonable amount of time" for the server to respond (including network latency),
+    /// as used in the MQTT specification.
+    server_timeout_ms: Int,
+  )
+}
+
 /// Represents a received message or change in the client.
 pub type Update {
   /// A published message to a topic this client was subscribed to was received.
@@ -93,4 +121,47 @@ pub type ConnectError {
 /// Utility record for the data required to request a subscription.
 pub type SubscribeRequest {
   SubscribeRequest(filter: String, qos: QoS)
+}
+
+/// Constructs connect options from transport options, the given client id,
+/// and default settings for the rest of the options.
+pub fn connect_with_id(
+  transport_options: t,
+  client_id: String,
+) -> ConnectOptions(t) {
+  ConnectOptions(
+    transport_options:,
+    client_id:,
+    authentication: None,
+    keep_alive_seconds: 15,
+    server_timeout_ms: 5000,
+  )
+}
+
+/// Builder function for specifying the keep-alive time in the connect options.
+pub fn keep_alive_seconds(
+  options: ConnectOptions(t),
+  keep_alive_seconds: Int,
+) -> ConnectOptions(t) {
+  ConnectOptions(..options, keep_alive_seconds:)
+}
+
+/// Builder function for specifying the server operation timeout in the connect options.
+pub fn server_timeout_ms(
+  options: ConnectOptions(t),
+  server_timeout_ms: Int,
+) -> ConnectOptions(t) {
+  ConnectOptions(..options, server_timeout_ms:)
+}
+
+/// Builder function for specifying the authentication details to be used when connecting.
+pub fn using_auth(
+  options: ConnectOptions(t),
+  username: String,
+  password: Option(BitArray),
+) -> ConnectOptions(t) {
+  ConnectOptions(
+    ..options,
+    authentication: Some(AuthDetails(username, password)),
+  )
 }
