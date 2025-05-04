@@ -2,9 +2,10 @@ import fake_server.{type ConnectedServer}
 import gleam/erlang/process
 import gleam/option.{None}
 import spoke.{AtMostOnce}
-import spoke/internal/packet/server/incoming as server_in
-import spoke/internal/packet/server/outgoing as server_out
 import spoke/internal/session
+import spoke/packet
+import spoke/packet/server/incoming as server_in
+import spoke/packet/server/outgoing as server_out
 
 // The ping tests might be a bit flaky, as we are dealing with time.
 // I couldn't find any easy way to fake time,
@@ -88,7 +89,8 @@ fn set_up_connected() -> #(spoke.Client, ConnectedServer) {
       fake_server.default_connector(server.port),
     )
 
-  let #(server, _) = fake_server.connect_client(client, server, True, False)
+  let #(server, _) =
+    fake_server.connect_client(client, server, True, packet.SessionNotPresent)
 
   #(client, server)
 }

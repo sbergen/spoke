@@ -1,6 +1,6 @@
 import gleeunit/should
-import spoke/internal/packet
 import spoke/internal/session.{type Session}
+import spoke/packet
 
 pub fn ephemeral_session_serialize_test() {
   session.new(True)

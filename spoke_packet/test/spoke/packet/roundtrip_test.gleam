@@ -6,12 +6,12 @@
 
 import gleam/bytes_tree
 import gleeunit/should
-import packet/generators
 import qcheck
-import spoke/internal/packet/client/incoming
-import spoke/internal/packet/client/outgoing
-import spoke/internal/packet/server/incoming as server_in
-import spoke/internal/packet/server/outgoing as server_out
+import spoke/packet/client/incoming
+import spoke/packet/client/outgoing
+import spoke/packet/generators
+import spoke/packet/server/incoming as server_in
+import spoke/packet/server/outgoing as server_out
 
 pub fn connect_roundtrip_test() {
   use expected_data <- qcheck.given(generators.connect_data())

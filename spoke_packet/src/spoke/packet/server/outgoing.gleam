@@ -1,13 +1,12 @@
 //// Outgoing packets for a MQTT server.
-//// Note that these are currently used only for testing,
-//// but I might split the packets into a separate packages at some point.
 
 import gleam/bytes_tree.{type BytesTree}
-import spoke/internal/packet.{
-  type ConnAckResult, type PublishData, type SubscribeResult,
+import spoke/packet.{
+  type ConnAckResult, type EncodeError, type PublishData, type SubscribeResult,
 }
-import spoke/internal/packet/encode.{type EncodeError}
+import spoke/packet/internal/encode
 
+/// Represents all the valid outgoing packets for an MQTT server.
 pub type Packet {
   ConnAck(ConnAckResult)
   Publish(PublishData)
@@ -20,6 +19,7 @@ pub type Packet {
   PingResp
 }
 
+/// Encodes a packet into its binary form.
 pub fn encode_packet(packet: Packet) -> Result(BytesTree, EncodeError) {
   case packet {
     ConnAck(result) -> Ok(encode.connack(result))

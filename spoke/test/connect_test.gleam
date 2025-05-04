@@ -3,16 +3,16 @@ import gleam/erlang/process
 import gleam/option.{Some}
 import gleeunit/should
 import spoke.{ConnectionStateChanged}
-import spoke/internal/packet
-import spoke/internal/packet/server/incoming as server_in
-import spoke/internal/packet/server/outgoing as server_out
+import spoke/packet.{SessionNotPresent, SessionPresent}
+import spoke/packet/server/incoming as server_in
+import spoke/packet/server/outgoing as server_out
 
 const default_client_id = "fake-client-id"
 
 pub fn connect_and_disconnect_test() {
   let #(client, server) = start_client_and_server("test-client-id", 42)
   let #(server, details) =
-    fake_server.connect_client(client, server, False, False)
+    fake_server.connect_client(client, server, False, SessionNotPresent)
 
   details.client_id |> should.equal("test-client-id")
   details.keep_alive_seconds |> should.equal(42)
@@ -24,7 +24,7 @@ pub fn connect_and_disconnect_test() {
 pub fn connect_and_disconnect_clean_session_test() {
   let #(client, server) = start_client_and_server("test-client-id", 42)
   let #(server, details) =
-    fake_server.connect_client(client, server, True, False)
+    fake_server.connect_client(client, server, True, SessionNotPresent)
 
   details.clean_session |> should.be_true()
 
@@ -40,7 +40,7 @@ pub fn reconnect_after_rejected_connect_test() {
 
   result |> should.equal(spoke.BadUsernameOrPassword)
 
-  let server = fake_server.reconnect(client, server, False, True)
+  let server = fake_server.reconnect(client, server, False, SessionPresent)
 
   fake_server.disconnect(client, server)
 }
@@ -70,7 +70,7 @@ pub fn connecting_when_already_connected_succeeds_test() {
 
   // Finish initial connect
   fake_server.drop_incoming_data(socket)
-  fake_server.send_response(socket, server_out.ConnAck(Ok(False)))
+  fake_server.send_response(socket, server_out.ConnAck(Ok(SessionNotPresent)))
   let assert Ok(ConnectionStateChanged(spoke.ConnectAccepted(False))) =
     process.receive(spoke.updates(client), 10)
 

@@ -1,7 +1,7 @@
 import gleam/bit_array
 import gleam/list
 import qcheck.{type Generator}
-import spoke/internal/packet.{
+import spoke/packet.{
   type AuthOptions, type ConnAckResult, type ConnectOptions, type MessageData,
   type PublishData, type QoS, type SubscribeRequest, type SubscribeResult,
   AuthOptions, ConnectOptions, MessageData, PublishDataQoS0, PublishDataQoS1,
@@ -28,7 +28,9 @@ pub fn connack_result() -> Generator(ConnAckResult) {
   use success <- qcheck.bind(qcheck.bool())
   case success {
     True -> {
-      use session_present <- qcheck.map(qcheck.bool())
+      use session_present <- qcheck.map(
+        from_list([packet.SessionPresent, packet.SessionNotPresent]),
+      )
       Ok(session_present)
     }
     False -> {

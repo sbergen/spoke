@@ -1,12 +1,11 @@
 //// Incoming packets for a MQTT server.
-//// Note that these are currently used only for testing,
-//// but I might split the packets into a separate packages at some point.
 
-import spoke/internal/packet.{
-  type ConnectOptions, type PublishData, type SubscribeRequest,
+import spoke/packet.{
+  type ConnectOptions, type DecodeError, type PublishData, type SubscribeRequest,
 }
-import spoke/internal/packet/decode.{type DecodeError}
+import spoke/packet/internal/decode
 
+/// Represents all the valid incoming packets for an MQTT server.
 pub type Packet {
   Connect(ConnectOptions)
   Publish(PublishData)
@@ -20,6 +19,20 @@ pub type Packet {
   Disconnect
 }
 
+/// Decodes all packets from a chunk of binary data.
+/// Returns a list of decoded packets and the leftover data,
+/// or the first error if the data is invalid.
+/// Will never return `Error(DataTooShort)`,
+/// but might return an empty list and the input data.
+pub fn decode_packets(
+  bytes: BitArray,
+) -> Result(#(List(Packet), BitArray), DecodeError) {
+  decode.all(bytes, decode_packet)
+}
+
+/// Decodes a single packet from a chunk of binary data.
+/// Returns the decoded packet and the leftover data,
+/// or the first error if the data is invalid.
 pub fn decode_packet(
   bytes: BitArray,
 ) -> Result(#(Packet, BitArray), DecodeError) {
@@ -36,8 +49,8 @@ pub fn decode_packet(
         10 -> decode.unsubscribe(flags, rest, Unsubscribe)
         12 -> decode.zero_length(flags, rest, PingReq)
         14 -> decode.zero_length(flags, rest, Disconnect)
-        _ -> Error(decode.InvalidPacketIdentifier(id))
+        _ -> Error(packet.InvalidPacketIdentifier(id))
       }
-    _ -> Error(decode.DataTooShort)
+    _ -> Error(packet.DataTooShort)
   }
 }

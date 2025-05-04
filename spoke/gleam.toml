@@ -10,10 +10,10 @@ gleam_stdlib = ">= 0.43.0 and < 2.0.0"
 gleam_erlang = ">= 0.28.0 and < 1.0.0"
 gleam_otp = ">= 0.13.0 and < 1.0.0"
 gleam_json = ">= 2.3.0 and < 3.0.0"
+spoke_packet = { path = "../spoke_packet" }
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
 glisten = ">= 7.0.0 and < 8.0.0"
 checkmark = ">= 1.0.0 and < 2.0.0"
-qcheck = ">= 1.0.0 and < 2.0.0"
 spoke_tcp = { path = "../spoke_tcp" }

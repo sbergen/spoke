@@ -3,9 +3,9 @@ import gleam/erlang/process
 import gleam/otp/task
 import gleeunit/should
 import spoke.{AtLeastOnce, AtMostOnce, ConnectionStateChanged, ExactlyOnce}
-import spoke/internal/packet
-import spoke/internal/packet/server/incoming as server_in
-import spoke/internal/packet/server/outgoing as server_out
+import spoke/packet
+import spoke/packet/server/incoming as server_in
+import spoke/packet/server/outgoing as server_out
 
 pub fn subscribe_when_not_connected_returns_error_test() {
   let client =

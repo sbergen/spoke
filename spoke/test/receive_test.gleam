@@ -1,9 +1,9 @@
 import fake_server
 import gleam/erlang/process
 import spoke
-import spoke/internal/packet
-import spoke/internal/packet/server/incoming as server_in
-import spoke/internal/packet/server/outgoing as server_out
+import spoke/packet
+import spoke/packet/server/incoming as server_in
+import spoke/packet/server/outgoing as server_out
 
 pub fn receive_message_qos0_test() {
   let #(client, server) =
@@ -77,7 +77,8 @@ pub fn receive_message_qos2_duplicate_filtering_test() {
     process.receive(spoke.updates(client), 10)
 
   // Reconnect
-  let #(server, _) = fake_server.connect_client(client, server, False, True)
+  let #(server, _) =
+    fake_server.connect_client(client, server, False, packet.SessionPresent)
 
   // Re-send data, as we didn't receive the PubRec
   let data = packet.PublishDataQoS2(msg, dup: True, packet_id: 42)
@@ -110,7 +111,8 @@ pub fn receive_message_qos2_duplicate_pubrel_test() {
     process.receive(spoke.updates(client), 10)
 
   // Reconnect
-  let #(server, _) = fake_server.connect_client(client, server, False, True)
+  let #(server, _) =
+    fake_server.connect_client(client, server, False, packet.SessionPresent)
 
   fake_server.send_response(server, server_out.PubRel(42))
   fake_server.expect_packet(server, server_in.PubComp(42))

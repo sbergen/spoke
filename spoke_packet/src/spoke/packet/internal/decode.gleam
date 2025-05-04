@@ -4,19 +4,36 @@ import gleam/bit_array
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/result.{try}
-import spoke/internal/packet.{
-  type ConnAckResult, type ConnectOptions, type PublishData, type QoS,
-  type SubscribeRequest, type SubscribeResult, QoS0, QoS1, QoS2,
-  SubscribeRequest,
+import spoke/packet.{
+  type ConnAckResult, type ConnectOptions, type DecodeError, type PublishData,
+  type QoS, type SubscribeRequest, type SubscribeResult, DataTooShort,
+  InvalidData, InvalidQoS, InvalidUTF8, QoS0, QoS1, QoS2, SubscribeRequest,
+  VarIntTooLarge,
 }
 
-pub type DecodeError {
-  InvalidPacketIdentifier(Int)
-  DataTooShort
-  InvalidData
-  InvalidUTF8
-  InvalidQoS
-  VarIntTooLarge
+/// Decodes all packets from a chunk of binary data.
+/// Returns a list of decoded packets and the leftover data
+/// or the first error if there is invalid data.
+pub fn all(
+  data: BitArray,
+  decoder: fn(BitArray) -> Result(#(packet, BitArray), DecodeError),
+) -> Result(#(List(packet), BitArray), DecodeError) {
+  case all_recursive(data, decoder, []) {
+    Ok(#(result, rest)) -> Ok(#(list.reverse(result), rest))
+    Error(e) -> Error(e)
+  }
+}
+
+fn all_recursive(
+  data: BitArray,
+  decoder: fn(BitArray) -> Result(#(packet, BitArray), DecodeError),
+  packets: List(packet),
+) -> Result(#(List(packet), BitArray), DecodeError) {
+  case decoder(data) {
+    Error(DataTooShort) -> Ok(#(packets, data))
+    Error(e) -> Error(e)
+    Ok(#(packet, rest)) -> all_recursive(rest, decoder, [packet, ..packets])
+  }
 }
 
 pub fn connect(
@@ -165,7 +182,7 @@ pub fn publish(
       use #(make_data, data) <- try(case qos {
         QoS0 -> {
           use _ <- try(dup |> must_equal(0))
-          Ok(#(packet.PublishDataQoS0(_), data))
+          Ok(#(packet.PublishDataQoS0, data))
         }
         QoS1 -> {
           use #(id, data) <- try(integer(data))
@@ -330,7 +347,13 @@ fn decode_connack_code(
   code: Int,
 ) -> Result(ConnAckResult, DecodeError) {
   case code {
-    0 -> Ok(Ok(session_present == 1))
+    0 ->
+      Ok(
+        Ok(case session_present {
+          1 -> packet.SessionPresent
+          _ -> packet.SessionNotPresent
+        }),
+      )
     1 -> Ok(Error(packet.UnacceptableProtocolVersion))
     2 -> Ok(Error(packet.IdentifierRefused))
     3 -> Ok(Error(packet.ServerUnavailable))

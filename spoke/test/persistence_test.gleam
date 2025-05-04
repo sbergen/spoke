@@ -1,7 +1,7 @@
 import fake_server
 import spoke
-import spoke/internal/packet
-import spoke/internal/packet/server/incoming as server_in
+import spoke/packet.{SessionPresent}
+import spoke/packet/server/incoming as server_in
 
 pub fn restore_session_success_test() {
   let server = fake_server.start_server()
@@ -20,7 +20,8 @@ pub fn restore_session_success_test() {
   // Restore session
   let assert Ok(client) = spoke.restore_session(options, state)
     as "Expecting session state to be valid"
-  let #(server, _) = fake_server.connect_client(client, server, False, True)
+  let #(server, _) =
+    fake_server.connect_client(client, server, False, SessionPresent)
 
   let expected_data =
     packet.PublishDataQoS1(packet.MessageData("topic", <<>>, False), True, 1)

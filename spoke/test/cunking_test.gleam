@@ -2,8 +2,8 @@ import fake_server
 import gleam/bytes_tree
 import gleam/erlang/process
 import spoke
-import spoke/internal/packet
-import spoke/internal/packet/server/outgoing as server_out
+import spoke/packet
+import spoke/packet/server/outgoing as server_out
 
 pub fn multiple_packets_at_once_test() {
   let #(client, socket) = fake_server.set_up_connected_client(True)

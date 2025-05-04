@@ -15,8 +15,8 @@ import gleam/json
 import gleam/list
 import gleam/option.{None, Some}
 import gleam/set.{type Set}
-import spoke/internal/packet
-import spoke/internal/packet/client/outgoing
+import spoke/packet
+import spoke/packet/client/outgoing
 
 const json_version = 1
 
