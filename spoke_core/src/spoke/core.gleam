@@ -1,6 +1,7 @@
 import gleam/bytes_tree.{type BytesTree}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import spoke/core/internal/connection.{type Connection}
 import spoke/core/internal/session.{type Session}
 import spoke/packet
@@ -35,10 +36,6 @@ pub type Output {
   ReceivedConnectResponse(packet.ConnAckResult)
 }
 
-pub type Next {
-  Next(state: State, outputs: List(Output))
-}
-
 type ConnectionState {
   NotConnected
   Connecting(options: packet.ConnectOptions)
@@ -50,12 +47,19 @@ pub opaque type State {
   State(session: Session, connection: ConnectionState)
 }
 
+type Next =
+  #(State, List(Output))
+
 pub fn new() -> State {
   State(session.new(False), NotConnected)
 }
 
-pub fn tick(state: State, time: Timestamp, input: Input) -> Result(Next, String) {
-  case input {
+pub fn tick(
+  state: State,
+  time: Timestamp,
+  input: Input,
+) -> Result(#(State, Option(Timestamp), List(Output)), String) {
+  use #(state, outputs) <- result.map(case input {
     ReceivedData(data) -> Ok(receive(state, time, data))
     Tick -> Ok(handle_tick(state, time))
     TransportEstablished -> transport_established(state, time)
@@ -65,11 +69,9 @@ pub fn tick(state: State, time: Timestamp, input: Input) -> Result(Next, String)
         Connect(options) -> connect(state, time, options)
         Disconnect -> Ok(disconnect(state))
       }
-  }
-}
+  })
 
-pub fn next_tick(state: State) -> Option(Int) {
-  next_ping(state)
+  #(state, next_ping(state), outputs)
 }
 
 fn next_ping(state: State) -> Option(Int) {
@@ -84,7 +86,7 @@ fn handle_tick(state: State, time: Timestamp) -> Next {
     Connected(c, ..) ->
       case connection.next_ping(c) {
         Some(ping_time) if ping_time <= time -> {
-          Next(State(..state, connection: Connected(connection.sent_ping(c))), [
+          #(State(..state, connection: Connected(connection.sent_ping(c))), [
             send(outgoing.PingReq),
           ])
         }
@@ -116,7 +118,7 @@ fn connect(
         False -> state.session
       }
 
-      Ok(Next(State(session, Connecting(options)), [OpenTransport]))
+      Ok(#(State(session, Connecting(options)), [OpenTransport]))
     }
   }
 }
@@ -129,7 +131,7 @@ fn disconnect(state: State) -> Next {
     _ -> output
   }
 
-  Next(State(..state, connection: NotConnected), output)
+  #(State(..state, connection: NotConnected), output)
 }
 
 fn transport_established(state: State, time: Timestamp) -> Result(Next, String) {
@@ -139,7 +141,7 @@ fn transport_established(state: State, time: Timestamp) -> Result(Next, String) 
       let keep_alive = options.keep_alive_seconds * 1000
       let connection = WaitingForConnAck(connection.new(time, keep_alive))
 
-      Ok(Next(State(..state, connection:), [send(connect_packet)]))
+      Ok(#(State(..state, connection:), [send(connect_packet)]))
     }
     WaitingForConnAck(..) -> Error("Already connecting")
     Connected(..) -> Error("Already connected")
@@ -155,21 +157,19 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
       let state = State(..state, connection: Connected(connection))
 
       case packet {
-        None -> Next(state, [])
+        None -> #(state, [])
         Some(incoming.ConnAck(result)) -> {
           // If a server sends a CONNACK packet containing a non-zero return code
           // it MUST then close the Network Connection.
           // We play it safe and close it anyway.
           case result {
-            Ok(_) ->
-              Next(State(..state, connection: Connected(connection)), [
-                ReceivedConnectResponse(result),
-              ])
-            Error(_) ->
-              Next(State(..state, connection: NotConnected), [
-                ReceivedConnectResponse(result),
-                CloseTransport,
-              ])
+            Ok(_) -> #(State(..state, connection: Connected(connection)), [
+              ReceivedConnectResponse(result),
+            ])
+            Error(_) -> #(State(..state, connection: NotConnected), [
+              ReceivedConnectResponse(result),
+              CloseTransport,
+            ])
           }
         }
 
@@ -186,13 +186,13 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
         connection.receive_all(connection, time, data)
       let state = State(..state, connection: Connected(connection))
 
-      let Next(state, outputs) = {
-        use Next(state, outputs), packet <- list.fold(packets, Next(state, []))
+      let #(state, outputs) = {
+        use #(state, outputs), packet <- list.fold(packets, #(state, []))
 
         case packet {
           incoming.ConnAck(_) ->
             kill_connection(state, "Got CONNACK while already connected")
-          incoming.PingResp -> Next(state, outputs)
+          incoming.PingResp -> #(state, outputs)
           incoming.PubAck(_) -> todo
           incoming.PubComp(_) -> todo
           incoming.PubRec(_) -> todo
@@ -203,7 +203,7 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
         }
       }
 
-      Next(state, list.reverse(outputs))
+      #(state, list.reverse(outputs))
     }
 
     Connecting(_) ->
@@ -214,13 +214,13 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
 }
 
 fn kill_connection(state: State, error: String) -> Next {
-  Next(State(..state, connection: NotConnected), [
+  #(State(..state, connection: NotConnected), [
     CloseTransportUnexpectedly(error),
   ])
 }
 
 fn noop(state: State) -> Next {
-  Next(state, [])
+  #(state, [])
 }
 
 fn send(packet: outgoing.Packet) -> Output {

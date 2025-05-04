@@ -2,18 +2,23 @@ import birdie
 import gleam/bytes_tree
 import gleam/dynamic.{type Dynamic}
 import gleam/list
-import gleam/option.{Some}
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import spoke/core.{type Timestamp}
 import spoke/packet/server/incoming as server_in
 import spoke/packet/server/outgoing as server_out
 
 pub opaque type Recorder {
-  Recorder(state: core.State, time: Timestamp, log: String)
+  Recorder(
+    state: core.State,
+    next_tick: Option(Timestamp),
+    time: Timestamp,
+    log: String,
+  )
 }
 
 pub fn new() -> Recorder {
-  Recorder(core.new(), 0, "")
+  Recorder(core.new(), None, 0, "")
 }
 
 pub fn time_advance(recorder: Recorder, duration: Int) -> Recorder {
@@ -23,7 +28,7 @@ pub fn time_advance(recorder: Recorder, duration: Int) -> Recorder {
     Recorder(..recorder, log:, time:)
   }
 
-  case core.next_tick(recorder.state) {
+  case recorder.next_tick {
     Some(next) if next <= time ->
       recorder |> input(core.Tick) |> assert_ticks_exhausted
     _ -> recorder
@@ -31,7 +36,7 @@ pub fn time_advance(recorder: Recorder, duration: Int) -> Recorder {
 }
 
 fn assert_ticks_exhausted(recorder: Recorder) -> Recorder {
-  case core.next_tick(recorder.state) {
+  case recorder.next_tick {
     Some(next) if next <= recorder.time -> {
       let log =
         recorder.log
@@ -70,13 +75,13 @@ fn input_preformatted(
   let log = recorder.log <> "  --> " <> input_string <> "\n"
 
   case core.tick(recorder.state, recorder.time, input) {
-    Ok(core.Next(state, outputs)) -> {
+    Ok(#(state, next_tick, outputs)) -> {
       let log =
         log
         <> "<--   "
         <> string.inspect(list.map(outputs, format_output))
         <> "\n"
-      Recorder(..recorder, state:, log:)
+      Recorder(..recorder, state:, log:, next_tick:)
     }
 
     Error(error) -> {
