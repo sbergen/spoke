@@ -7,4 +7,4 @@ title: First packet from server MUST be ConnAck
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
   --> ReceivedPacket(PingResp)
-<--   [CloseTransportUnexpectedly("The first packet sent from the Server to the Client MUST be a CONNACK Packet")]
+<--   [CloseTransport, Publish(DisconnectedUnexpectedly("The first packet sent from the Server to the Client MUST be a CONNACK Packet"))]

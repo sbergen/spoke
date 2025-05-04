@@ -59,6 +59,20 @@ pub fn received(recorder: Recorder, packet: server_out.Packet) -> Recorder {
   input_preformatted(recorder, input, string.inspect(ReceivedPacket(packet)))
 }
 
+pub fn received_many(
+  recorder: Recorder,
+  packets: List(server_out.Packet),
+) -> Recorder {
+  let data = {
+    use acc, packet <- list.fold(packets, bytes_tree.new())
+    let assert Ok(data) = server_out.encode_packet(packet)
+    bytes_tree.concat([acc, data])
+  }
+
+  let input = core.ReceivedData(bytes_tree.to_bit_array(data))
+  input_preformatted(recorder, input, string.inspect(ReceivedPackets(packets)))
+}
+
 pub fn flush(recorder: Recorder, what: String) -> Recorder {
   Recorder(..recorder, log: "<flushed " <> what <> ">\n")
 }
@@ -105,4 +119,5 @@ fn format_output(output: core.Output) -> Dynamic {
 type FormatHelper {
   SendData(server_in.Packet)
   ReceivedPacket(server_out.Packet)
+  ReceivedPackets(List(server_out.Packet))
 }

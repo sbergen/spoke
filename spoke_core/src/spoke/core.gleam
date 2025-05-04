@@ -14,26 +14,31 @@ pub type Timestamp =
 pub type OperationId =
   Int
 
-pub type Action {
+pub type Command {
   Connect(packet.ConnectOptions)
   Disconnect
 }
 
 pub type Input {
+  Perform(Command)
   Tick
   TransportEstablished
   TransportFailed(String)
   ReceivedData(BitArray)
-  Perform(Action)
+}
+
+pub type Update {
+  ReceivedMessage(packet.MessageData)
+  ReceivedConnectResponse(packet.ConnAckResult)
+  Disconnected
+  DisconnectedUnexpectedly(String)
 }
 
 pub type Output {
+  Publish(Update)
   OpenTransport
   CloseTransport
-  CloseTransportUnexpectedly(String)
   SendData(BytesTree)
-  ReceivedMessage(packet.MessageData)
-  ReceivedConnectResponse(packet.ConnAckResult)
 }
 
 type ConnectionState {
@@ -164,10 +169,10 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
           // We play it safe and close it anyway.
           case result {
             Ok(_) -> #(State(..state, connection: Connected(connection)), [
-              ReceivedConnectResponse(result),
+              Publish(ReceivedConnectResponse(result)),
             ])
             Error(_) -> #(State(..state, connection: NotConnected), [
-              ReceivedConnectResponse(result),
+              Publish(ReceivedConnectResponse(result)),
               CloseTransport,
             ])
           }
@@ -187,12 +192,13 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
       let state = State(..state, connection: Connected(connection))
 
       let #(state, outputs) = {
-        use #(state, outputs), packet <- list.fold(packets, #(state, []))
+        use #(state, outputs), packet <- list.fold(packets, #(state, [[]]))
 
-        case packet {
+        let #(state, new_outputs) = case packet {
           incoming.ConnAck(_) ->
             kill_connection(state, "Got CONNACK while already connected")
-          incoming.PingResp -> #(state, outputs)
+          // TODO
+          incoming.PingResp -> noop(state)
           incoming.PubAck(_) -> todo
           incoming.PubComp(_) -> todo
           incoming.PubRec(_) -> todo
@@ -201,21 +207,26 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
           incoming.SubAck(_, _) -> todo
           incoming.UnsubAck(_) -> todo
         }
+
+        #(state, [new_outputs, ..outputs])
       }
 
-      #(state, list.reverse(outputs))
+      #(state, outputs |> list.reverse |> list.flatten)
     }
 
     Connecting(_) ->
       kill_connection(state, "Received data before sending CONNECT")
 
-    NotConnected -> kill_connection(state, "Received data while not connected")
+    // This can easily happen if e.g. multiple receives are in the inbox/event queue,
+    // so we just ignore it.
+    NotConnected -> noop(state)
   }
 }
 
 fn kill_connection(state: State, error: String) -> Next {
   #(State(..state, connection: NotConnected), [
-    CloseTransportUnexpectedly(error),
+    CloseTransport,
+    Publish(DisconnectedUnexpectedly(error)),
   ])
 }
 

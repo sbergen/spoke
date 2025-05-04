@@ -11,6 +11,6 @@ title: Concurrent connects are errors
   --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   !!  Already connecting
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   [ReceivedConnectResponse(Ok(SessionNotPresent))]
+<--   [Publish(ReceivedConnectResponse(Ok(SessionNotPresent)))]
   --> Perform(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   !!  Already connected
