@@ -5,6 +5,7 @@ import gleam/result
 import spoke/core/internal/connection.{type Connection}
 import spoke/core/internal/convert
 import spoke/core/internal/session.{type Session}
+import spoke/core/internal/timer
 import spoke/mqtt.{ConnectionStateChanged}
 import spoke/packet
 import spoke/packet/client/incoming
@@ -37,6 +38,10 @@ pub type Output {
   SendData(BytesTree)
 }
 
+pub type TimedAction {
+  SendPing
+}
+
 pub opaque type State {
   State(options: Options, session: Session, connection: ConnectionState)
 }
@@ -60,7 +65,7 @@ pub fn update(
   use #(state, outputs) <- result.map(case input {
     ReceivedData(data) -> Ok(receive(state, time, data))
     Tick -> Ok(handle_tick(state, time))
-    TransportEstablished -> transport_established(state, time)
+    TransportEstablished -> transport_established(state)
     TransportFailed(error) -> Ok(transport_failed(state, error))
     TransportClosed -> transport_closed(state)
     Perform(action) ->
@@ -70,7 +75,7 @@ pub fn update(
       }
   })
 
-  #(state, next_ping(state), outputs)
+  #(state, next_tick(state), outputs)
 }
 
 //--- Privates ---------------------------------------------------------------//
@@ -89,32 +94,46 @@ type ConnectionState {
   NotConnected
   Connecting(deadline: Timestamp, options: packet.ConnectOptions)
   WaitingForConnAck(deadline: Timestamp, connection: Connection)
-  Connected(Connection)
+  Connected(timers: timer.TimerPool(TimedAction), connection: Connection)
   Disconnecting
 }
 
 type Next =
   #(State, List(Output))
 
-fn next_ping(state: State) -> Option(Int) {
+fn next_tick(state: State) -> Option(Int) {
   case state.connection {
-    Connected(c, ..) -> connection.next_ping(c)
-    _ -> None
+    Connected(timers, ..) -> timer.next(timers)
+    Connecting(deadline, _) -> Some(deadline)
+    WaitingForConnAck(deadline, _) -> Some(deadline)
+    Disconnecting -> None
+    NotConnected -> None
   }
 }
 
 fn handle_tick(state: State, time: Timestamp) -> Next {
   case state.connection {
-    Connected(c, ..) ->
-      case connection.next_ping(c) {
-        Some(ping_time) if ping_time <= time -> {
-          #(State(..state, connection: Connected(connection.sent_ping(c))), [
-            send(outgoing.PingReq),
-          ])
+    Connected(timers, connection) -> {
+      let #(#(state, outputs), timers) = {
+        use #(state, outputs), timer <- timer.drain(
+          timers,
+          time,
+          #(state, [[]]),
+        )
+        case timer.data {
+          SendPing -> #(state, [[send(outgoing.PingReq)], ..outputs])
         }
-        _ -> noop(state)
       }
-    _ -> noop(state)
+
+      #(
+        State(..state, connection: Connected(timers, connection)),
+        outputs |> list.reverse |> list.flatten,
+      )
+    }
+    Connecting(deadline, _) -> todo
+    WaitingForConnAck(deadline, _) -> todo
+    Disconnecting -> noop(state)
+    NotConnected -> noop(state)
   }
 }
 
@@ -160,7 +179,7 @@ fn disconnect(state: State) -> Result(Next, String) {
   let outputs = case state.connection {
     Connecting(..) -> Some([CloseTransport])
     WaitingForConnAck(..) -> Some([CloseTransport])
-    Connected(_) -> Some([send(outgoing.Disconnect), CloseTransport])
+    Connected(..) -> Some([send(outgoing.Disconnect), CloseTransport])
     Disconnecting -> None
     NotConnected -> None
   }
@@ -171,13 +190,10 @@ fn disconnect(state: State) -> Result(Next, String) {
   }
 }
 
-fn transport_established(state: State, time: Timestamp) -> Result(Next, String) {
+fn transport_established(state: State) -> Result(Next, String) {
   case state.connection {
     Connecting(deadline, options) -> {
-      let keep_alive = options.keep_alive_seconds * 1000
-      let connection = connection.new(time, keep_alive)
-      let connection = WaitingForConnAck(deadline, connection)
-
+      let connection = WaitingForConnAck(deadline, connection.new())
       Ok(#(State(..state, connection:), [send(outgoing.Connect(options))]))
     }
     _ -> unexpected_connection_state(state, "establishing transport")
@@ -200,7 +216,7 @@ fn transport_failed(state: State, error: String) -> Next {
   let change = case state.connection {
     // If we're already disconnected, just ignore this
     NotConnected -> None
-    Connected(_) -> Some(mqtt.DisconnectedUnexpectedly(error))
+    Connected(..) -> Some(mqtt.DisconnectedUnexpectedly(error))
     Disconnecting -> Some(mqtt.DisconnectedUnexpectedly(error))
     Connecting(..) -> Some(mqtt.ConnectFailed(error))
     WaitingForConnAck(..) -> Some(mqtt.ConnectFailed(error))
@@ -214,12 +230,11 @@ fn transport_failed(state: State, error: String) -> Next {
   #(State(..state, connection: NotConnected), updates)
 }
 
-fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
+fn receive(state: State, now: Timestamp, data: BitArray) -> Next {
   case state.connection {
     WaitingForConnAck(_deadline, connection) -> {
       let assert Ok(#(connection, packet)) =
-        connection.receive_one(connection, time, data)
-      let state = State(..state, connection: Connected(connection))
+        connection.receive_one(connection, data)
 
       case packet {
         None -> #(state, [])
@@ -229,10 +244,13 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
           // We play it safe and close it anyway.
           let update =
             ConnectionStateChanged(convert.to_connection_state(result))
+          let connection =
+            Connected(
+              timer.new_pool() |> start_ping_timer(now, state),
+              connection,
+            )
           case result {
-            Ok(_) -> #(State(..state, connection: Connected(connection)), [
-              Publish(update),
-            ])
+            Ok(_) -> #(State(..state, connection:), [Publish(update)])
             Error(_) -> #(State(..state, connection: NotConnected), [
               Publish(update),
               CloseTransport,
@@ -248,10 +266,11 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
       }
     }
 
-    Connected(connection) -> {
+    Connected(timers, connection) -> {
       let assert Ok(#(connection, packets)) =
-        connection.receive_all(connection, time, data)
-      let state = State(..state, connection: Connected(connection))
+        connection.receive_all(connection, data)
+      let timers = timers |> start_ping_timer(now, state)
+      let state = State(..state, connection: Connected(timers, connection))
 
       let #(state, outputs) = {
         use #(state, outputs), packet <- list.fold(packets, #(state, [[]]))
@@ -286,6 +305,16 @@ fn receive(state: State, time: Timestamp, data: BitArray) -> Next {
   }
 }
 
+fn start_ping_timer(
+  timers: timer.TimerPool(TimedAction),
+  now: Timestamp,
+  state: State,
+) -> timer.TimerPool(TimedAction) {
+  timers
+  |> timer.remove(fn(timer) { timer.data == SendPing })
+  |> timer.add(timer.Timer(now + state.options.keep_alive, SendPing))
+}
+
 fn kill_connection(state: State, error: String) -> Next {
   #(State(..state, connection: NotConnected), [
     CloseTransport,
@@ -306,7 +335,7 @@ fn unexpected_connection_state(
     <> operation
     <> ": "
     <> case state.connection {
-      Connected(_) -> "Connected"
+      Connected(..) -> "Connected"
       Connecting(..) -> "Connecting"
       Disconnecting -> "Disconnecting"
       NotConnected -> "Not connected"

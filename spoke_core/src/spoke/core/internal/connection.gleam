@@ -8,30 +8,15 @@ pub type Timestamp =
   Int
 
 pub opaque type Connection {
-  Connection(
-    leftover_data: BitArray,
-    next_ping: Option(Timestamp),
-    keep_alive: Int,
-  )
+  Connection(leftover_data: BitArray)
 }
 
-pub fn new(time: Timestamp, keep_alive: Int) -> Connection {
-  // TODO: set disconnect timeout
-  Connection(<<>>, None, keep_alive)
-}
-
-pub fn sent_ping(connection: Connection) -> Connection {
-  // TODO: set disconnect timeout
-  Connection(..connection, next_ping: None)
-}
-
-pub fn next_ping(connection: Connection) -> Option(Timestamp) {
-  connection.next_ping
+pub fn new() -> Connection {
+  Connection(<<>>)
 }
 
 pub fn receive_one(
   connection: Connection,
-  time: Timestamp,
   data: BitArray,
 ) -> Result(#(Connection, Option(incoming.Packet)), packet.DecodeError) {
   let data = bit_array.append(connection.leftover_data, data)
@@ -41,24 +26,14 @@ pub fn receive_one(
     Error(e) -> Error(e)
   })
 
-  Ok(#(next(connection, time, data), packet))
+  Ok(#(Connection(data), packet))
 }
 
 pub fn receive_all(
   connection: Connection,
-  time: Timestamp,
   data: BitArray,
 ) -> Result(#(Connection, List(incoming.Packet)), packet.DecodeError) {
   let data = bit_array.append(connection.leftover_data, data)
   use #(packets, leftover_data) <- result.try(incoming.decode_packets(data))
-  Ok(#(next(connection, time, leftover_data), packets))
-}
-
-fn next(
-  connection: Connection,
-  time: Timestamp,
-  leftover_data: BitArray,
-) -> Connection {
-  let next_ping = Some(time + connection.keep_alive)
-  Connection(..connection, leftover_data:, next_ping:)
+  Ok(#(Connection(leftover_data), packets))
 }
