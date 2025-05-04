@@ -55,10 +55,15 @@ pub type SubscribeRequest {
 /// The error values of the CONNECT return code
 /// ([MQTT 3.2.2.3](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc385349256))
 pub type ConnectError {
+  /// The Server does not support the level of the MQTT protocol requested by the Client
   UnacceptableProtocolVersion
+  /// The Client identifier is correct UTF-8 but not allowed by the Server
   IdentifierRefused
+  /// The Network Connection has been made but the MQTT service is unavailable
   ServerUnavailable
+  /// The data in the user name or password is malformed
   BadUsernameOrPassword
+  // The Client is not authorized to connect
   NotAuthorized
 }
 
@@ -81,16 +86,25 @@ pub type ConnAckResult =
 
 /// An error that can be encountered during decoding.
 pub type DecodeError {
+  /// The packet identifier in the header was not valid.
   InvalidPacketIdentifier(Int)
+  /// The data being decoded did not contain the entire packet.
   DataTooShort
+  /// The data contained values that are specified as invalid,
+  /// e.g. non-zero reserved bits.
   InvalidData
+  /// A string in a packet contained data that wasn't valid UTF-8.
   InvalidUTF8
+  /// A QoS value wasn't in the valid range.
   InvalidQoS
+  /// A variable-length integer was too long.
   VarIntTooLarge
 }
 
 /// An error that can be encountered during encoding.
 pub type EncodeError {
+  /// An empty list was used when subscribing to topics.
   EmptySubscribeList
+  /// An empty list was used when unsubscribing from topics.
   EmptyUnsubscribeList
 }
