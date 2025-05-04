@@ -17,9 +17,17 @@ pub fn pings_when_no_activity_test() {
   |> record.snap("Pings are sent when no other activity")
 }
 
+pub fn close_after_timeout_test() {
+  set_up_connected(10)
+  |> record.time_advance(10_000)
+  |> record.time_advance(1000)
+  |> record.snap("Connection is closed if ping times out")
+}
+
 fn set_up_connected(keep_alive: Int) -> Recorder {
   mqtt.connect_with_id(0, "ping-client")
   |> mqtt.keep_alive_seconds(keep_alive)
+  |> mqtt.server_timeout_ms(1000)
   |> record.from_options()
   |> record.input(Perform(Connect(True, None)))
   |> record.input(TransportEstablished)

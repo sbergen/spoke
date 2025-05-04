@@ -40,6 +40,7 @@ pub type Output {
 
 pub type TimedAction {
   SendPing
+  PingRespTimedOut
 }
 
 pub opaque type State {
@@ -66,7 +67,7 @@ pub fn update(
     ReceivedData(data) -> Ok(receive(state, time, data))
     Tick -> Ok(handle_tick(state, time))
     TransportEstablished -> transport_established(state)
-    TransportFailed(error) -> Ok(transport_failed(state, error))
+    TransportFailed(error) -> Ok(disconnect_unexpectedly(state, error))
     TransportClosed -> transport_closed(state)
     Perform(action) ->
       case action {
@@ -114,23 +115,38 @@ fn next_tick(state: State) -> Option(Int) {
 fn handle_tick(state: State, now: Timestamp) -> Next {
   case state.connection {
     Connected(timers, connection) -> {
-      let #(#(state, outputs), timers) = {
-        use #(state, outputs), timer <- timer.drain(timers, now, #(state, [[]]))
-        case timer.data {
-          SendPing -> #(state, [[send(outgoing.PingReq)], ..outputs])
-        }
-      }
-
-      #(
-        State(..state, connection: Connected(timers, connection)),
-        outputs |> list.reverse |> list.flatten,
-      )
+      let #(expired, timers) = timer.drain(timers, now)
+      let state = State(..state, connection: Connected(timers, connection))
+      fold_next(state, expired, fn(state, timer) {
+        handle_timer(state, now, timer)
+      })
     }
     Connecting(deadline, _) -> maybe_time_out_connection(state, now, deadline)
     WaitingForConnAck(deadline, _) ->
       maybe_time_out_connection(state, now, deadline)
     Disconnecting -> noop(state)
     NotConnected -> noop(state)
+  }
+}
+
+fn handle_timer(
+  state: State,
+  now: Timestamp,
+  timer: timer.Timer(TimedAction),
+) -> Next {
+  case timer.data {
+    SendPing -> {
+      case state.connection {
+        Connected(timers, connection) -> {
+          let timers = start_ping_timeout_timer(timers, now, state)
+          let connection = Connected(timers, connection)
+          #(State(..state, connection:), [send(outgoing.PingReq)])
+        }
+        _ -> noop(state)
+      }
+    }
+    PingRespTimedOut ->
+      disconnect_unexpectedly(state, "Ping response timed out")
   }
 }
 
@@ -221,11 +237,10 @@ fn transport_closed(state: State) -> Result(Next, String) {
 }
 
 fn server_timeout(state: State) -> Next {
-  let #(state, outputs) = transport_failed(state, "Operation timed out")
-  #(state, [CloseTransport, ..outputs])
+  disconnect_unexpectedly(state, "Operation timed out")
 }
 
-fn transport_failed(state: State, error: String) -> Next {
+fn disconnect_unexpectedly(state: State, error: String) -> Next {
   let change = case state.connection {
     // If we're already disconnected, just ignore this
     NotConnected -> None
@@ -237,7 +252,7 @@ fn transport_failed(state: State, error: String) -> Next {
 
   let outputs = case change {
     None -> []
-    Some(change) -> [Publish(ConnectionStateChanged(change))]
+    Some(change) -> [CloseTransport, Publish(ConnectionStateChanged(change))]
   }
 
   #(State(..state, connection: NotConnected), outputs)
@@ -259,7 +274,7 @@ fn receive(state: State, now: Timestamp, data: BitArray) -> Next {
             ConnectionStateChanged(convert.to_connection_state(result))
           let connection =
             Connected(
-              timer.new_pool() |> start_ping_timer(now, state),
+              timer.new_pool() |> start_send_ping_timer(now, state),
               connection,
             )
           case result {
@@ -282,30 +297,23 @@ fn receive(state: State, now: Timestamp, data: BitArray) -> Next {
     Connected(timers, connection) -> {
       let assert Ok(#(connection, packets)) =
         connection.receive_all(connection, data)
-      let timers = timers |> start_ping_timer(now, state)
+      let timers = timers |> start_send_ping_timer(now, state)
       let state = State(..state, connection: Connected(timers, connection))
 
-      let #(state, outputs) = {
-        use #(state, outputs), packet <- list.fold(packets, #(state, [[]]))
-
-        let #(state, new_outputs) = case packet {
-          incoming.ConnAck(_) ->
-            kill_connection(state, "Got CONNACK while already connected")
-          // TODO
-          incoming.PingResp -> noop(state)
-          incoming.PubAck(_) -> todo
-          incoming.PubComp(_) -> todo
-          incoming.PubRec(_) -> todo
-          incoming.PubRel(_) -> todo
-          incoming.Publish(_) -> todo
-          incoming.SubAck(_, _) -> todo
-          incoming.UnsubAck(_) -> todo
-        }
-
-        #(state, [new_outputs, ..outputs])
+      use state, packet <- fold_next(state, packets)
+      case packet {
+        incoming.ConnAck(_) ->
+          kill_connection(state, "Got CONNACK while already connected")
+        // TODO
+        incoming.PingResp -> noop(state)
+        incoming.PubAck(_) -> todo
+        incoming.PubComp(_) -> todo
+        incoming.PubRec(_) -> todo
+        incoming.PubRel(_) -> todo
+        incoming.Publish(_) -> todo
+        incoming.SubAck(_, _) -> todo
+        incoming.UnsubAck(_) -> todo
       }
-
-      #(state, outputs |> list.reverse |> list.flatten)
     }
 
     Connecting(..) ->
@@ -318,14 +326,25 @@ fn receive(state: State, now: Timestamp, data: BitArray) -> Next {
   }
 }
 
-fn start_ping_timer(
+fn start_send_ping_timer(
   timers: timer.TimerPool(TimedAction),
   now: Timestamp,
   state: State,
 ) -> timer.TimerPool(TimedAction) {
   timers
-  |> timer.remove(fn(timer) { timer.data == SendPing })
+  |> timer.remove(fn(timer) {
+    timer.data == SendPing || timer.data == PingRespTimedOut
+  })
   |> timer.add(timer.Timer(now + state.options.keep_alive, SendPing))
+}
+
+fn start_ping_timeout_timer(
+  timers: timer.TimerPool(TimedAction),
+  now: Timestamp,
+  state: State,
+) -> timer.TimerPool(TimedAction) {
+  timers
+  |> timer.add(timer.Timer(now + state.options.server_timeout, PingRespTimedOut))
 }
 
 fn kill_connection(state: State, error: String) -> Next {
@@ -337,6 +356,15 @@ fn kill_connection(state: State, error: String) -> Next {
 
 fn noop(state: State) -> Next {
   #(state, [])
+}
+
+fn fold_next(state: State, items: List(a), fun: fn(State, a) -> Next) -> Next {
+  let #(state, outputs) = {
+    use #(state, outputs), item <- list.fold(items, #(state, [[]]))
+    let #(state, new_outputs) = fun(state, item)
+    #(state, [new_outputs, ..outputs])
+  }
+  #(state, outputs |> list.reverse |> list.flatten)
 }
 
 fn unexpected_connection_state(

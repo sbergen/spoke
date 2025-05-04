@@ -6,4 +6,4 @@ title: Transport failure while disconnecting is published
   --> Perform(Disconnect)
 <--   [SendData(Disconnect), CloseTransport]
   --> TransportFailed("Fake failure")
-<--   [Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Fake failure")))]
+<--   [CloseTransport, Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Fake failure")))]

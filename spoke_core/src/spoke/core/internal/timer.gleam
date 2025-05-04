@@ -37,19 +37,12 @@ pub fn next(pool: TimerPool(a)) -> Option(Int) {
   }
 }
 
-pub fn drain(
-  pool: TimerPool(a),
-  until: Int,
-  init: s,
-  do: fn(s, Timer(a)) -> s,
-) -> #(s, TimerPool(a)) {
+pub fn drain(pool: TimerPool(a), until: Int) -> #(List(Timer(a)), TimerPool(a)) {
   let #(before, after) =
     list.partition(pool.timers, fn(timer) { timer.deadline <= until })
 
-  let result =
-    before
-    |> list.sort(fn(a, b) { int.compare(a.deadline, b.deadline) })
-    |> list.fold(init, fn(state, timer) { do(state, timer) })
+  let before =
+    list.sort(before, fn(a, b) { int.compare(a.deadline, b.deadline) })
 
-  #(result, TimerPool(after))
+  #(before, TimerPool(after))
 }
