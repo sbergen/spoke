@@ -6,6 +6,7 @@ import spoke/packet.{
 }
 import spoke/packet/internal/encode
 
+/// Represents all the valid outgoing packets for an MQTT client.
 pub type Packet {
   Connect(ConnectOptions)
   Publish(PublishData)
@@ -19,6 +20,7 @@ pub type Packet {
   Disconnect
 }
 
+/// Encodes a packet into its binary form.
 pub fn encode_packet(packet: Packet) -> Result(BytesTree, EncodeError) {
   case packet {
     Connect(data) -> Ok(encode.connect(data))

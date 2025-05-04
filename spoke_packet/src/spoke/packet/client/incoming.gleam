@@ -5,6 +5,7 @@ import spoke/packet.{
 }
 import spoke/packet/internal/decode
 
+/// Represents all the valid incoming packets for an MQTT client.
 pub type Packet {
   ConnAck(ConnAckResult)
   Publish(PublishData)
@@ -20,7 +21,9 @@ pub type Packet {
 /// Decodes all packets from a chunk of binary data.
 /// Returns a list of decoded packets and the leftover data,
 /// or the first error if the data is invalid.
-pub fn decode_all(
+/// Will never return `Error(DataTooShort)`,
+/// but might return an empty list and the input data.
+pub fn decode_packets(
   bytes: BitArray,
 ) -> Result(#(List(Packet), BitArray), DecodeError) {
   decode.all(bytes, decode_packet)

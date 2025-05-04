@@ -261,9 +261,10 @@ fn handle_receive(state: State, data: Result(BitArray, String)) -> State {
   })
 
   let data = bit_array.append(state.leftover_data, data)
-  use #(packets, leftover_data) <- ok_or_exit(incoming.decode_all(data), fn(e) {
-    "Decoding error while receiving: " <> string.inspect(e)
-  })
+  use #(packets, leftover_data) <- ok_or_exit(
+    incoming.decode_packets(data),
+    fn(e) { "Decoding error while receiving: " <> string.inspect(e) },
+  )
 
   // Schedule the packets to be processed,
   // to atomically update the actor state.

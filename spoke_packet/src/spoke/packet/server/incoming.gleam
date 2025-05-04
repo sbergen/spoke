@@ -1,12 +1,11 @@
 //// Incoming packets for a MQTT server.
-//// Note that these are currently used only for testing,
-//// but I might split the packets into a separate packages at some point.
 
 import spoke/packet.{
   type ConnectOptions, type DecodeError, type PublishData, type SubscribeRequest,
 }
 import spoke/packet/internal/decode
 
+/// Represents all the valid incoming packets for an MQTT server.
 pub type Packet {
   Connect(ConnectOptions)
   Publish(PublishData)
@@ -23,7 +22,9 @@ pub type Packet {
 /// Decodes all packets from a chunk of binary data.
 /// Returns a list of decoded packets and the leftover data,
 /// or the first error if the data is invalid.
-pub fn decode_all(
+/// Will never return `Error(DataTooShort)`,
+/// but might return an empty list and the input data.
+pub fn decode_packets(
   bytes: BitArray,
 ) -> Result(#(List(Packet), BitArray), DecodeError) {
   decode.all(bytes, decode_packet)
