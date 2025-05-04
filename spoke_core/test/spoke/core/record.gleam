@@ -74,7 +74,7 @@ fn input_preformatted(
 ) -> Recorder {
   let log = recorder.log <> "  --> " <> input_string <> "\n"
 
-  case core.tick(recorder.state, recorder.time, input) {
+  case core.update(recorder.state, recorder.time, input) {
     Ok(#(state, next_tick, outputs)) -> {
       let log =
         log

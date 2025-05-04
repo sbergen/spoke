@@ -54,7 +54,7 @@ pub fn new() -> State {
   State(session.new(False), NotConnected)
 }
 
-pub fn tick(
+pub fn update(
   state: State,
   time: Timestamp,
   input: Input,
