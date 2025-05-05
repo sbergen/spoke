@@ -46,12 +46,28 @@ pub fn new(state: s, timers: List(Timer(t))) -> State(s, t) {
 }
 
 /// Updates the state within a transaction
-pub fn update(
+pub fn map(t: Transaction(s, t, o, e), f: fn(s) -> s) -> Transaction(s, t, o, e) {
+  case t {
+    Succeed(state, ..) -> Succeed(..t, state: f(state))
+    Fail(_) as f -> f
+  }
+}
+
+/// Replaces the state within a transaction
+pub fn replace(t: Transaction(s, t, o, e), state: s) -> Transaction(s, t, o, e) {
+  case t {
+    Succeed(..) -> Succeed(..t, state:)
+    Fail(_) as f -> f
+  }
+}
+
+/// Come up with a better name?
+pub fn flat_map(
   t: Transaction(s, t, o, e),
-  update: fn(s) -> s,
+  f: fn(s) -> Transaction(s, t, o, e),
 ) -> Transaction(s, t, o, e) {
   case t {
-    Succeed(state, ..) -> Succeed(..t, state: update(state))
+    Succeed(state, ..) -> f(state)
     Fail(_) as f -> f
   }
 }
@@ -59,11 +75,10 @@ pub fn update(
 /// Starts a timer within a transaction
 pub fn start_timer(
   t: Transaction(s, t, o, e),
-  timer: fn(s) -> Timer(t),
+  timer: Timer(t),
 ) -> Transaction(s, t, o, e) {
   case t {
-    Succeed(state:, timers:, ..) ->
-      Succeed(..t, timers: [timer(state), ..timers])
+    Succeed(timers:, ..) -> Succeed(..t, timers: [timer, ..timers])
     Fail(_) as f -> f
   }
 }
@@ -71,19 +86,44 @@ pub fn start_timer(
 /// Cancels a timer within a transaction
 pub fn cancel_timer(
   t: Transaction(s, t, o, e),
-  predicate: fn(s) -> fn(Timer(t)) -> Bool,
+  predicate: fn(Timer(t)) -> Bool,
 ) -> Transaction(s, t, o, e) {
   case t {
-    Succeed(state:, timers:, ..) -> {
-      let predicate = predicate(state)
+    Succeed(timers:, ..) ->
       Succeed(..t, timers: list.filter(timers, fn(timer) { !predicate(timer) }))
-    }
+    Fail(_) as f -> f
+  }
+}
+
+/// Cancels all timers within a transaction
+pub fn cancel_all_timers(t: Transaction(s, t, o, e)) -> Transaction(s, t, o, e) {
+  case t {
+    Succeed(..) -> Succeed(..t, timers: [])
+    Fail(_) as f -> f
+  }
+}
+
+pub fn output(t: Transaction(s, t, o, e), o: o) -> Transaction(s, t, o, e) {
+  case t {
+    Succeed(outputs:, ..) -> Succeed(..t, outputs: [o, ..outputs])
+    Fail(_) as f -> f
+  }
+}
+
+pub fn output_many(
+  t: Transaction(s, t, o, e),
+  os: List(o),
+) -> Transaction(s, t, o, e) {
+  // TODO: check the list operations below
+  case t {
+    Succeed(outputs:, ..) ->
+      Succeed(..t, outputs: list.append(list.reverse(os), outputs))
     Fail(_) as f -> f
   }
 }
 
 /// Adds an output within a transaction
-pub fn output(
+pub fn map_output(
   t: Transaction(s, t, o, e),
   make_output: fn(s) -> o,
 ) -> Transaction(s, t, o, e) {

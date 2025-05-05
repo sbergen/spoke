@@ -63,30 +63,33 @@ fn apply(
         PrintTime -> {
           let new_line = "It's now: " <> string.inspect(now)
           transaction
-          |> state.update(list.prepend(_, new_line))
-          |> state.start_timer(fn(_) { state.Timer(now + 10, PrintTime) })
+          |> state.map(list.prepend(_, new_line))
+          |> state.start_timer(state.Timer(now + 10, PrintTime))
         }
       }
 
     state.Apply(operation) ->
       case operation {
-        Yank -> state.update(transaction, list.drop(_, 1))
+        Yank -> state.map(transaction, list.drop(_, 1))
 
         Append(message) -> {
-          use lines <- state.update(transaction)
+          use lines <- state.map(transaction)
           [string.inspect(now) <> ": " <> message, ..lines]
         }
 
         PrintMe -> {
-          use lines <- state.output(transaction)
-          Print(
-            lines
-            |> list.reverse
-            |> string.join("\n"),
+          use lines <- state.flat_map(transaction)
+          state.output(
+            transaction,
+            Print(
+              lines
+              |> list.reverse
+              |> string.join("\n"),
+            ),
           )
         }
 
-        Stop -> state.cancel_timer(transaction, fn(_) { fn(_) { True } })
+        Stop -> state.cancel_all_timers(transaction)
       }
   }
 }

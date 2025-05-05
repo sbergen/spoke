@@ -7,7 +7,7 @@ title: Connect can time out at all stages
   ... 999 ms:
   ... 1000 ms:
   --> Tick
-<--   [CloseTransport, Publish(ConnectionStateChanged(ConnectFailed("Operation timed out")))]
+<--   [CloseTransport, Publish(ConnectionStateChanged(ConnectFailed("Connecting timed out")))]
   --> Perform(Connect(False, None))
 <--   [OpenTransport]
   ... 1500 ms:
@@ -16,4 +16,4 @@ title: Connect can time out at all stages
   ... 1999 ms:
   ... 2000 ms:
   --> Tick
-<--   [CloseTransport, Publish(ConnectionStateChanged(ConnectFailed("Operation timed out")))]
+<--   [CloseTransport, Publish(ConnectionStateChanged(ConnectFailed("Connecting timed out")))]

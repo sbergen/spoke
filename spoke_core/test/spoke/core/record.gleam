@@ -11,7 +11,7 @@ import spoke/packet/server/outgoing as server_out
 
 pub opaque type Recorder {
   Recorder(
-    state: core.State,
+    state: core.Client,
     next_tick: Option(Timestamp),
     time: Timestamp,
     log: String,
@@ -35,7 +35,7 @@ pub fn time_advance(recorder: Recorder, duration: Int) -> Recorder {
 
   case recorder.next_tick {
     Some(next) if next <= time ->
-      recorder |> input(core.Tick) |> assert_ticks_exhausted
+      recorder |> input_preformatted(None, "Tick") |> assert_ticks_exhausted
     _ -> recorder
   }
 }
@@ -55,13 +55,17 @@ fn assert_ticks_exhausted(recorder: Recorder) -> Recorder {
 }
 
 pub fn input(recorder: Recorder, input: core.Input) -> Recorder {
-  input_preformatted(recorder, input, string.inspect(input))
+  input_preformatted(recorder, Some(input), string.inspect(input))
 }
 
 pub fn received(recorder: Recorder, packet: server_out.Packet) -> Recorder {
   let assert Ok(data) = server_out.encode_packet(packet)
   let input = core.ReceivedData(bytes_tree.to_bit_array(data))
-  input_preformatted(recorder, input, string.inspect(ReceivedPacket(packet)))
+  input_preformatted(
+    recorder,
+    Some(input),
+    string.inspect(ReceivedPacket(packet)),
+  )
 }
 
 pub fn received_many(
@@ -75,7 +79,11 @@ pub fn received_many(
   }
 
   let input = core.ReceivedData(bytes_tree.to_bit_array(data))
-  input_preformatted(recorder, input, string.inspect(ReceivedPackets(packets)))
+  input_preformatted(
+    recorder,
+    Some(input),
+    string.inspect(ReceivedPackets(packets)),
+  )
 }
 
 pub fn flush(recorder: Recorder, what: String) -> Recorder {
@@ -88,7 +96,7 @@ pub fn snap(recorder: Recorder, title: String) -> Nil {
 
 fn input_preformatted(
   recorder: Recorder,
-  input: core.Input,
+  input: Option(core.Input),
   input_string: String,
 ) -> Recorder {
   let log = recorder.log <> "  --> " <> input_string <> "\n"
