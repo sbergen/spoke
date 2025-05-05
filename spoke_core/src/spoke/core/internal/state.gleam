@@ -83,7 +83,10 @@ pub fn cancel_timer(
 }
 
 /// Adds an output within a transaction
-pub fn output(t: Transaction(s, t, o, e), make_output: fn(s) -> o) {
+pub fn output(
+  t: Transaction(s, t, o, e),
+  make_output: fn(s) -> o,
+) -> Transaction(s, t, o, e) {
   case t {
     Succeed(state:, outputs:, ..) ->
       Succeed(..t, outputs: [make_output(state), ..outputs])
@@ -98,6 +101,8 @@ pub fn fail(_: Transaction(s, t, o, e), error: e) -> Transaction(s, t, o, e) {
 }
 
 /// Triggers all expired timers and applies the given input, if any.
+/// On success, returns the new state, next tick deadline, if any,
+/// and the list of outputs to apply.
 pub fn step(
   state: State(s, t),
   now: Timestamp,
@@ -108,16 +113,13 @@ pub fn step(
   let State(state, timers) = state
 
   // Apply timers
-  let #(before, timers) =
+  let #(to_trigger, timers) =
     list.partition(timers, fn(timer) { timer.deadline <= now })
-
-  let to_trigger =
-    list.sort(before, fn(a, b) { int.compare(a.deadline, b.deadline) })
-
   let transaction =
     to_trigger
-    |> list.fold(Succeed(state, timers, []), fn(t, timer) {
-      apply(t, now, TimerExpired(timer.data))
+    |> list.sort(fn(a, b) { int.compare(a.deadline, b.deadline) })
+    |> list.fold(Succeed(state, timers, []), fn(transaction, timer) {
+      apply(transaction, now, TimerExpired(timer.data))
     })
 
   // Apply input, if any
@@ -129,7 +131,6 @@ pub fn step(
   case transaction {
     Fail(e) -> Error(e)
     Succeed(state, timers, outputs) -> {
-      let timers = timers
       Ok(#(State(state, timers), next_tick(timers), list.reverse(outputs)))
     }
   }
