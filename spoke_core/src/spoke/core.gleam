@@ -58,22 +58,24 @@ pub fn new(options: mqtt.ConnectOptions(_)) -> Client {
   Client(state.new(State(options, session.new(False), NotConnected), []))
 }
 
-pub fn update(
+pub fn tick(
   client: Client,
   now: Timestamp,
-  input: Option(Input),
-) -> Result(#(Client, Option(Timestamp), List(Output)), String) {
-  let input = case input {
-    None -> state.Tick
-    Some(input) -> state.Handle(input)
-  }
+) -> #(Client, Option(Timestamp), List(Output)) {
+  state.tick(client.state, now, handle_timer)
+  |> state.wrap(Client)
+}
 
-  use #(state, next_tick, outputs) <- result.map(state.step(
-    client.state,
-    now,
-    input,
-    handle_update,
-  ))
+pub fn step(
+  client: Client,
+  now: Timestamp,
+  input: Input,
+) -> Result(#(Client, Option(Timestamp), List(Output)), String) {
+  use #(state, next_tick, outputs) <- result.map(
+    state.begin_step(client.state)
+    |> handle_input(now, input)
+    |> result.map(state.end_step),
+  )
 
   #(Client(state), next_tick, outputs)
 }
@@ -84,11 +86,8 @@ type State {
   State(options: Options, session: Session, connection: ConnectionState)
 }
 
-type Transaction =
-  state.Transaction(State, TimedAction, Output, String)
-
-type Update =
-  state.Update(Input, TimedAction)
+type Step =
+  state.Step(State, TimedAction, Output)
 
 // Drops the transport options and the generics from the public type
 type Options {
@@ -108,52 +107,51 @@ type ConnectionState {
   Disconnecting
 }
 
-fn handle_update(
-  transaction: Transaction,
+fn handle_input(
+  transaction: Step,
   now: Timestamp,
-  update: Update,
-) -> Transaction {
-  case update {
-    state.Apply(input) ->
-      case input {
-        ReceivedData(data) -> receive(transaction, now, data)
-        TransportEstablished -> transport_established(transaction)
-        TransportFailed(error) -> disconnect_unexpectedly(transaction, error)
-        TransportClosed -> transport_closed(transaction)
-        Perform(action) ->
-          case action {
-            Connect(options, will) -> connect(transaction, now, options, will)
-            Disconnect -> disconnect(transaction)
-          }
-      }
-    state.TimerExpired(action) ->
+  input: Input,
+) -> Result(Step, String) {
+  case input {
+    ReceivedData(data) -> Ok(receive(transaction, now, data))
+    TransportEstablished -> transport_established(transaction)
+    TransportFailed(error) -> Ok(disconnect_unexpectedly(transaction, error))
+    TransportClosed -> transport_closed(transaction)
+    Perform(action) ->
       case action {
-        SendPing -> {
-          use state <- state.flat_map(transaction)
-          case state.connection {
-            Connected(connection) -> {
-              let connection = Connected(connection)
-              start_ping_timeout_timer(transaction, now)
-              |> state.replace(State(..state, connection:))
-              |> state.output(send(outgoing.PingReq))
-            }
-            _ -> transaction
-          }
-        }
-        PingRespTimedOut ->
-          disconnect_unexpectedly(transaction, "Ping response timed out")
-        ConnectTimedOut ->
-          disconnect_unexpectedly(transaction, "Connecting timed out")
+        Connect(options, will) -> connect(transaction, now, options, will)
+        Disconnect -> disconnect(transaction)
       }
   }
 }
 
+fn handle_timer(transaction: Step, now: Timestamp, action: TimedAction) -> Step {
+  case action {
+    SendPing -> {
+      use state <- state.flat_map(transaction)
+      case state.connection {
+        Connected(connection) -> {
+          let connection = Connected(connection)
+          start_ping_timeout_timer(transaction, now)
+          |> state.replace(State(..state, connection:))
+          |> state.output(send(outgoing.PingReq))
+        }
+        _ -> transaction
+      }
+    }
+    PingRespTimedOut ->
+      disconnect_unexpectedly(transaction, "Ping response timed out")
+    ConnectTimedOut ->
+      disconnect_unexpectedly(transaction, "Connecting timed out")
+  }
+}
+
 fn connect(
-  transaction: Transaction,
+  transaction: Step,
   now: Timestamp,
   clean_session: Bool,
   will: Option(mqtt.PublishData),
-) -> Transaction {
+) -> Result(Step, String) {
   use state <- state.flat_map(transaction)
   case state.connection {
     NotConnected -> {
@@ -183,12 +181,13 @@ fn connect(
       )
       |> state.start_timer(state.Timer(deadline, ConnectTimedOut))
       |> state.output(OpenTransport)
+      |> Ok
     }
     _ -> unexpected_connection_state(transaction, "connecting")
   }
 }
 
-fn disconnect(transaction: Transaction) -> Transaction {
+fn disconnect(transaction: Step) -> Result(Step, String) {
   use state <- state.flat_map(transaction)
   let outputs = case state.connection {
     Connecting(..) -> Some([CloseTransport])
@@ -203,11 +202,12 @@ fn disconnect(transaction: Transaction) -> Transaction {
       transaction
       |> state.replace(State(..state, connection: Disconnecting))
       |> state.output_many(outputs)
+      |> Ok
     None -> unexpected_connection_state(transaction, "disconnecting")
   }
 }
 
-fn transport_established(transaction: Transaction) -> Transaction {
+fn transport_established(transaction: Step) -> Result(Step, String) {
   use state <- state.flat_map(transaction)
   case state.connection {
     Connecting(options) -> {
@@ -215,12 +215,13 @@ fn transport_established(transaction: Transaction) -> Transaction {
       transaction
       |> state.replace(State(..state, connection:))
       |> state.output(send(outgoing.Connect(options)))
+      |> Ok
     }
     _ -> unexpected_connection_state(transaction, "establishing transport")
   }
 }
 
-fn transport_closed(transaction: Transaction) -> Transaction {
+fn transport_closed(transaction: Step) -> Result(Step, String) {
   use state <- state.flat_map(transaction)
   case state.connection {
     Disconnecting ->
@@ -228,15 +229,13 @@ fn transport_closed(transaction: Transaction) -> Transaction {
       |> state.cancel_all_timers()
       |> state.replace(State(..state, connection: NotConnected))
       |> state.output(Publish(ConnectionStateChanged(mqtt.Disconnected)))
+      |> Ok
     _ ->
       unexpected_connection_state(transaction, "closing transport expectedly")
   }
 }
 
-fn disconnect_unexpectedly(
-  transaction: Transaction,
-  error: String,
-) -> Transaction {
+fn disconnect_unexpectedly(transaction: Step, error: String) -> Step {
   use state <- state.flat_map(transaction)
   let change = case state.connection {
     // If we're already disconnected, just ignore this
@@ -258,11 +257,7 @@ fn disconnect_unexpectedly(
   |> state.output_many(outputs)
 }
 
-fn receive(
-  transaction: Transaction,
-  now: Timestamp,
-  data: BitArray,
-) -> Transaction {
+fn receive(transaction: Step, now: Timestamp, data: BitArray) -> Step {
   use state <- state.flat_map(transaction)
   case state.connection {
     WaitingForConnAck(connection) -> {
@@ -338,10 +333,7 @@ fn receive(
   }
 }
 
-fn start_send_ping_timer(
-  transaction: Transaction,
-  now: Timestamp,
-) -> Transaction {
+fn start_send_ping_timer(transaction: Step, now: Timestamp) -> Step {
   use state <- state.flat_map(transaction)
   transaction
   |> state.cancel_timer(fn(timer) {
@@ -352,10 +344,7 @@ fn start_send_ping_timer(
   |> state.start_timer(state.Timer(now + state.options.keep_alive, SendPing))
 }
 
-fn start_ping_timeout_timer(
-  transaction: Transaction,
-  now: Timestamp,
-) -> Transaction {
+fn start_ping_timeout_timer(transaction: Step, now: Timestamp) -> Step {
   use state <- state.flat_map(transaction)
   transaction
   |> state.start_timer(state.Timer(
@@ -364,7 +353,7 @@ fn start_ping_timeout_timer(
   ))
 }
 
-fn kill_connection(transaction: Transaction, error: String) -> Transaction {
+fn kill_connection(transaction: Step, error: String) -> Step {
   transaction
   |> state.map(fn(state) { State(..state, connection: NotConnected) })
   |> state.cancel_all_timers()
@@ -375,23 +364,20 @@ fn kill_connection(transaction: Transaction, error: String) -> Transaction {
 }
 
 fn unexpected_connection_state(
-  transaction: Transaction,
+  transaction: Step,
   operation: String,
-) -> Transaction {
-  use state <- state.flat_map(transaction)
-  state.fail(
-    transaction,
-    "Unexpected connection state when "
-      <> operation
-      <> ": "
-      <> case state.connection {
-      Connected(..) -> "Connected"
-      Connecting(..) -> "Connecting"
-      Disconnecting -> "Disconnecting"
-      NotConnected -> "Not connected"
-      WaitingForConnAck(..) -> "Waiting for CONNACK"
-    },
-  )
+) -> Result(Step, String) {
+  use state <- state.error(transaction)
+  "Unexpected connection state when "
+  <> operation
+  <> ": "
+  <> case state.connection {
+    Connected(..) -> "Connected"
+    Connecting(..) -> "Connecting"
+    Disconnecting -> "Disconnecting"
+    NotConnected -> "Not connected"
+    WaitingForConnAck(..) -> "Waiting for CONNACK"
+  }
 }
 
 fn send(packet: outgoing.Packet) -> Output {

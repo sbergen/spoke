@@ -7,25 +7,8 @@ pub type Timestamp =
   Int
 
 /// An ongoing transaction to update the state, timers, or produce outputs.
-pub opaque type Transaction(s, t, o, e) {
-  Succeed(state: s, timers: List(Timer(t)), outputs: List(o))
-  Fail(e)
-}
-
-/// An update to be applied to the state
-pub type Update(i, t) {
-  /// Apply a requested input
-  Apply(i)
-  /// Apply a timer that expired
-  TimerExpired(t)
-}
-
-/// An input to process in `update`
-pub type Input(i) {
-  /// A specific input to apply
-  Handle(i)
-  /// No input to apply, just trigger all expired timers
-  Tick
+pub opaque type Step(s, t, o) {
+  Step(state: s, timers: List(Timer(t)), outputs: List(o))
 }
 
 /// A timer that wil expire when the timestamp increases to this point.
@@ -46,134 +29,106 @@ pub fn new(state: s, timers: List(Timer(t))) -> State(s, t) {
 }
 
 /// Updates the state within a transaction
-pub fn map(t: Transaction(s, t, o, e), f: fn(s) -> s) -> Transaction(s, t, o, e) {
-  case t {
-    Succeed(state, ..) -> Succeed(..t, state: f(state))
-    Fail(_) as f -> f
-  }
+pub fn map(t: Step(s, t, o), f: fn(s) -> s) -> Step(s, t, o) {
+  Step(..t, state: f(t.state))
 }
 
 /// Replaces the state within a transaction
-pub fn replace(t: Transaction(s, t, o, e), state: s) -> Transaction(s, t, o, e) {
-  case t {
-    Succeed(..) -> Succeed(..t, state:)
-    Fail(_) as f -> f
-  }
+pub fn replace(t: Step(s, t, o), state: s) -> Step(s, t, o) {
+  Step(..t, state:)
 }
 
 /// Come up with a better name?
-pub fn flat_map(
-  t: Transaction(s, t, o, e),
-  f: fn(s) -> Transaction(s, t, o, e),
-) -> Transaction(s, t, o, e) {
-  case t {
-    Succeed(state, ..) -> f(state)
-    Fail(_) as f -> f
-  }
+pub fn flat_map(t: Step(s, t, o), f: fn(s) -> x) -> x {
+  f(t.state)
 }
 
 /// Starts a timer within a transaction
-pub fn start_timer(
-  t: Transaction(s, t, o, e),
-  timer: Timer(t),
-) -> Transaction(s, t, o, e) {
-  case t {
-    Succeed(timers:, ..) -> Succeed(..t, timers: [timer, ..timers])
-    Fail(_) as f -> f
-  }
+pub fn start_timer(t: Step(s, t, o), timer: Timer(t)) -> Step(s, t, o) {
+  Step(..t, timers: [timer, ..t.timers])
 }
 
 /// Cancels a timer within a transaction
 pub fn cancel_timer(
-  t: Transaction(s, t, o, e),
+  t: Step(s, t, o),
   predicate: fn(Timer(t)) -> Bool,
-) -> Transaction(s, t, o, e) {
-  case t {
-    Succeed(timers:, ..) ->
-      Succeed(..t, timers: list.filter(timers, fn(timer) { !predicate(timer) }))
-    Fail(_) as f -> f
-  }
+) -> Step(s, t, o) {
+  Step(..t, timers: list.filter(t.timers, fn(timer) { !predicate(timer) }))
 }
 
 /// Cancels all timers within a transaction
-pub fn cancel_all_timers(t: Transaction(s, t, o, e)) -> Transaction(s, t, o, e) {
-  case t {
-    Succeed(..) -> Succeed(..t, timers: [])
-    Fail(_) as f -> f
-  }
+pub fn cancel_all_timers(t: Step(s, t, o)) -> Step(s, t, o) {
+  Step(..t, timers: [])
 }
 
-pub fn output(t: Transaction(s, t, o, e), o: o) -> Transaction(s, t, o, e) {
-  case t {
-    Succeed(outputs:, ..) -> Succeed(..t, outputs: [o, ..outputs])
-    Fail(_) as f -> f
-  }
+pub fn output(t: Step(s, t, o), o: o) -> Step(s, t, o) {
+  Step(..t, outputs: [o, ..t.outputs])
 }
 
-pub fn output_many(
-  t: Transaction(s, t, o, e),
-  os: List(o),
-) -> Transaction(s, t, o, e) {
+pub fn output_many(t: Step(s, t, o), os: List(o)) -> Step(s, t, o) {
   // TODO: check the list operations below
-  case t {
-    Succeed(outputs:, ..) ->
-      Succeed(..t, outputs: list.append(list.reverse(os), outputs))
-    Fail(_) as f -> f
-  }
+  Step(..t, outputs: list.append(list.reverse(os), t.outputs))
 }
 
 /// Adds an output within a transaction
-pub fn map_output(
-  t: Transaction(s, t, o, e),
-  make_output: fn(s) -> o,
-) -> Transaction(s, t, o, e) {
-  case t {
-    Succeed(state:, outputs:, ..) ->
-      Succeed(..t, outputs: [make_output(state), ..outputs])
-    Fail(_) as f -> f
-  }
+pub fn map_output(t: Step(s, t, o), make_output: fn(s) -> o) -> Step(s, t, o) {
+  Step(..t, outputs: [make_output(t.state), ..t.outputs])
 }
 
-/// Fails the transaction
-pub fn fail(_: Transaction(s, t, o, e), error: e) -> Transaction(s, t, o, e) {
-  // TODO: support multiple errors?
-  Fail(error)
+pub fn error(t: Step(s, t, o), e: fn(s) -> e) -> Result(Step(s, t, o), e) {
+  Error(e(t.state))
 }
 
-/// Triggers all expired timers and applies the given input, if any.
-/// On success, returns the new state, next tick deadline, if any,
+/// Triggers all expired timers.
+/// Returns the new state, next tick deadline, if any,
 /// and the list of outputs to apply.
+pub fn tick(
+  state: State(s, t),
+  now: Timestamp,
+  apply: fn(Step(s, t, o), Timestamp, t) -> Step(s, t, o),
+) -> #(State(s, t), Option(Timestamp), List(o)) {
+  let State(state, timers) = state
+  let #(to_trigger, timers) =
+    list.partition(timers, fn(timer) { timer.deadline <= now })
+
+  let Step(state, timers, outputs) =
+    to_trigger
+    |> list.sort(fn(a, b) { int.compare(a.deadline, b.deadline) })
+    |> list.fold(Step(state, timers, []), fn(transaction, timer) {
+      apply(transaction, now, timer.data)
+    })
+
+  #(State(state, timers), next_tick(timers), list.reverse(outputs))
+}
+
+pub fn begin_step(state: State(s, t)) -> Step(s, t, _) {
+  Step(state.state, state.timers, [])
+}
+
+pub fn end_step(
+  step: Step(s, t, o),
+) -> #(State(s, t), Option(Timestamp), List(o)) {
+  let Step(state, timers, outputs) = step
+  #(State(state, timers), next_tick(timers), list.reverse(outputs))
+}
+
 pub fn step(
   state: State(s, t),
   now: Timestamp,
-  input: Input(i),
-  apply: fn(Transaction(s, t, o, e), Timestamp, Update(i, t)) ->
-    Transaction(s, t, o, e),
-) -> Result(#(State(s, t), Option(Timestamp), List(o)), e) {
-  let State(state, timers) = state
+  input: i,
+  apply: fn(Step(s, t, o), Timestamp, i) -> Step(s, t, o),
+) -> #(State(s, t), Option(Timestamp), List(o)) {
+  state
+  |> begin_step()
+  |> apply(now, input)
+  |> end_step
+}
 
-  // Apply timers
-  let #(to_trigger, timers) =
-    list.partition(timers, fn(timer) { timer.deadline <= now })
-  let transaction =
-    to_trigger
-    |> list.sort(fn(a, b) { int.compare(a.deadline, b.deadline) })
-    |> list.fold(Succeed(state, timers, []), fn(transaction, timer) {
-      apply(transaction, now, TimerExpired(timer.data))
-    })
-
-  // Apply input, if any
-  let transaction = case input {
-    Handle(input) -> apply(transaction, now, Apply(input))
-    Tick -> transaction
-  }
-
-  case transaction {
-    Fail(e) -> Error(e)
-    Succeed(state, timers, outputs) -> {
-      Ok(#(State(state, timers), next_tick(timers), list.reverse(outputs)))
-    }
-  }
+pub fn wrap(
+  result: #(State(s, t), Option(Timestamp), List(o)),
+  wrap: fn(State(s, t)) -> a,
+) -> #(a, Option(Timestamp), List(o)) {
+  #(wrap(result.0), result.1, result.2)
 }
 
 fn next_tick(timers: List(Timer(_))) -> Option(Timestamp) {
