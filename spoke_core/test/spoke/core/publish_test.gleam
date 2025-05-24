@@ -80,9 +80,45 @@ pub fn publish_qos2_rerelease_test() {
   |> recorder.snap("QoS2 rerelease after reconnect")
 }
 
+pub fn clean_session_after_disconnected_test() {
+  let data1 = mqtt.PublishData("topic", <<"payload">>, mqtt.AtLeastOnce, False)
+  let data2 =
+    mqtt.PublishData("topic2", <<"payload2">>, mqtt.ExactlyOnce, False)
+
+  recorder.default_connected()
+  |> record.input(Perform(PublishMessage(data1)))
+  |> record.input(Perform(PublishMessage(data2)))
+  |> record.input(TransportClosed)
+  |> clean_reconnect
+  |> record.input(Perform(GetPendingPublishes(discard())))
+  |> recorder.snap("Reconnecting with clean session discards messages")
+}
+
+pub fn ephemeral_session_is_discarded_test() {
+  let data = mqtt.PublishData("topic", <<"payload">>, mqtt.AtLeastOnce, False)
+  recorder.default()
+  |> record.input(Perform(Connect(True, None)))
+  |> record.input(TransportEstablished)
+  |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
+  |> record.input(Perform(PublishMessage(data)))
+  |> record.input(TransportClosed)
+  |> record.input(Perform(Connect(False, None)))
+  |> record.input(TransportEstablished)
+  |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
+  |> record.input(Perform(GetPendingPublishes(discard())))
+  |> recorder.snap("Ephemeral session is discarded on reconnect")
+}
+
 fn reconnect(recorder: recorder.Recorder) -> recorder.Recorder {
   recorder
   |> record.input(Perform(Connect(False, None)))
   |> record.input(TransportEstablished)
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionPresent)))
+}
+
+fn clean_reconnect(recorder: recorder.Recorder) -> recorder.Recorder {
+  recorder
+  |> record.input(Perform(Connect(True, None)))
+  |> record.input(TransportEstablished)
+  |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
 }
