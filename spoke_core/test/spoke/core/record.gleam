@@ -1,69 +1,31 @@
 import birdie
+import drift/record
 import gleam/bytes_tree
-import gleam/dynamic.{type Dynamic}
+import gleam/dynamic
 import gleam/list
-import gleam/option.{type Option, None, Some}
 import gleam/string
-import spoke/core.{type Timestamp}
+import spoke/core
 import spoke/mqtt
 import spoke/packet/server/incoming as server_in
 import spoke/packet/server/outgoing as server_out
 
-pub opaque type Recorder {
-  Recorder(
-    state: core.Client,
-    next_tick: Option(Timestamp),
-    time: Timestamp,
-    log: String,
-  )
-}
+pub type Recorder =
+  record.Recorder(core.State, core.Input, core.Output, String)
 
 pub fn default() -> Recorder {
   from_options(mqtt.connect_with_id(0, "my-client"))
 }
 
 pub fn from_options(options: mqtt.ConnectOptions(_)) -> Recorder {
-  Recorder(core.new(options), None, 0, "")
-}
-
-pub fn time_advance(recorder: Recorder, duration: Int) -> Recorder {
-  let time = recorder.time + duration
-  let recorder = {
-    let log = recorder.log <> "  ... " <> string.inspect(time) <> " ms:\n"
-    Recorder(..recorder, log:, time:)
-  }
-
-  case recorder.next_tick {
-    Some(next) if next <= time ->
-      recorder |> input_preformatted(None, "Tick") |> assert_ticks_exhausted
-    _ -> recorder
-  }
-}
-
-fn assert_ticks_exhausted(recorder: Recorder) -> Recorder {
-  case recorder.next_tick {
-    Some(next) if next <= recorder.time -> {
-      let log =
-        recorder.log
-        <> "!!!!! Next tick at "
-        <> string.inspect(next)
-        <> " !!!!!\n"
-      Recorder(..recorder, log:)
-    }
-    _ -> recorder
-  }
-}
-
-pub fn input(recorder: Recorder, input: core.Input) -> Recorder {
-  input_preformatted(recorder, Some(input), string.inspect(input))
+  record.new(core.new_state(options), core.handle_input, format_output)
 }
 
 pub fn received(recorder: Recorder, packet: server_out.Packet) -> Recorder {
   let assert Ok(data) = server_out.encode_packet(packet)
   let input = core.ReceivedData(bytes_tree.to_bit_array(data))
-  input_preformatted(
+  record.input_preformatted(
     recorder,
-    Some(input),
+    input,
     string.inspect(ReceivedPacket(packet)),
   )
 }
@@ -79,51 +41,34 @@ pub fn received_many(
   }
 
   let input = core.ReceivedData(bytes_tree.to_bit_array(data))
-  input_preformatted(
+  record.input_preformatted(
     recorder,
-    Some(input),
+    input,
     string.inspect(ReceivedPackets(packets)),
   )
 }
 
-pub fn flush(recorder: Recorder, what: String) -> Recorder {
-  Recorder(..recorder, log: "<flushed " <> what <> ">\n")
-}
-
 pub fn snap(recorder: Recorder, title: String) -> Nil {
-  birdie.snap(string.trim_end(recorder.log), title)
+  birdie.snap(record.to_log(recorder), title)
 }
 
-fn input_preformatted(
-  recorder: Recorder,
-  input: Option(core.Input),
-  input_string: String,
-) -> Recorder {
-  let log = recorder.log <> "  --> " <> input_string <> "\n"
+// TODO: these forward declarations aren't great :/
 
-  let result = case input {
-    Some(input) -> core.step(recorder.state, recorder.time, input)
-    None -> Ok(core.tick(recorder.state, recorder.time))
-  }
-
-  case result {
-    Ok(#(state, next_tick, outputs)) -> {
-      let log =
-        log
-        <> "<--   "
-        <> string.inspect(list.map(outputs, format_output))
-        <> "\n"
-      Recorder(..recorder, state:, log:, next_tick:)
-    }
-
-    Error(error) -> {
-      let log = log <> "  !!  " <> error <> "\n"
-      Recorder(..recorder, log:)
-    }
-  }
+pub fn input(recorder: Recorder, input: core.Input) -> Recorder {
+  record.input(recorder, input)
 }
 
-fn format_output(output: core.Output) -> Dynamic {
+pub fn flush(recorder: Recorder, what: String) -> Recorder {
+  record.flush(recorder, what)
+}
+
+pub fn time_advance(recorder: Recorder, duration: Int) -> Recorder {
+  record.time_advance(recorder, duration)
+}
+
+// end TODO
+
+fn format_output(output: core.Output) -> String {
   case output {
     core.SendData(data) -> {
       let assert Ok(#(packet, <<>>)) =
@@ -132,6 +77,7 @@ fn format_output(output: core.Output) -> Dynamic {
     }
     other -> dynamic.from(other)
   }
+  |> string.inspect
 }
 
 type FormatHelper {

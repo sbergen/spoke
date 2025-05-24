@@ -24,7 +24,7 @@ pub opaque type Session {
   Session(
     clean_session: Bool,
     packet_id: Int,
-    /// Published QoS 2 messages waiting for PubRec,
+    /// Published QoS 2 messages waiting or PubRec,
     /// used for re-transmission of Publish.
     unacked_qos1: Dict(Int, packet.MessageData),
     /// Published QoS 2 messages waiting for PubRec,
