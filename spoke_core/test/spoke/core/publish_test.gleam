@@ -41,3 +41,15 @@ pub fn resend_qos1_after_disconnected_test() {
   |> record.input(Perform(GetPendingPublishes(discard())))
   |> recorder.snap("QoS1 republish after reconnect")
 }
+
+pub fn publish_qos2_happy_path_test() {
+  let data = mqtt.PublishData("topic", <<"payload">>, mqtt.ExactlyOnce, False)
+  recorder.default_connected()
+  |> record.input(Perform(PublishMessage(data)))
+  |> record.input(Perform(GetPendingPublishes(discard())))
+  |> recorder.received(server_out.PubRec(1))
+  |> record.input(Perform(GetPendingPublishes(discard())))
+  |> recorder.received(server_out.PubComp(1))
+  |> record.input(Perform(GetPendingPublishes(discard())))
+  |> recorder.snap("QoS2 publish success")
+}

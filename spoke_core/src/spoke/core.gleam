@@ -347,8 +347,8 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
           kill_connection(context, state, "Got CONNACK while already connected")
         incoming.PingResp -> drift.continue(context, state)
         incoming.PubAck(id) -> handle_puback(context, state, id)
-        incoming.PubComp(_) -> todo
-        incoming.PubRec(_) -> todo
+        incoming.PubRec(id) -> handle_pubrec(context, state, id)
+        incoming.PubComp(id) -> handle_pubcomp(context, state, id)
         incoming.PubRel(_) -> todo
         incoming.Publish(_) -> todo
         incoming.SubAck(_, _) -> todo
@@ -374,6 +374,20 @@ fn handle_puback(context: Context, state: State, id: Int) -> Step {
     session.InvalidPubAckId ->
       kill_connection(context, state, "Received invalid PubAck id")
   }
+}
+
+fn handle_pubrec(context: Context, state: State, id: Int) -> Step {
+  drift.continue(
+    context,
+    State(..state, session: session.handle_pubrec(state.session, id)),
+  )
+}
+
+fn handle_pubcomp(context: Context, state: State, id: Int) -> Step {
+  drift.continue(
+    context,
+    State(..state, session: session.handle_pubcomp(state.session, id)),
+  )
 }
 
 fn start_send_ping_timer(context: Context, state: State) -> Step {
