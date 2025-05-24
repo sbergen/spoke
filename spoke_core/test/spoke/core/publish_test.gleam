@@ -2,7 +2,7 @@ import drift/record.{discard}
 import gleam/option.{None}
 import spoke/core.{
   Connect, GetPendingPublishes, Perform, PublishMessage, TransportClosed,
-  TransportEstablished,
+  TransportEstablished, WaitForPublishesToFinish,
 }
 import spoke/core/recorder
 import spoke/mqtt
@@ -107,6 +107,28 @@ pub fn ephemeral_session_is_discarded_test() {
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> record.input(Perform(GetPendingPublishes(discard())))
   |> recorder.snap("Ephemeral session is discarded on reconnect")
+}
+
+pub fn wait_for_publishes_to_finish_nothing_pending_test() {
+  recorder.default_connected()
+  |> record.input(Perform(WaitForPublishesToFinish(discard(), 0)))
+  |> recorder.snap("Wait for publishes to finish when nothing pending")
+}
+
+pub fn wait_for_publishes_to_finish_happy_path_test() {
+  let data1 = mqtt.PublishData("topic", <<"payload">>, mqtt.AtLeastOnce, False)
+  let data2 =
+    mqtt.PublishData("topic2", <<"payload2">>, mqtt.ExactlyOnce, False)
+
+  recorder.default_connected()
+  |> record.input(Perform(PublishMessage(data1)))
+  |> record.input(Perform(PublishMessage(data2)))
+  |> record.input(Perform(WaitForPublishesToFinish(discard(), 10)))
+  |> record.input(Perform(WaitForPublishesToFinish(discard(), 10)))
+  |> recorder.received(server_out.PubAck(1))
+  |> recorder.received(server_out.PubRec(2))
+  |> recorder.received(server_out.PubComp(2))
+  |> recorder.snap("Wait for publishes to finish happy path")
 }
 
 fn reconnect(recorder: recorder.Recorder) -> recorder.Recorder {

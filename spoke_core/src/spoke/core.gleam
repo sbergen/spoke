@@ -1,11 +1,16 @@
-import drift.{type Effect}
+import drift.{type Effect, type Timer}
+import drift/reference.{type Reference}
 import gleam/bytes_tree.{type BytesTree}
+import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import spoke/core/internal/connection.{type Connection}
 import spoke/core/internal/convert
 import spoke/core/internal/session.{type Session}
-import spoke/mqtt.{AtLeastOnce, AtMostOnce, ConnectionStateChanged, ExactlyOnce}
+import spoke/mqtt.{
+  type PublishCompletionError, AtLeastOnce, AtMostOnce, ConnectionStateChanged,
+  ExactlyOnce,
+}
 import spoke/packet
 import spoke/packet/client/incoming
 import spoke/packet/client/outgoing
@@ -15,12 +20,14 @@ pub type Command {
   Disconnect
   PublishMessage(mqtt.PublishData)
   GetPendingPublishes(Effect(Int))
+  WaitForPublishesToFinish(Effect(Result(Nil, PublishCompletionError)), Int)
 }
 
 pub opaque type TimedAction {
   SendPing
   PingRespTimedOut
   ConnectTimedOut
+  WaitForPublishesTimeout(Reference)
 }
 
 pub type Input {
@@ -38,6 +45,10 @@ pub type Output {
   CloseTransport
   SendData(BytesTree)
   ReturnPendingPublishes(Effect(Int), Int)
+  PublishesCompleted(
+    Effect(Result(Nil, PublishCompletionError)),
+    Result(Nil, PublishCompletionError),
+  )
 }
 
 pub opaque type State {
@@ -45,9 +56,13 @@ pub opaque type State {
     options: Options,
     session: Session,
     connection: ConnectionState,
-    send_ping_timer: Option(drift.Timer),
-    ping_resp_timer: Option(drift.Timer),
-    connect_timer: Option(drift.Timer),
+    send_ping_timer: Option(Timer),
+    ping_resp_timer: Option(Timer),
+    connect_timer: Option(Timer),
+    publish_completion_listeners: Dict(
+      Reference,
+      #(Effect(Result(Nil, PublishCompletionError)), Timer),
+    ),
   )
 }
 
@@ -65,7 +80,7 @@ pub fn new_state(options: mqtt.ConnectOptions(_)) -> State {
       keep_alive: options.keep_alive_seconds * 1000,
       server_timeout: options.server_timeout_ms,
     )
-  State(options, session.new(False), NotConnected, None, None, None)
+  State(options, session.new(False), NotConnected, None, None, None, dict.new())
 }
 
 pub fn handle_input(context: Context, state: State, input: Input) -> Step {
@@ -81,8 +96,37 @@ pub fn handle_input(context: Context, state: State, input: Input) -> Step {
         PublishMessage(data) -> publish(context, state, data)
         GetPendingPublishes(reply) ->
           get_pending_publishes(context, state, reply)
+        WaitForPublishesToFinish(reply, timeout) ->
+          wait_for_publishes(context, state, reply, timeout)
       }
     Timeout(action) -> handle_timer(context, state, action)
+  }
+}
+
+fn wait_for_publishes(
+  context: Context,
+  state: State,
+  reply: Effect(Result(Nil, PublishCompletionError)),
+  timeout: Int,
+) -> Step {
+  case session.pending_publishes(state.session) {
+    0 ->
+      context
+      |> drift.output(PublishesCompleted(reply, Ok(Nil)))
+      |> drift.continue(state)
+
+    _ -> {
+      let ref = reference.new()
+      let #(context, timer) =
+        drift.handle_after(
+          context,
+          timeout,
+          Timeout(WaitForPublishesTimeout(ref)),
+        )
+      let publish_completion_listeners =
+        dict.insert(state.publish_completion_listeners, ref, #(reply, timer))
+      drift.continue(context, State(..state, publish_completion_listeners:))
+    }
   }
 }
 
@@ -121,6 +165,7 @@ fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
       disconnect_unexpectedly(context, state, "Ping response timed out")
     ConnectTimedOut ->
       disconnect_unexpectedly(context, state, "Connecting timed out")
+    WaitForPublishesTimeout(_) -> todo
   }
 }
 
@@ -345,13 +390,25 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
       case packet {
         incoming.ConnAck(_) ->
           kill_connection(context, state, "Got CONNACK while already connected")
+
         incoming.PingResp -> drift.continue(context, state)
-        incoming.PubAck(id) -> handle_puback(context, state, id)
+
+        incoming.PubAck(id) ->
+          handle_puback(context, state, id)
+          |> drift.chain(check_publish_completion)
+
         incoming.PubRec(id) -> handle_pubrec(context, state, id)
-        incoming.PubComp(id) -> handle_pubcomp(context, state, id)
+
+        incoming.PubComp(id) ->
+          handle_pubcomp(context, state, id)
+          |> drift.chain(check_publish_completion)
+
         incoming.PubRel(_) -> todo
+
         incoming.Publish(_) -> todo
+
         incoming.SubAck(_, _) -> todo
+
         incoming.UnsubAck(_) -> todo
       }
     }
@@ -422,6 +479,25 @@ fn start_ping_timeout_timer(context: Context, state: State) -> Step {
     )
 
   drift.continue(context, State(..state, ping_resp_timer: Some(timer)))
+}
+
+fn check_publish_completion(context: Context, state: State) -> Step {
+  case session.pending_publishes(state.session) {
+    0 -> {
+      {
+        use context, #(effect, timer) <- list.fold(
+          dict.values(state.publish_completion_listeners),
+          context,
+        )
+        let context = drift.cancel_timer(context, timer).0
+        drift.output(context, PublishesCompleted(effect, Ok(Nil)))
+      }
+      |> drift.continue(
+        State(..state, publish_completion_listeners: dict.new()),
+      )
+    }
+    _ -> drift.continue(context, state)
+  }
 }
 
 fn kill_connection(context: Context, state: State, error: String) -> Step {

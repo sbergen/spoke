@@ -118,6 +118,12 @@ pub type ConnectError {
   NotAuthorized
 }
 
+/// An error that can happen when waiting for publishes to complete.
+pub type PublishCompletionError {
+  PublishCompletionTimedOut
+  SessionResetCanceledPublishes
+}
+
 /// Utility record for the data required to request a subscription.
 pub type SubscribeRequest {
   SubscribeRequest(filter: String, qos: QoS)
