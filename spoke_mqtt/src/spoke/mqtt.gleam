@@ -69,7 +69,7 @@ pub type PublishData {
   PublishData(topic: String, payload: BitArray, qos: QoS, retain: Bool)
 }
 
-/// Unified error type for operations that are completed in a blocking way.
+/// Unified error type for operations.
 pub type OperationError {
   /// The client was not connected when it was required.
   NotConnected
@@ -77,6 +77,8 @@ pub type OperationError {
   OperationTimedOut
   /// We received unexpected data from the server, and will disconnect.
   ProtocolViolation
+  /// The session was reset, invalidating the operation
+  SessionReset
 }
 
 /// The result of a subscribe operation
@@ -116,12 +118,6 @@ pub type ConnectError {
   BadUsernameOrPassword
   /// The Client is not authorized to connect
   NotAuthorized
-}
-
-/// An error that can happen when waiting for publishes to complete.
-pub type PublishCompletionError {
-  PublishCompletionTimedOut
-  SessionResetCanceledPublishes
 }
 
 /// Utility record for the data required to request a subscription.

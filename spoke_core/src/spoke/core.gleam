@@ -4,11 +4,13 @@ import gleam/bytes_tree.{type BytesTree}
 import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import spoke/core/internal/connection.{type Connection}
 import spoke/core/internal/convert
 import spoke/core/internal/session.{type Session}
 import spoke/mqtt.{
-  type PublishCompletionError, AtLeastOnce, AtMostOnce, ConnectionStateChanged,
+  type OperationError, type PublishData, type SubscribeRequest,
+  type Subscription, AtLeastOnce, AtMostOnce, ConnectionStateChanged,
   ExactlyOnce,
 }
 import spoke/packet
@@ -16,17 +18,22 @@ import spoke/packet/client/incoming
 import spoke/packet/client/outgoing
 
 pub type Command {
-  Connect(clean_session: Bool, will: Option(mqtt.PublishData))
+  Connect(clean_session: Bool, will: Option(PublishData))
   Disconnect
-  PublishMessage(mqtt.PublishData)
+  Subscribe(
+    List(SubscribeRequest),
+    Effect(Result(List(Subscription), OperationError)),
+  )
+  PublishMessage(PublishData)
   GetPendingPublishes(Effect(Int))
-  WaitForPublishesToFinish(Effect(Result(Nil, PublishCompletionError)), Int)
+  WaitForPublishesToFinish(Effect(Result(Nil, OperationError)), Int)
 }
 
 pub opaque type TimedAction {
   SendPing
   PingRespTimedOut
   ConnectTimedOut
+  SubscribeTimedOut(Int)
   WaitForPublishesTimeout(Reference)
 }
 
@@ -46,8 +53,12 @@ pub type Output {
   SendData(BytesTree)
   ReturnPendingPublishes(Effect(Int), Int)
   PublishesCompleted(
-    Effect(Result(Nil, PublishCompletionError)),
-    Result(Nil, PublishCompletionError),
+    Effect(Result(Nil, OperationError)),
+    Result(Nil, OperationError),
+  )
+  SubscribeCompleted(
+    Effect(Result(List(Subscription), OperationError)),
+    Result(List(Subscription), OperationError),
   )
 }
 
@@ -56,12 +67,13 @@ pub opaque type State {
     options: Options,
     session: Session,
     connection: ConnectionState,
+    pending_subs: Dict(Int, PendingSubscription),
     send_ping_timer: Option(Timer),
     ping_resp_timer: Option(Timer),
     connect_timer: Option(Timer),
     publish_completion_listeners: Dict(
       Reference,
-      #(Effect(Result(Nil, PublishCompletionError)), Timer),
+      #(Effect(Result(Nil, OperationError)), Timer),
     ),
   )
 }
@@ -80,7 +92,16 @@ pub fn new_state(options: mqtt.ConnectOptions(_)) -> State {
       keep_alive: options.keep_alive_seconds * 1000,
       server_timeout: options.server_timeout_ms,
     )
-  State(options, session.new(False), NotConnected, None, None, None, dict.new())
+  State(
+    options,
+    session.new(False),
+    NotConnected,
+    dict.new(),
+    None,
+    None,
+    None,
+    dict.new(),
+  )
 }
 
 pub fn handle_input(context: Context, state: State, input: Input) -> Step {
@@ -93,6 +114,8 @@ pub fn handle_input(context: Context, state: State, input: Input) -> Step {
       case action {
         Connect(options, will) -> connect(context, state, options, will)
         Disconnect -> disconnect(context, state)
+        Subscribe(requests, effect) ->
+          subscribe(context, state, requests, effect)
         PublishMessage(data) -> publish(context, state, data)
         GetPendingPublishes(reply) ->
           get_pending_publishes(context, state, reply)
@@ -103,10 +126,51 @@ pub fn handle_input(context: Context, state: State, input: Input) -> Step {
   }
 }
 
+fn subscribe(
+  context: Context,
+  state: State,
+  requests: List(SubscribeRequest),
+  effect: Effect(Result(List(Subscription), OperationError)),
+) -> Step {
+  case state.connection {
+    Connected(_) -> {
+      let #(session, id) = session.reserve_packet_id(state.session)
+
+      let #(context, timer) =
+        drift.handle_after(
+          context,
+          state.options.server_timeout,
+          Timeout(SubscribeTimedOut(id)),
+        )
+
+      let pending_subs =
+        dict.insert(
+          state.pending_subs,
+          id,
+          PendingSubscription(requests, effect, timer),
+        )
+
+      context
+      |> drift.output(
+        send(outgoing.Subscribe(
+          id,
+          list.map(requests, convert.to_packet_subscribe_request),
+        )),
+      )
+      |> drift.continue(State(..state, session:, pending_subs:))
+    }
+
+    _ ->
+      context
+      |> drift.output(SubscribeCompleted(effect, Error(mqtt.NotConnected)))
+      |> drift.continue(state)
+  }
+}
+
 fn wait_for_publishes(
   context: Context,
   state: State,
-  reply: Effect(Result(Nil, PublishCompletionError)),
+  reply: Effect(Result(Nil, OperationError)),
   timeout: Int,
 ) -> Step {
   case session.pending_publishes(state.session) {
@@ -149,6 +213,14 @@ type ConnectionState {
   Disconnecting
 }
 
+type PendingSubscription {
+  PendingSubscription(
+    topics: List(SubscribeRequest),
+    reply_to: Effect(Result(List(Subscription), OperationError)),
+    timeout: Timer,
+  )
+}
+
 fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
   case action {
     SendPing -> {
@@ -167,6 +239,7 @@ fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
       disconnect_unexpectedly(context, state, "Connecting timed out")
     WaitForPublishesTimeout(ref) ->
       time_out_wait_for_publish(context, state, ref)
+    SubscribeTimedOut(id) -> time_out_subscription(context, state, id)
   }
 }
 
@@ -179,11 +252,27 @@ fn time_out_wait_for_publish(
     dict.get(state.publish_completion_listeners, ref)
 
   context
-  |> drift.output(PublishesCompleted(
-    effect,
-    Error(mqtt.PublishCompletionTimedOut),
-  ))
+  |> drift.output(PublishesCompleted(effect, Error(mqtt.OperationTimedOut)))
   |> drift.continue(state)
+}
+
+fn time_out_subscription(context: Context, state: State, id: Int) -> Step {
+  let pending_subs = state.pending_subs
+
+  case dict.get(pending_subs, id) {
+    // If the key was not found, it means that the suback
+    // and timeout were queued to be handled at the same time.
+    Error(_) -> drift.continue(context, state)
+    Ok(PendingSubscription(_, reply_to, _)) ->
+      kill_connection(
+        drift.output(
+          context,
+          SubscribeCompleted(reply_to, Error(mqtt.OperationTimedOut)),
+        ),
+        State(..state, pending_subs: dict.delete(pending_subs, id)),
+        "Subscribe timed out",
+      )
+  }
 }
 
 fn connect(
@@ -397,7 +486,8 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
 
         incoming.Publish(_) -> todo
 
-        incoming.SubAck(_, _) -> todo
+        incoming.SubAck(id, return_codes) ->
+          handle_suback(context, state, id, return_codes)
 
         incoming.UnsubAck(_) -> todo
       }
@@ -455,6 +545,49 @@ fn handle_first_packet(
         state,
         "The first packet sent from the Server to the Client MUST be a CONNACK Packet",
       )
+  }
+}
+
+fn handle_suback(
+  context: Context,
+  state: State,
+  id: Int,
+  return_codes: List(Result(packet.QoS, Nil)),
+) -> Step {
+  let result = {
+    let subs = state.pending_subs
+    use pending_sub <- result.try(result.replace_error(
+      dict.get(subs, id),
+      "Received invalid packet id in subscribe ack",
+    ))
+
+    use pairs <- result.try(result.replace_error(
+      list.strict_zip(pending_sub.topics, return_codes),
+      "Received invalid number of results in subscribe ack",
+    ))
+
+    let results = list.map(pairs, convert.to_subscription)
+    Ok(
+      drift.cancel_timer(context, pending_sub.timeout).0
+      |> drift.output(SubscribeCompleted(pending_sub.reply_to, Ok(results)))
+      |> drift.continue(State(..state, pending_subs: dict.delete(subs, id))),
+    )
+  }
+
+  case result {
+    Error(e) -> {
+      let errors = {
+        use pending_sub <- list.map(dict.values(state.pending_subs))
+        SubscribeCompleted(pending_sub.reply_to, Error(mqtt.ProtocolViolation))
+      }
+
+      kill_connection(
+        drift.output_many(context, errors),
+        State(..state, pending_subs: dict.new()),
+        e,
+      )
+    }
+    Ok(step) -> step
   }
 }
 
@@ -521,17 +654,13 @@ fn check_publish_completion(context: Context, state: State) -> Step {
 }
 
 fn reset_publish_completion(context: Context, state: State) -> Step {
-  check_publish_completion_with(
-    context,
-    state,
-    Error(mqtt.SessionResetCanceledPublishes),
-  )
+  check_publish_completion_with(context, state, Error(mqtt.SessionReset))
 }
 
 fn check_publish_completion_with(
   context: Context,
   state: State,
-  result: Result(Nil, mqtt.PublishCompletionError),
+  result: Result(Nil, OperationError),
 ) -> Step {
   case session.pending_publishes(state.session) {
     0 -> {

@@ -12,7 +12,7 @@ title: Wait for publishes to finish timeouts
 <--   []
   ... 10 ms:
   --> Tick
-<--   [PublishesCompleted(Effect(//fn(a) { ... }), Error(PublishCompletionTimedOut))]
+<--   [PublishesCompleted(Effect(//fn(a) { ... }), Error(OperationTimedOut))]
   ... 15 ms:
   --> Tick
-<--   [PublishesCompleted(Effect(//fn(a) { ... }), Error(PublishCompletionTimedOut))]
+<--   [PublishesCompleted(Effect(//fn(a) { ... }), Error(OperationTimedOut))]

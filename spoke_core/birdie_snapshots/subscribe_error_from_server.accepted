@@ -1,0 +1,9 @@
+---
+version: 1.2.7
+title: Subscribe error from server
+---
+<flushed connect and handshake>
+  --> Perform(Subscribe([SubscribeRequest("topic0", AtMostOnce), SubscribeRequest("topic1", AtLeastOnce)], Effect(//fn(a) { ... })))
+<--   [SendData(Subscribe(1, [SubscribeRequest("topic0", QoS0), SubscribeRequest("topic1", QoS1)]))]
+  --> ReceivedPacket(SubAck(1, [Ok(QoS0), Error(Nil)]))
+<--   [SubscribeCompleted(Effect(//fn(a) { ... }), Ok([SuccessfulSubscription("topic0", AtMostOnce), FailedSubscription("topic1")]))]

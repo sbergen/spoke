@@ -1,0 +1,11 @@
+---
+version: 1.2.7
+title: Subscribes time out after server timeout
+---
+<flushed connect and handshake>
+  --> Perform(Subscribe([SubscribeRequest("topic0", AtMostOnce)], Effect(//fn(a) { ... })))
+<--   [SendData(Subscribe(1, [SubscribeRequest("topic0", QoS0)]))]
+  ... 4999 ms:
+  ... 5000 ms:
+  --> Tick
+<--   [SubscribeCompleted(Effect(//fn(a) { ... }), Error(OperationTimedOut)), CloseTransport, Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Subscribe timed out")))]

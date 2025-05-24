@@ -14,4 +14,4 @@ title: Wait for publishes to finish clean session
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(True, "my-client", 15, None, None)))]
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent))), PublishesCompleted(Effect(//fn(a) { ... }), Error(SessionResetCanceledPublishes))]
+<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent))), PublishesCompleted(Effect(//fn(a) { ... }), Error(SessionReset))]
