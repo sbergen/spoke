@@ -165,8 +165,25 @@ fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
       disconnect_unexpectedly(context, state, "Ping response timed out")
     ConnectTimedOut ->
       disconnect_unexpectedly(context, state, "Connecting timed out")
-    WaitForPublishesTimeout(_) -> todo
+    WaitForPublishesTimeout(ref) ->
+      time_out_wait_for_publish(context, state, ref)
   }
+}
+
+fn time_out_wait_for_publish(
+  context: Context,
+  state: State,
+  ref: Reference,
+) -> Step {
+  let assert Ok(#(effect, _timer)) =
+    dict.get(state.publish_completion_listeners, ref)
+
+  context
+  |> drift.output(PublishesCompleted(
+    effect,
+    Error(mqtt.PublishCompletionTimedOut),
+  ))
+  |> drift.continue(state)
 }
 
 fn connect(

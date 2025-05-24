@@ -131,6 +131,19 @@ pub fn wait_for_publishes_to_finish_happy_path_test() {
   |> recorder.snap("Wait for publishes to finish happy path")
 }
 
+pub fn wait_for_publishes_to_finish_timeout_test() {
+  let data = mqtt.PublishData("topic", <<"payload">>, mqtt.AtLeastOnce, False)
+
+  recorder.default_connected()
+  |> record.input(Perform(PublishMessage(data)))
+  |> record.input(Perform(WaitForPublishesToFinish(discard(), 10)))
+  |> record.time_advance(5)
+  |> record.input(Perform(WaitForPublishesToFinish(discard(), 10)))
+  |> record.time_advance(5)
+  |> record.time_advance(5)
+  |> recorder.snap("Wait for publishes to finish timeouts")
+}
+
 fn reconnect(recorder: recorder.Recorder) -> recorder.Recorder {
   recorder
   |> record.input(Perform(Connect(False, None)))
