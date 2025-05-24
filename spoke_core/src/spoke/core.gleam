@@ -445,8 +445,7 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
         Some(packet) -> {
           let step = handle_first_packet(context, state, connection, packet)
 
-          // Process the rest of the data
-          // TODO add test!
+          // Process the rest of the data, if any
           use context, state <- drift.chain(step)
           receive(context, state, <<>>)
         }

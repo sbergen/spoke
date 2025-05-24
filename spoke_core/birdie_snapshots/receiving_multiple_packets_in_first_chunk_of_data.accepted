@@ -1,0 +1,10 @@
+---
+version: 1.2.7
+title: Receiving multiple packets in first chunk of data
+---
+  --> Perform(Connect(False, None))
+<--   [OpenTransport]
+  --> TransportEstablished
+<--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
+  --> ReceivedData(" \u{0002}\u{0001}\u{0000}0\u{000E}\u{0000}\u{0005}topicpayload")
+<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionPresent))), Publish(ReceivedMessage("topic", "payload", False))]

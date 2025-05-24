@@ -1,0 +1,7 @@
+---
+version: 1.2.7
+title: Receiving multiple packets after connected
+---
+<flushed connect and handshake>
+  --> ReceivedData("0\u{000E}\u{0000}\u{0005}topicpayload0\u{0010}\u{0000}\u{0006}topic2payload2")
+<--   [Publish(ReceivedMessage("topic", "payload", False)), Publish(ReceivedMessage("topic2", "payload2", False))]
