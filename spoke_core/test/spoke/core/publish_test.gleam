@@ -128,6 +128,7 @@ pub fn wait_for_publishes_to_finish_happy_path_test() {
   |> recorder.received(server_out.PubAck(1))
   |> recorder.received(server_out.PubRec(2))
   |> recorder.received(server_out.PubComp(2))
+  |> record.time_advance(100)
   |> recorder.snap("Wait for publishes to finish happy path")
 }
 
@@ -142,6 +143,29 @@ pub fn wait_for_publishes_to_finish_timeout_test() {
   |> record.time_advance(5)
   |> record.time_advance(5)
   |> recorder.snap("Wait for publishes to finish timeouts")
+}
+
+pub fn wait_for_publishes_to_finish_clean_session_test() {
+  let data = mqtt.PublishData("topic", <<"payload">>, mqtt.AtLeastOnce, False)
+
+  recorder.default_connected()
+  |> record.input(Perform(PublishMessage(data)))
+  |> record.input(Perform(WaitForPublishesToFinish(discard(), 10)))
+  |> record.input(TransportClosed)
+  |> clean_reconnect
+  |> recorder.snap("Wait for publishes to finish clean session")
+}
+
+pub fn wait_for_publishes_to_finish_continued_session_test() {
+  let data = mqtt.PublishData("topic", <<"payload">>, mqtt.AtLeastOnce, False)
+
+  recorder.default_connected()
+  |> record.input(Perform(PublishMessage(data)))
+  |> record.input(Perform(WaitForPublishesToFinish(discard(), 10)))
+  |> record.input(TransportClosed)
+  |> reconnect
+  |> recorder.received(server_out.PubAck(1))
+  |> recorder.snap("Wait for publishes to finish continued session")
 }
 
 fn reconnect(recorder: recorder.Recorder) -> recorder.Recorder {

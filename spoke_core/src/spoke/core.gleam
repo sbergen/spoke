@@ -353,42 +353,15 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
         connection.receive_one(connection, data)
 
       case packet {
-        None -> drift.continue(context, state)
-        Some(incoming.ConnAck(result)) -> {
-          let update =
-            ConnectionStateChanged(convert.to_connection_state(result))
+        Some(packet) -> {
+          let step = handle_first_packet(context, state, connection, packet)
 
-          case result {
-            Ok(_) ->
-              context
-              |> drift.output(Publish(update))
-              |> drift.output_many(
-                state.session
-                |> session.packets_to_send_after_connect()
-                |> list.map(send),
-              )
-              |> start_send_ping_timer(
-                State(..state, connection: Connected(connection)),
-              )
-
-            // If a server sends a CONNACK packet containing a non-zero return code
-            // it MUST then close the Network Connection.
-            // We play it safe and close it anyway.
-            Error(_) ->
-              context
-              |> drift.output(Publish(update))
-              |> drift.output(CloseTransport)
-              |> drift.cancel_all_timers()
-              |> drift.continue(State(..state, connection: NotConnected))
-          }
+          // Process the rest of the data
+          // TODO add test!
+          use context, state <- drift.chain(step)
+          receive(context, state, <<>>)
         }
-
-        Some(_) ->
-          kill_connection(
-            context,
-            state,
-            "The first packet sent from the Server to the Client MUST be a CONNACK Packet",
-          )
+        None -> drift.continue(context, state)
       }
     }
 
@@ -437,6 +410,51 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
     // so we just ignore it.
     NotConnected -> drift.continue(context, state)
     Disconnecting -> drift.continue(context, state)
+  }
+}
+
+fn handle_first_packet(
+  context: Context,
+  state: State,
+  connection: Connection,
+  packet: incoming.Packet,
+) -> Step {
+  case packet {
+    incoming.ConnAck(result) -> {
+      let update = ConnectionStateChanged(convert.to_connection_state(result))
+
+      case result {
+        Ok(_) ->
+          context
+          |> drift.output(Publish(update))
+          |> drift.output_many(
+            state.session
+            |> session.packets_to_send_after_connect()
+            |> list.map(send),
+          )
+          |> start_send_ping_timer(
+            State(..state, connection: Connected(connection)),
+          )
+          |> drift.chain(reset_publish_completion)
+
+        // If a server sends a CONNACK packet containing a non-zero return code
+        // it MUST then close the Network Connection.
+        // We play it safe and close it anyway.
+        Error(_) ->
+          context
+          |> drift.output(Publish(update))
+          |> drift.output(CloseTransport)
+          |> drift.cancel_all_timers()
+          |> drift.continue(State(..state, connection: NotConnected))
+      }
+    }
+
+    _ ->
+      kill_connection(
+        context,
+        state,
+        "The first packet sent from the Server to the Client MUST be a CONNACK Packet",
+      )
   }
 }
 
@@ -499,6 +517,22 @@ fn start_ping_timeout_timer(context: Context, state: State) -> Step {
 }
 
 fn check_publish_completion(context: Context, state: State) -> Step {
+  check_publish_completion_with(context, state, Ok(Nil))
+}
+
+fn reset_publish_completion(context: Context, state: State) -> Step {
+  check_publish_completion_with(
+    context,
+    state,
+    Error(mqtt.SessionResetCanceledPublishes),
+  )
+}
+
+fn check_publish_completion_with(
+  context: Context,
+  state: State,
+  result: Result(Nil, mqtt.PublishCompletionError),
+) -> Step {
   case session.pending_publishes(state.session) {
     0 -> {
       {
@@ -507,7 +541,7 @@ fn check_publish_completion(context: Context, state: State) -> Step {
           context,
         )
         let context = drift.cancel_timer(context, timer).0
-        drift.output(context, PublishesCompleted(effect, Ok(Nil)))
+        drift.output(context, PublishesCompleted(effect, result))
       }
       |> drift.continue(
         State(..state, publish_completion_listeners: dict.new()),

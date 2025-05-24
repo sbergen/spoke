@@ -1,0 +1,17 @@
+---
+version: 1.2.7
+title: Wait for publishes to finish clean session
+---
+<flushed connect and handshake>
+  --> Perform(PublishMessage(PublishData("topic", "payload", AtLeastOnce, False)))
+<--   [SendData(Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1)))]
+  --> Perform(WaitForPublishesToFinish(Effect(//fn(a) { ... }), 10))
+<--   []
+  --> TransportClosed
+<--   [Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Transport closed")))]
+  --> Perform(Connect(True, None))
+<--   [OpenTransport]
+  --> TransportEstablished
+<--   [SendData(Connect(ConnectOptions(True, "my-client", 15, None, None)))]
+  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent))), PublishesCompleted(Effect(//fn(a) { ... }), Error(SessionResetCanceledPublishes))]
