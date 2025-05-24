@@ -69,7 +69,7 @@ pub fn concurrent_connect_test() {
   |> record.input(Perform(Connect(False, None)))
   |> record.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> record.input(Perform(Connect(False, None)))
-  |> record.snap("Concurrent connects are errors")
+  |> record.snap("Concurrent connects are no-ops")
 }
 
 pub fn double_connack_test() {

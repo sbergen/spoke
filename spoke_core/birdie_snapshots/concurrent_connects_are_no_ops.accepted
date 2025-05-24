@@ -1,19 +1,16 @@
 ---
 version: 1.2.7
-title: Concurrent connects are errors
+title: Concurrent connects are no-ops
 ---
   --> Perform(Connect(False, None))
 <--   [OpenTransport]
   --> Perform(Connect(False, None))
 <--   []
-  !!  "Unexpected connection state when connecting: Connecting"
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
   --> Perform(Connect(False, None))
 <--   []
-  !!  "Unexpected connection state when connecting: Waiting for CONNACK"
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
 <--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))]
   --> Perform(Connect(False, None))
 <--   []
-  !!  "Unexpected connection state when connecting: Connected"

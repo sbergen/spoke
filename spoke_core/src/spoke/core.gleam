@@ -170,7 +170,9 @@ fn connect(
         ),
       )
     }
-    _ -> unexpected_connection_state(context, state, "connecting")
+
+    // Trying to reconnect is a no-op
+    _ -> drift.with_state(context, state)
   }
 }
 
