@@ -1,0 +1,11 @@
+---
+version: 1.2.7
+title: Unsubscribe times out
+---
+<flushed connect and handshake>
+  --> Perform(Unsubscribe(["topic0", "topic1"], Effect(//fn(a) { ... })))
+<--   [SendData(Unsubscribe(1, ["topic0", "topic1"]))]
+  ... 4999 ms:
+  ... 5000 ms:
+  --> Tick
+<--   [UnsubscribeCompleted(Effect(//fn(a) { ... }), Error(OperationTimedOut)), CloseTransport, Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Unsubscribe timed out")))]

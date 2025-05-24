@@ -24,6 +24,7 @@ pub type Command {
     List(SubscribeRequest),
     Effect(Result(List(Subscription), OperationError)),
   )
+  Unsubscribe(List(String), Effect(Result(Nil, OperationError)))
   PublishMessage(PublishData)
   GetPendingPublishes(Effect(Int))
   WaitForPublishesToFinish(Effect(Result(Nil, OperationError)), Int)
@@ -34,6 +35,7 @@ pub opaque type TimedAction {
   PingRespTimedOut
   ConnectTimedOut
   SubscribeTimedOut(Int)
+  UnsubscribeTimedOut(Int)
   WaitForPublishesTimeout(Reference)
 }
 
@@ -60,6 +62,10 @@ pub type Output {
     Effect(Result(List(Subscription), OperationError)),
     Result(List(Subscription), OperationError),
   )
+  UnsubscribeCompleted(
+    Effect(Result(Nil, OperationError)),
+    Result(Nil, OperationError),
+  )
 }
 
 pub opaque type State {
@@ -68,6 +74,7 @@ pub opaque type State {
     session: Session,
     connection: ConnectionState,
     pending_subs: Dict(Int, PendingSubscription),
+    pending_unsubs: Dict(Int, PendingUnsubscribe),
     send_ping_timer: Option(Timer),
     ping_resp_timer: Option(Timer),
     connect_timer: Option(Timer),
@@ -97,6 +104,7 @@ pub fn new_state(options: mqtt.ConnectOptions(_)) -> State {
     session.new(False),
     NotConnected,
     dict.new(),
+    dict.new(),
     None,
     None,
     None,
@@ -116,6 +124,8 @@ pub fn handle_input(context: Context, state: State, input: Input) -> Step {
         Disconnect -> disconnect(context, state)
         Subscribe(requests, effect) ->
           subscribe(context, state, requests, effect)
+        Unsubscribe(topics, effect) ->
+          unsubscribe(context, state, topics, effect)
         PublishMessage(data) -> publish(context, state, data)
         GetPendingPublishes(reply) ->
           get_pending_publishes(context, state, reply)
@@ -163,6 +173,36 @@ fn subscribe(
     _ ->
       context
       |> drift.output(SubscribeCompleted(effect, Error(mqtt.NotConnected)))
+      |> drift.continue(state)
+  }
+}
+
+fn unsubscribe(
+  context: Context,
+  state: State,
+  topics: List(String),
+  complete: Effect(Result(Nil, OperationError)),
+) -> Step {
+  case state.connection {
+    Connected(_) -> {
+      let #(session, id) = session.reserve_packet_id(state.session)
+      let #(context, timer) =
+        drift.handle_after(
+          context,
+          state.options.server_timeout,
+          Timeout(UnsubscribeTimedOut(id)),
+        )
+      let pending_unsubs =
+        state.pending_unsubs
+        |> dict.insert(id, PendingUnsubscribe(complete, timer))
+
+      context
+      |> drift.output(send(outgoing.Unsubscribe(id, topics)))
+      |> drift.continue(State(..state, session:, pending_unsubs:))
+    }
+    _ ->
+      context
+      |> drift.output(UnsubscribeCompleted(complete, Error(mqtt.NotConnected)))
       |> drift.continue(state)
   }
 }
@@ -221,6 +261,13 @@ type PendingSubscription {
   )
 }
 
+type PendingUnsubscribe {
+  PendingUnsubscribe(
+    reply_to: Effect(Result(Nil, OperationError)),
+    timeout: Timer,
+  )
+}
+
 fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
   case action {
     SendPing -> {
@@ -240,6 +287,7 @@ fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
     WaitForPublishesTimeout(ref) ->
       time_out_wait_for_publish(context, state, ref)
     SubscribeTimedOut(id) -> time_out_subscription(context, state, id)
+    UnsubscribeTimedOut(id) -> time_out_unsubscribe(context, state, id)
   }
 }
 
@@ -271,6 +319,25 @@ fn time_out_subscription(context: Context, state: State, id: Int) -> Step {
         ),
         State(..state, pending_subs: dict.delete(pending_subs, id)),
         "Subscribe timed out",
+      )
+  }
+}
+
+fn time_out_unsubscribe(context: Context, state: State, id: Int) -> Step {
+  let pending_unsubs = state.pending_unsubs
+
+  case dict.get(pending_unsubs, id) {
+    // If the key was not found, it means that the unsuback
+    // and timeout were queued to be handled at the same time.
+    Error(_) -> drift.continue(context, state)
+    Ok(PendingUnsubscribe(complete, _)) ->
+      kill_connection(
+        drift.output(
+          context,
+          UnsubscribeCompleted(complete, Error(mqtt.OperationTimedOut)),
+        ),
+        State(..state, pending_unsubs: dict.delete(pending_unsubs, id)),
+        "Unsubscribe timed out",
       )
   }
 }
@@ -476,7 +543,7 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
         incoming.Publish(data) -> handle_publish(context, state, data)
         incoming.SubAck(id, return_codes) ->
           handle_suback(context, state, id, return_codes)
-        incoming.UnsubAck(_) -> todo
+        incoming.UnsubAck(id) -> handle_unsuback(context, state, id)
       }
     }
 
@@ -606,19 +673,26 @@ fn handle_suback(
   }
 
   case result {
-    Error(e) -> {
-      let errors = {
-        use pending_sub <- list.map(dict.values(state.pending_subs))
-        SubscribeCompleted(pending_sub.reply_to, Error(mqtt.ProtocolViolation))
-      }
-
-      kill_connection(
-        drift.output_many(context, errors),
-        State(..state, pending_subs: dict.new()),
-        e,
-      )
-    }
+    Error(e) -> kill_connection(context, state, e)
     Ok(step) -> step
+  }
+}
+
+fn handle_unsuback(context: Context, state: State, id: Int) -> Step {
+  let unsubs = state.pending_unsubs
+  case dict.get(unsubs, id) {
+    Ok(pending_unsub) -> {
+      let #(context, _) = drift.cancel_timer(context, pending_unsub.timeout)
+      context
+      |> drift.output(UnsubscribeCompleted(pending_unsub.reply_to, Ok(Nil)))
+      |> drift.continue(State(..state, pending_unsubs: dict.delete(unsubs, id)))
+    }
+    Error(_) ->
+      kill_connection(
+        context,
+        state,
+        "Received invalid packet id in unsubscribe ack",
+      )
   }
 }
 
@@ -726,13 +800,32 @@ fn check_publish_completion_with(
 }
 
 fn kill_connection(context: Context, state: State, error: String) -> Step {
+  let sub_errors = {
+    use pending_sub <- list.map(dict.values(state.pending_subs))
+    SubscribeCompleted(pending_sub.reply_to, Error(mqtt.ProtocolViolation))
+  }
+
+  let unsub_errors = {
+    use pending_unsub <- list.map(dict.values(state.pending_unsubs))
+    UnsubscribeCompleted(pending_unsub.reply_to, Error(mqtt.ProtocolViolation))
+  }
+
   context
   |> drift.cancel_all_timers()
+  |> drift.output_many(sub_errors)
+  |> drift.output_many(unsub_errors)
   |> drift.output(CloseTransport)
   |> drift.output(
     Publish(ConnectionStateChanged(mqtt.DisconnectedUnexpectedly(error))),
   )
-  |> drift.continue(State(..state, connection: NotConnected))
+  |> drift.continue(
+    State(
+      ..state,
+      connection: NotConnected,
+      pending_subs: dict.new(),
+      pending_unsubs: dict.new(),
+    ),
+  )
 }
 
 fn unexpected_connection_state(

@@ -10,7 +10,6 @@ gleam_stdlib = ">= 0.43.0 and < 2.0.0"
 gleam_erlang = ">= 0.28.0 and < 1.0.0"
 gleam_otp = ">= 0.13.0 and < 1.0.0"
 gleam_json = ">= 2.3.0 and < 3.0.0"
-spoke_core = { path = "../spoke_core" }
 spoke_packet = { path = "../spoke_packet" }
 
 [dev-dependencies]
