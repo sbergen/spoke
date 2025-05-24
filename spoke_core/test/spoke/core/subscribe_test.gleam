@@ -22,8 +22,8 @@ pub fn subscribe_success_test() {
     mqtt.SubscribeRequest("topic2", ExactlyOnce),
   ]
 
-  let results = [Ok(packet.QoS0), Ok(packet.QoS1), Ok(packet.QoS2)]
-  let suback = server_out.SubAck(1, results)
+  let suback =
+    server_out.SubAck(1, Ok(packet.QoS0), [Ok(packet.QoS1), Ok(packet.QoS2)])
 
   recorder.default_connected()
   |> record.input(Perform(Subscribe(topics, discard())))
@@ -36,8 +36,7 @@ pub fn subscribe_failed_test() {
     mqtt.SubscribeRequest("topic0", AtMostOnce),
     mqtt.SubscribeRequest("topic1", AtLeastOnce),
   ]
-  let results = [Ok(packet.QoS0), Error(Nil)]
-  let suback = server_out.SubAck(1, results)
+  let suback = server_out.SubAck(1, Ok(packet.QoS0), [Error(Nil)])
 
   recorder.default_connected()
   |> record.input(Perform(Subscribe(topics, discard())))
@@ -57,7 +56,7 @@ pub fn subscribe_timeout_test() {
 
 pub fn subscribe_invalid_id_test() {
   let request = mqtt.SubscribeRequest("topic0", mqtt.AtMostOnce)
-  let suback = server_out.SubAck(2, [Ok(packet.QoS0)])
+  let suback = server_out.SubAck(2, Ok(packet.QoS0), [])
 
   recorder.default_connected()
   |> record.input(Perform(Subscribe([request], discard())))
@@ -68,7 +67,7 @@ pub fn subscribe_invalid_id_test() {
 
 pub fn subscribe_invalid_length_test() {
   let request = mqtt.SubscribeRequest("topic0", mqtt.AtMostOnce)
-  let suback = server_out.SubAck(1, [Ok(packet.QoS0), Ok(packet.QoS1)])
+  let suback = server_out.SubAck(1, Ok(packet.QoS0), [Ok(packet.QoS1)])
 
   recorder.default_connected()
   |> record.input(Perform(Subscribe([request], discard())))

@@ -69,7 +69,7 @@ pub type PublishData {
   PublishData(topic: String, payload: BitArray, qos: QoS, retain: Bool)
 }
 
-/// Unified error type for operations.
+/// Unified error type for operations initiated by the user of the library.
 pub type OperationError {
   /// The client was not connected when it was required.
   NotConnected

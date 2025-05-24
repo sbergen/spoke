@@ -20,13 +20,15 @@ import spoke/packet/client/outgoing
 pub fn main() {
   // Represent MQTT packets in code
   let subscribe_packet =
-    outgoing.Subscribe(packet_id: 42, topics: [
-      packet.SubscribeRequest("my/topic", packet.QoS1),
-    ])
+    outgoing.Subscribe(
+      packet_id: 42,
+      topic: packet.SubscribeRequest("my/topic", packet.QoS1),
+      other_topics: [],
+    )
 
   // And encode them into binary. Prints
   // <<130, 13, 0, 42, 0, 8, 109, 121, 47, 116, 111, 112, 105, 99, 1>>
-  let assert Ok(bytes) = outgoing.encode_packet(subscribe_packet)
+  let bytes = outgoing.encode_packet(subscribe_packet)
   echo bytes_tree.to_bit_array(bytes)
 
   // Decode binary data, which may contain multiple packets or be incomplete:

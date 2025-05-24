@@ -13,7 +13,7 @@ pub type Packet {
   PubRec(packet_id: Int)
   PubRel(packet_id: Int)
   PubComp(packet_id: Int)
-  Subscribe(packet_id: Int, topics: List(SubscribeRequest))
+  Subscribe(packet_id: Int, topic: List(SubscribeRequest))
   Unsubscribe(packet_id: Int, topics: List(String))
   PingReq
   Disconnect

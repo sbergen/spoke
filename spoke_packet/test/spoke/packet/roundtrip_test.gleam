@@ -28,24 +28,24 @@ pub fn connack_roundtrip_test() {
 }
 
 pub fn subscribe_roundtrip_test() {
-  use #(id, requests) <- qcheck.given(generators.subscribe_request())
+  use #(id, request, requests) <- qcheck.given(generators.subscribe_request())
 
-  roundtrip_out(outgoing.Subscribe(id, requests))
-  |> should.equal(server_in.Subscribe(id, requests))
+  roundtrip_out(outgoing.Subscribe(id, request, requests))
+  |> should.equal(server_in.Subscribe(id, [request, ..requests]))
 }
 
 pub fn suback_roundtrip_test() {
-  use #(id, results) <- qcheck.given(generators.suback())
+  use #(id, result, results) <- qcheck.given(generators.suback())
 
-  roundtrip_in(server_out.SubAck(id, results))
-  |> should.equal(incoming.SubAck(id, results))
+  roundtrip_in(server_out.SubAck(id, result, results))
+  |> should.equal(incoming.SubAck(id, [result, ..results]))
 }
 
 pub fn unsubscribe_roundtrip_test() {
-  use #(id, requests) <- qcheck.given(generators.unsubscribe_request())
+  use #(id, request, requests) <- qcheck.given(generators.unsubscribe_request())
 
-  roundtrip_out(outgoing.Unsubscribe(id, requests))
-  |> should.equal(server_in.Unsubscribe(id, requests))
+  roundtrip_out(outgoing.Unsubscribe(id, request, requests))
+  |> should.equal(server_in.Unsubscribe(id, [request, ..requests]))
 }
 
 pub fn publish_out_roundtrip_test() {
@@ -139,7 +139,7 @@ pub fn pubcomp_in_roundtrip_test() {
 
 /// Encodes outgoing packet, and decodes it as incoming server packet
 fn roundtrip_out(out: outgoing.Packet) -> server_in.Packet {
-  let assert Ok(bytes) = outgoing.encode_packet(out)
+  let bytes = outgoing.encode_packet(out)
   let assert Ok(#(packet, <<>>)) =
     server_in.decode_packet(bytes_tree.to_bit_array(bytes))
   packet
@@ -147,7 +147,7 @@ fn roundtrip_out(out: outgoing.Packet) -> server_in.Packet {
 
 /// Encodes server outgoing packet, and decodes it as incoming packet
 fn roundtrip_in(out: server_out.Packet) -> incoming.Packet {
-  let assert Ok(bytes) = server_out.encode_packet(out)
+  let bytes = server_out.encode_packet(out)
   let assert Ok(#(packet, <<>>)) =
     incoming.decode_packet(bytes_tree.to_bit_array(bytes))
   packet

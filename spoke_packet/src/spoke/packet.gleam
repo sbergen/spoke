@@ -100,11 +100,3 @@ pub type DecodeError {
   /// A variable-length integer was too long.
   VarIntTooLarge
 }
-
-/// An error that can be encountered during encoding.
-pub type EncodeError {
-  /// An empty list was used when subscribing to topics.
-  EmptySubscribeList
-  /// An empty list was used when unsubscribing from topics.
-  EmptyUnsubscribeList
-}

@@ -5,6 +5,6 @@ title: Invalid suback length kills connection
 <flushed connect and handshake>
   --> Perform(Subscribe([SubscribeRequest("topic0", AtMostOnce)], Effect(//fn(a) { ... })))
 <--   [SendData(Subscribe(1, [SubscribeRequest("topic0", QoS0)]))]
-  --> ReceivedPacket(SubAck(1, [Ok(QoS0), Ok(QoS1)]))
+  --> ReceivedPacket(SubAck(1, Ok(QoS0), [Ok(QoS1)]))
 <--   [SubscribeCompleted(Effect(//fn(a) { ... }), Error(ProtocolViolation)), CloseTransport, Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Received invalid number of results in subscribe ack")))]
   ... 5000 ms:

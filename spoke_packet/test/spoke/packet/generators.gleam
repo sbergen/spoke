@@ -48,16 +48,20 @@ pub fn connack_result() -> Generator(ConnAckResult) {
   }
 }
 
-pub fn subscribe_request() -> Generator(#(Int, List(SubscribeRequest))) {
+pub fn subscribe_request() -> Generator(
+  #(Int, SubscribeRequest, List(SubscribeRequest)),
+) {
   qcheck.return({
     use packet_id <- qcheck.parameter
+    use request <- qcheck.parameter
     use requests <- qcheck.parameter
-    #(packet_id, requests)
+    #(packet_id, request, requests)
   })
   |> qcheck.apply(packet_id())
+  |> qcheck.apply(one_subscribe_request())
   |> qcheck.apply(qcheck.generic_list(
     one_subscribe_request(),
-    qcheck.bounded_int(1, 5),
+    qcheck.bounded_int(0, 5),
   ))
 }
 
@@ -65,17 +69,19 @@ pub fn packet_id() -> Generator(Int) {
   qcheck.bounded_int(1, 65_535)
 }
 
-pub fn unsubscribe_request() -> Generator(#(Int, List(String))) {
-  qcheck.tuple2(
+pub fn unsubscribe_request() -> Generator(#(Int, String, List(String))) {
+  qcheck.tuple3(
     packet_id(),
-    qcheck.generic_list(qcheck.string(), qcheck.bounded_int(1, 5)),
+    qcheck.string(),
+    qcheck.generic_list(qcheck.string(), qcheck.bounded_int(0, 5)),
   )
 }
 
-pub fn suback() -> Generator(#(Int, List(SubscribeResult))) {
-  qcheck.tuple2(
+pub fn suback() -> Generator(#(Int, SubscribeResult, List(SubscribeResult))) {
+  qcheck.tuple3(
     packet_id(),
-    qcheck.generic_list(one_subscribe_result(), qcheck.bounded_int(1, 5)),
+    one_subscribe_result(),
+    qcheck.generic_list(one_subscribe_result(), qcheck.bounded_int(0, 5)),
   )
 }
 

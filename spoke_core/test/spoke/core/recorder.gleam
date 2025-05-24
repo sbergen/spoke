@@ -31,7 +31,7 @@ pub fn from_options(options: mqtt.ConnectOptions(_)) -> Recorder {
 }
 
 pub fn received(recorder: Recorder, packet: server_out.Packet) -> Recorder {
-  let assert Ok(data) = server_out.encode_packet(packet)
+  let data = server_out.encode_packet(packet)
   let input = core.ReceivedData(bytes_tree.to_bit_array(data))
   record.input_preformatted(
     recorder,
@@ -46,7 +46,7 @@ pub fn received_many(
 ) -> Recorder {
   let data = {
     use acc, packet <- list.fold(packets, bytes_tree.new())
-    let assert Ok(data) = server_out.encode_packet(packet)
+    let data = server_out.encode_packet(packet)
     bytes_tree.concat([acc, data])
   }
 

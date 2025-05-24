@@ -2,7 +2,6 @@ import drift/record
 import gleam/bytes_tree
 import gleam/list
 import gleam/option.{None}
-import gleam/result
 import spoke/core.{Connect, Perform, ReceivedData, TransportEstablished}
 import spoke/core/recorder
 import spoke/packet
@@ -61,8 +60,8 @@ pub fn split_packet_test() {
         retain: False,
       )),
     )
-  let assert Ok(data) = server_out.encode_packet(packet)
-  let assert <<begin:bytes-size(5), end:bytes>> = bytes_tree.to_bit_array(data)
+  let assert <<begin:bytes-size(5), end:bytes>> =
+    bytes_tree.to_bit_array(server_out.encode_packet(packet))
 
   recorder.default_connected()
   |> record.input(ReceivedData(begin))
@@ -71,11 +70,8 @@ pub fn split_packet_test() {
 }
 
 fn packets_to_bits(packets: List(server_out.Packet)) -> BitArray {
-  let assert Ok(bytes) =
-    packets
-    |> list.map(server_out.encode_packet)
-    |> result.all
-
-  bytes_tree.concat(bytes)
+  packets
+  |> list.map(server_out.encode_packet)
+  |> bytes_tree.concat
   |> bytes_tree.to_bit_array
 }

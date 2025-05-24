@@ -139,11 +139,11 @@ pub fn handle_input(context: Context, state: State, input: Input) -> Step {
 fn subscribe(
   context: Context,
   state: State,
-  requests: List(SubscribeRequest),
+  all_requests: List(SubscribeRequest),
   effect: Effect(Result(List(Subscription), OperationError)),
 ) -> Step {
-  case state.connection {
-    Connected(_) -> {
+  case all_requests, state.connection {
+    [request, ..requests], Connected(_) -> {
       let #(session, id) = session.reserve_packet_id(state.session)
 
       let #(context, timer) =
@@ -157,20 +157,25 @@ fn subscribe(
         dict.insert(
           state.pending_subs,
           id,
-          PendingSubscription(requests, effect, timer),
+          PendingSubscription(all_requests, effect, timer),
         )
 
       context
       |> drift.output(
         send(outgoing.Subscribe(
           id,
+          convert.to_packet_subscribe_request(request),
           list.map(requests, convert.to_packet_subscribe_request),
         )),
       )
       |> drift.continue(State(..state, session:, pending_subs:))
     }
-
-    _ ->
+    [], Connected(_) ->
+      // Empty list is a no-op
+      context
+      |> drift.output(SubscribeCompleted(effect, Ok([])))
+      |> drift.continue(state)
+    _, _ ->
       context
       |> drift.output(SubscribeCompleted(effect, Error(mqtt.NotConnected)))
       |> drift.continue(state)
@@ -183,8 +188,8 @@ fn unsubscribe(
   topics: List(String),
   complete: Effect(Result(Nil, OperationError)),
 ) -> Step {
-  case state.connection {
-    Connected(_) -> {
+  case topics, state.connection {
+    [topic, ..topics], Connected(_) -> {
       let #(session, id) = session.reserve_packet_id(state.session)
       let #(context, timer) =
         drift.handle_after(
@@ -197,10 +202,15 @@ fn unsubscribe(
         |> dict.insert(id, PendingUnsubscribe(complete, timer))
 
       context
-      |> drift.output(send(outgoing.Unsubscribe(id, topics)))
+      |> drift.output(send(outgoing.Unsubscribe(id, topic, topics)))
       |> drift.continue(State(..state, session:, pending_unsubs:))
     }
-    _ ->
+    [], Connected(_) ->
+      // Empty list is a no-op
+      context
+      |> drift.output(UnsubscribeCompleted(complete, Ok(Nil)))
+      |> drift.continue(state)
+    _, _ ->
       context
       |> drift.output(UnsubscribeCompleted(complete, Error(mqtt.NotConnected)))
       |> drift.continue(state)
@@ -849,9 +859,7 @@ fn unexpected_connection_state(
 }
 
 fn send(packet: outgoing.Packet) -> Output {
-  // TODO: Error handling
-  let assert Ok(data) = outgoing.encode_packet(packet)
-  SendData(data)
+  SendData(outgoing.encode_packet(packet))
 }
 
 fn maybe_cancel_timer(context: Context, timer: Option(drift.Timer)) -> Context {

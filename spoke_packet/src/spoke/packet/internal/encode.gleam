@@ -5,9 +5,8 @@ import gleam/bytes_tree.{type BytesTree}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import spoke/packet.{
-  type ConnectOptions, type EncodeError, type QoS, type SubscribeRequest,
-  type SubscribeResult, EmptySubscribeList, EmptyUnsubscribeList, QoS0, QoS1,
-  QoS2,
+  type ConnectOptions, type QoS, type SubscribeRequest, type SubscribeResult,
+  QoS0, QoS1, QoS2,
 }
 
 const protocol_level: Int = 4
@@ -94,60 +93,51 @@ pub fn publish(data: packet.PublishData) -> BytesTree {
 
 pub fn subscribe(
   packet_id: Int,
-  topics: List(SubscribeRequest),
-) -> Result(BytesTree, EncodeError) {
-  case topics {
-    [] -> Error(EmptySubscribeList)
-    _ -> {
-      let header = <<packet_id:big-size(16)>>
-      let payload = {
-        use builder, topic <- list.fold(topics, bytes_tree.new())
-        builder
-        |> bytes_tree.append(string(topic.filter))
-        |> bytes_tree.append(<<encode_qos(topic.qos):8>>)
-      }
-
-      Ok(encode_parts(8, <<2:4>>, header, payload))
-    }
+  topic: SubscribeRequest,
+  other_topics: List(SubscribeRequest),
+) -> BytesTree {
+  let header = <<packet_id:big-size(16)>>
+  let payload = {
+    use builder, topic <- list.fold([topic, ..other_topics], bytes_tree.new())
+    builder
+    |> bytes_tree.append(string(topic.filter))
+    |> bytes_tree.append(<<encode_qos(topic.qos):8>>)
   }
+
+  encode_parts(8, <<2:4>>, header, payload)
 }
 
 pub fn suback(
   packet_id: Int,
-  results: List(SubscribeResult),
-) -> Result(BytesTree, EncodeError) {
-  case results {
-    [] -> Error(EmptySubscribeList)
-    _ -> {
-      let header = <<packet_id:big-size(16)>>
-      let payload = {
-        use builder, result <- list.fold(results, bytes_tree.new())
-        builder
-        |> bytes_tree.append(<<encode_suback_result(result):8>>)
-      }
-
-      Ok(encode_parts(9, <<0:4>>, header, payload))
-    }
+  result: SubscribeResult,
+  other_results: List(SubscribeResult),
+) -> BytesTree {
+  let header = <<packet_id:big-size(16)>>
+  let payload = {
+    use builder, result <- list.fold(
+      [result, ..other_results],
+      bytes_tree.new(),
+    )
+    builder
+    |> bytes_tree.append(<<encode_suback_result(result):8>>)
   }
+
+  encode_parts(9, <<0:4>>, header, payload)
 }
 
 pub fn unsubscribe(
   packet_id: Int,
-  topics: List(String),
-) -> Result(BytesTree, EncodeError) {
-  case topics {
-    [] -> Error(EmptyUnsubscribeList)
-    _ -> {
-      let header = <<packet_id:big-size(16)>>
-      let payload = {
-        use builder, topic <- list.fold(topics, bytes_tree.new())
-        builder
-        |> bytes_tree.append(string(topic))
-      }
-
-      Ok(encode_parts(10, <<2:4>>, header, payload))
-    }
+  topic: String,
+  other_topics: List(String),
+) -> BytesTree {
+  let header = <<packet_id:big-size(16)>>
+  let payload = {
+    use builder, topic <- list.fold([topic, ..other_topics], bytes_tree.new())
+    builder
+    |> bytes_tree.append(string(topic))
   }
+
+  encode_parts(10, <<2:4>>, header, payload)
 }
 
 pub fn connack(result: packet.ConnAckResult) -> BytesTree {
