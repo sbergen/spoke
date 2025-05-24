@@ -3,7 +3,7 @@ version: 1.2.7
 title: Transport failure while disconnecting is published
 ---
 <flushed connect>
-  --> Perform(Disconnect)
-<--   [SendData(Disconnect), CloseTransport]
+  --> Perform(Disconnect(Effect(//fn(a) { ... })))
+<--   [SendData(Disconnect), CloseTransport, ReportStateAtDisconnect(Effect(//fn(a) { ... }), "{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}")]
   --> TransportFailed("Fake failure")
 <--   [CloseTransport, Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Fake failure")))]

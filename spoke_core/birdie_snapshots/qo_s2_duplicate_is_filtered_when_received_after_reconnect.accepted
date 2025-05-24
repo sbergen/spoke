@@ -17,3 +17,5 @@ title: QoS2 duplicate is filtered when received after reconnect
 <--   [SendData(PubRec(42))]
   --> ReceivedPacket(PubRel(42))
 <--   [SendData(PubComp(42))]
+  --> Perform(Disconnect(Effect(//fn(a) { ... })))
+<--   [SendData(Disconnect), CloseTransport, ReportStateAtDisconnect(Effect(//fn(a) { ... }), "{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}")]

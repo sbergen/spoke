@@ -1,6 +1,6 @@
-import drift/record
+import drift/record.{discard}
 import gleam/option.{None}
-import spoke/core.{Connect, Perform, TransportEstablished}
+import spoke/core.{Connect, Disconnect, Perform, TransportEstablished}
 import spoke/core/recorder
 import spoke/packet
 import spoke/packet/server/outgoing as server_out
@@ -44,7 +44,7 @@ pub fn receive_message_qos2_happy_path_test() {
   recorder.default_connected()
   |> recorder.received(packet)
   |> recorder.received(server_out.PubRel(42))
-  // TODO: dump session json
+  |> record.input(Perform(Disconnect(discard())))
   |> recorder.snap("Receive QoS2 message")
 }
 
@@ -61,7 +61,7 @@ pub fn receive_message_qos2_duplicate_filtering_test() {
   // Re-send data, as we didn't receive the PubRec
   |> recorder.received(server_out.Publish(resend_data))
   |> recorder.received(server_out.PubRel(42))
-  // TODO: dump session json
+  |> record.input(Perform(Disconnect(discard())))
   |> recorder.snap("QoS2 duplicate is filtered when received after reconnect")
 }
 
@@ -76,7 +76,7 @@ pub fn receive_message_qos2_duplicate_pubrel_test() {
   |> record.input(core.TransportClosed)
   |> reconnect
   |> recorder.received(server_out.PubRel(42))
-  // TODO: dump session json
+  |> record.input(Perform(Disconnect(discard())))
   |> recorder.snap("QoS2 pubrel is always responded to with pubcomp")
 }
 

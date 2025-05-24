@@ -1,4 +1,4 @@
-import drift/record
+import drift/record.{discard}
 import gleam/option.{None, Some}
 import spoke/core.{
   Connect, Disconnect, Perform, TransportClosed, TransportEstablished,
@@ -20,7 +20,7 @@ pub fn connect_and_disconnect_test() {
   |> record.input(Perform(Connect(False, Some(will))))
   |> record.input(TransportEstablished)
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
-  |> record.input(Perform(Disconnect))
+  |> record.input(Perform(Disconnect(discard())))
   |> record.input(TransportClosed)
   |> recorder.snap("Connect and Disconnect")
 }
@@ -47,10 +47,16 @@ pub fn reconnect_after_protocol_violation_test() {
   |> recorder.snap("Reconnect after protocol violation")
 }
 
+pub fn disconnect_before_connect_test() {
+  recorder.default()
+  |> record.input(Perform(Disconnect(discard())))
+  |> recorder.snap("Disconnect before connecting")
+}
+
 pub fn disconnect_before_establish_test() {
   recorder.default()
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(Perform(Disconnect))
+  |> record.input(Perform(Disconnect(discard())))
   |> recorder.snap("Disconnect before connection established")
 }
 
@@ -58,7 +64,7 @@ pub fn disconnect_while_connecting_test() {
   recorder.default()
   |> record.input(Perform(Connect(False, None)))
   |> record.input(TransportEstablished)
-  |> record.input(Perform(Disconnect))
+  |> record.input(Perform(Disconnect(discard())))
   |> recorder.snap("Disconnect while connecting")
 }
 
@@ -109,7 +115,7 @@ pub fn transport_error_while_disconnecting_test() {
   recorder.default()
   |> connect_with_defaults()
   |> record.flush("connect")
-  |> record.input(Perform(Disconnect))
+  |> record.input(Perform(Disconnect(discard())))
   |> record.input(TransportFailed("Fake failure"))
   |> recorder.snap("Transport failure while disconnecting is published")
 }

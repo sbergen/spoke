@@ -19,7 +19,7 @@ import spoke/packet/client/outgoing
 
 pub type Command {
   Connect(clean_session: Bool, will: Option(PublishData))
-  Disconnect
+  Disconnect(Effect(String))
   Subscribe(
     List(SubscribeRequest),
     Effect(Result(List(Subscription), OperationError)),
@@ -66,6 +66,7 @@ pub type Output {
     Effect(Result(Nil, OperationError)),
     Result(Nil, OperationError),
   )
+  ReportStateAtDisconnect(Effect(String), String)
 }
 
 pub opaque type State {
@@ -121,7 +122,7 @@ pub fn handle_input(context: Context, state: State, input: Input) -> Step {
     Perform(action) ->
       case action {
         Connect(options, will) -> connect(context, state, options, will)
-        Disconnect -> disconnect(context, state)
+        Disconnect(complete) -> disconnect(context, state, complete)
         Subscribe(requests, effect) ->
           subscribe(context, state, requests, effect)
         Unsubscribe(topics, effect) ->
@@ -403,7 +404,7 @@ fn connect(
   }
 }
 
-fn disconnect(context: Context, state: State) -> Step {
+fn disconnect(context: Context, state: State, complete: Effect(String)) -> Step {
   let outputs = case state.connection {
     Connecting(..) -> Some([CloseTransport])
     WaitingForConnAck(..) -> Some([CloseTransport])
@@ -412,12 +413,18 @@ fn disconnect(context: Context, state: State) -> Step {
     NotConnected -> None
   }
 
+  let result = ReportStateAtDisconnect(complete, session.to_json(state.session))
+
   case outputs {
     Some(outputs) ->
       context
       |> drift.output_many(outputs)
+      |> drift.output(result)
       |> drift.continue(State(..state, connection: Disconnecting))
-    None -> unexpected_connection_state(context, state, "disconnecting")
+    None ->
+      context
+      |> drift.output(result)
+      |> drift.continue(state)
   }
 }
 

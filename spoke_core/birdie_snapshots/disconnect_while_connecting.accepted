@@ -6,5 +6,5 @@ title: Disconnect while connecting
 <--   [OpenTransport]
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
-  --> Perform(Disconnect)
-<--   [CloseTransport]
+  --> Perform(Disconnect(Effect(//fn(a) { ... })))
+<--   [CloseTransport, ReportStateAtDisconnect(Effect(//fn(a) { ... }), "{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}")]
