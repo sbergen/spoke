@@ -5,13 +5,9 @@ title: QoS2 publish success
 <flushed connect and handshake>
   --> Perform(PublishMessage(PublishData("topic", "payload", ExactlyOnce, False)))
 <--   [SendData(Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 1)))]
-  --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
-<--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 1)]
+  --> Perform(WaitForPublishesToFinish(Effect(//fn(a) { ... }), 0))
+<--   []
   --> ReceivedPacket(PubRec(1))
 <--   [SendData(PubRel(1))]
-  --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
-<--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 1)]
   --> ReceivedPacket(PubComp(1))
-<--   []
-  --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
-<--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 0)]
+<--   [PublishesCompleted(Effect(//fn(a) { ... }), Ok(Nil))]

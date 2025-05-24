@@ -7,6 +7,8 @@ title: Reconnecting with clean session discards messages
 <--   [SendData(Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1)))]
   --> Perform(PublishMessage(PublishData("topic2", "payload2", ExactlyOnce, False)))
 <--   [SendData(Publish(PublishDataQoS2(MessageData("topic2", "payload2", False), False, 2)))]
+  --> Perform(WaitForPublishesToFinish(Effect(//fn(a) { ... }), 0))
+<--   []
   --> TransportClosed
 <--   [Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Transport closed")))]
   --> Perform(Connect(True, None))
@@ -14,6 +16,4 @@ title: Reconnecting with clean session discards messages
   --> TransportEstablished
 <--   [SendData(Connect(ConnectOptions(True, "my-client", 15, None, None)))]
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))]
-  --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
-<--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 0)]
+<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent))), PublishesCompleted(Effect(//fn(a) { ... }), Error(SessionReset))]
