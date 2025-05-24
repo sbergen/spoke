@@ -469,26 +469,14 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
       case packet {
         incoming.ConnAck(_) ->
           kill_connection(context, state, "Got CONNACK while already connected")
-
         incoming.PingResp -> drift.continue(context, state)
-
-        incoming.PubAck(id) ->
-          handle_puback(context, state, id)
-          |> drift.chain(check_publish_completion)
-
+        incoming.PubAck(id) -> handle_puback(context, state, id)
         incoming.PubRec(id) -> handle_pubrec(context, state, id)
-
-        incoming.PubComp(id) ->
-          handle_pubcomp(context, state, id)
-          |> drift.chain(check_publish_completion)
-
-        incoming.PubRel(_) -> todo
-
-        incoming.Publish(_) -> todo
-
+        incoming.PubComp(id) -> handle_pubcomp(context, state, id)
+        incoming.PubRel(id) -> handle_pubrel(context, state, id)
+        incoming.Publish(data) -> handle_publish(context, state, data)
         incoming.SubAck(id, return_codes) ->
           handle_suback(context, state, id, return_codes)
-
         incoming.UnsubAck(_) -> todo
       }
     }
@@ -548,6 +536,50 @@ fn handle_first_packet(
   }
 }
 
+fn handle_publish(
+  context: Context,
+  state: State,
+  data: packet.PublishData,
+) -> Step {
+  let #(msg, session, packet) = case data {
+    packet.PublishDataQoS0(msg) -> #(Some(msg), state.session, None)
+
+    // dup is essentially useless,
+    // as we don't know if we have already received this or not.
+    packet.PublishDataQoS1(msg, _dup, id) -> #(
+      Some(msg),
+      state.session,
+      Some(outgoing.PubAck(id)),
+    )
+
+    packet.PublishDataQoS2(msg, _dup, id) -> {
+      let #(session, publish_result) =
+        session.start_qos2_receive(state.session, id)
+      let msg = case publish_result {
+        True -> Some(msg)
+        False -> None
+      }
+      #(msg, session, Some(outgoing.PubRec(id)))
+    }
+  }
+
+  let context = case packet, state.connection {
+    Some(packet), Connected(_) -> drift.output(context, send(packet))
+    _, _ -> context
+  }
+
+  let context = case msg {
+    Some(msg) ->
+      drift.output(
+        context,
+        Publish(mqtt.ReceivedMessage(msg.topic, msg.payload, msg.retain)),
+      )
+    None -> context
+  }
+
+  drift.continue(context, State(..state, session:))
+}
+
 fn handle_suback(
   context: Context,
   state: State,
@@ -599,11 +631,13 @@ fn handle_puback(context: Context, state: State, id: Int) -> Step {
     session.InvalidPubAckId ->
       kill_connection(context, state, "Received invalid PubAck id")
   }
+  |> drift.chain(check_publish_completion)
 }
 
 fn handle_pubrec(context: Context, state: State, id: Int) -> Step {
-  drift.continue(
-    context,
+  context
+  |> drift.output(send(outgoing.PubRel(id)))
+  |> drift.continue(
     State(..state, session: session.handle_pubrec(state.session, id)),
   )
 }
@@ -612,6 +646,18 @@ fn handle_pubcomp(context: Context, state: State, id: Int) -> Step {
   drift.continue(
     context,
     State(..state, session: session.handle_pubcomp(state.session, id)),
+  )
+  |> drift.chain(check_publish_completion)
+}
+
+fn handle_pubrel(context: Context, state: State, id: Int) -> Step {
+  // TODO, what if not connected?
+  context
+  // Whether or not we already sent PubComp, we always do it when receiving PubRel.
+  // This is in case we lose the connection after PubRec
+  |> drift.output(send(outgoing.PubComp(id)))
+  |> drift.continue(
+    State(..state, session: session.handle_pubrel(state.session, id)),
   )
 }
 

@@ -8,7 +8,7 @@ title: QoS2 rerelease after reconnect
   --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
 <--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 1)]
   --> ReceivedPacket(PubRec(1))
-<--   []
+<--   [SendData(PubRel(1))]
   --> TransportClosed
 <--   [Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Transport closed")))]
   --> Perform(Connect(False, None))

@@ -1,0 +1,7 @@
+---
+version: 1.2.7
+title: Receive QoS0 message
+---
+<flushed connect and handshake>
+  --> ReceivedPacket(Publish(PublishDataQoS0(MessageData("topic", "payload", False))))
+<--   [Publish(ReceivedMessage("topic", "payload", False))]

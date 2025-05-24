@@ -8,7 +8,7 @@ title: QoS2 publish success
   --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
 <--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 1)]
   --> ReceivedPacket(PubRec(1))
-<--   []
+<--   [SendData(PubRel(1))]
   --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
 <--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 1)]
   --> ReceivedPacket(PubComp(1))

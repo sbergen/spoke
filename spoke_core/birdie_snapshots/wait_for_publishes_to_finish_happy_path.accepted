@@ -14,7 +14,7 @@ title: Wait for publishes to finish happy path
   --> ReceivedPacket(PubAck(1))
 <--   []
   --> ReceivedPacket(PubRec(2))
-<--   []
+<--   [SendData(PubRel(2))]
   --> ReceivedPacket(PubComp(2))
 <--   [PublishesCompleted(Effect(//fn(a) { ... }), Ok(Nil)), PublishesCompleted(Effect(//fn(a) { ... }), Ok(Nil))]
   ... 100 ms:
