@@ -10,15 +10,15 @@ import spoke/packet
 import spoke/packet/client/incoming
 import spoke/packet/client/outgoing
 
-pub type Timestamp =
-  Int
-
-pub type OperationId =
-  Int
-
 pub type Command {
   Connect(clean_session: Bool, will: Option(mqtt.PublishData))
   Disconnect
+}
+
+pub opaque type TimedAction {
+  SendPing
+  PingRespTimedOut
+  ConnectTimedOut
 }
 
 pub type Input {
@@ -35,12 +35,6 @@ pub type Output {
   OpenTransport
   CloseTransport
   SendData(BytesTree)
-}
-
-pub opaque type TimedAction {
-  SendPing
-  PingRespTimedOut
-  ConnectTimedOut
 }
 
 pub opaque type State {
@@ -86,28 +80,8 @@ pub fn handle_input(context: Context, state: State, input: Input) -> Step {
   }
 }
 
-fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
-  case action {
-    SendPing -> {
-      case state.connection {
-        Connected(_) -> {
-          context
-          |> drift.output(send(outgoing.PingReq))
-          |> start_ping_timeout_timer(state)
-        }
-        _ -> drift.with_state(context, state)
-      }
-    }
-    PingRespTimedOut ->
-      disconnect_unexpectedly(context, state, "Ping response timed out")
-    ConnectTimedOut ->
-      disconnect_unexpectedly(context, state, "Connecting timed out")
-  }
-}
-
 //===== Privates =====//
 
-// Drops the transport options and the generics from the public type
 type Options {
   Options(
     client_id: String,
@@ -123,6 +97,25 @@ type ConnectionState {
   WaitingForConnAck(connection: Connection)
   Connected(connection: Connection)
   Disconnecting
+}
+
+fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
+  case action {
+    SendPing -> {
+      case state.connection {
+        Connected(_) -> {
+          context
+          |> drift.output(send(outgoing.PingReq))
+          |> start_ping_timeout_timer(state)
+        }
+        _ -> drift.continue(context, state)
+      }
+    }
+    PingRespTimedOut ->
+      disconnect_unexpectedly(context, state, "Ping response timed out")
+    ConnectTimedOut ->
+      disconnect_unexpectedly(context, state, "Connecting timed out")
+  }
 }
 
 fn connect(
@@ -161,7 +154,7 @@ fn connect(
 
       context
       |> drift.output(OpenTransport)
-      |> drift.with_state(
+      |> drift.continue(
         State(
           ..state,
           session:,
@@ -172,7 +165,7 @@ fn connect(
     }
 
     // Trying to reconnect is a no-op
-    _ -> drift.with_state(context, state)
+    _ -> drift.continue(context, state)
   }
 }
 
@@ -189,7 +182,7 @@ fn disconnect(context: Context, state: State) -> Step {
     Some(outputs) ->
       context
       |> drift.output_many(outputs)
-      |> drift.with_state(State(..state, connection: Disconnecting))
+      |> drift.continue(State(..state, connection: Disconnecting))
     None -> unexpected_connection_state(context, state, "disconnecting")
   }
 }
@@ -200,7 +193,7 @@ fn transport_established(context: Context, state: State) -> Step {
       let connection = WaitingForConnAck(connection.new())
       context
       |> drift.output(send(outgoing.Connect(options)))
-      |> drift.with_state(State(..state, connection:))
+      |> drift.continue(State(..state, connection:))
     }
     _ -> unexpected_connection_state(context, state, "establishing transport")
   }
@@ -212,7 +205,7 @@ fn transport_closed(context: Context, state: State) -> Step {
       context
       |> drift.cancel_all_timers()
       |> drift.output(Publish(ConnectionStateChanged(mqtt.Disconnected)))
-      |> drift.with_state(State(..state, connection: NotConnected))
+      |> drift.continue(State(..state, connection: NotConnected))
     _ ->
       unexpected_connection_state(
         context,
@@ -244,7 +237,7 @@ fn disconnect_unexpectedly(
   context
   |> drift.cancel_all_timers()
   |> drift.output_many(outputs)
-  |> drift.with_state(State(..state, connection: NotConnected))
+  |> drift.continue(State(..state, connection: NotConnected))
 }
 
 fn receive(context: Context, state: State, data: BitArray) -> Step {
@@ -254,7 +247,7 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
         connection.receive_one(connection, data)
 
       case packet {
-        None -> drift.with_state(context, state)
+        None -> drift.continue(context, state)
         Some(incoming.ConnAck(result)) -> {
           // If a server sends a CONNACK packet containing a non-zero return code
           // it MUST then close the Network Connection.
@@ -272,7 +265,7 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
               |> drift.output(Publish(update))
               |> drift.output(CloseTransport)
               |> drift.cancel_all_timers()
-              |> drift.with_state(State(..state, connection: NotConnected))
+              |> drift.continue(State(..state, connection: NotConnected))
           }
         }
 
@@ -296,12 +289,11 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
         )
 
       use step, packet <- list.fold(packets, step)
-      use context, state <- drift.continue(step)
+      use context, state <- drift.chain(step)
       case packet {
         incoming.ConnAck(_) ->
           kill_connection(context, state, "Got CONNACK while already connected")
-        // TODO we should cancel a disconnect timer
-        incoming.PingResp -> drift.with_state(context, state)
+        incoming.PingResp -> drift.continue(context, state)
         incoming.PubAck(_) -> todo
         incoming.PubComp(_) -> todo
         incoming.PubRec(_) -> todo
@@ -317,8 +309,8 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
 
     // These can easily happen if e.g. multiple receives are in the mailbox/event queue,
     // so we just ignore it.
-    NotConnected -> drift.with_state(context, state)
-    Disconnecting -> drift.with_state(context, state)
+    NotConnected -> drift.continue(context, state)
+    Disconnecting -> drift.continue(context, state)
   }
 }
 
@@ -332,7 +324,7 @@ fn start_send_ping_timer(context: Context, state: State) -> Step {
   let #(context, timer) =
     drift.handle_after(context, state.options.keep_alive, Timeout(SendPing))
 
-  drift.with_state(
+  drift.continue(
     context,
     State(
       ..state,
@@ -353,7 +345,7 @@ fn start_ping_timeout_timer(context: Context, state: State) -> Step {
       Timeout(PingRespTimedOut),
     )
 
-  drift.with_state(context, State(..state, ping_resp_timer: Some(timer)))
+  drift.continue(context, State(..state, ping_resp_timer: Some(timer)))
 }
 
 fn kill_connection(context: Context, state: State, error: String) -> Step {
@@ -363,7 +355,7 @@ fn kill_connection(context: Context, state: State, error: String) -> Step {
   |> drift.output(
     Publish(ConnectionStateChanged(mqtt.DisconnectedUnexpectedly(error))),
   )
-  |> drift.with_state(State(..state, connection: NotConnected))
+  |> drift.continue(State(..state, connection: NotConnected))
 }
 
 fn unexpected_connection_state(
