@@ -1,11 +1,11 @@
-import drift
+import drift.{type Effect}
 import gleam/bytes_tree.{type BytesTree}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import spoke/core/internal/connection.{type Connection}
 import spoke/core/internal/convert
 import spoke/core/internal/session.{type Session}
-import spoke/mqtt.{ConnectionStateChanged}
+import spoke/mqtt.{AtLeastOnce, AtMostOnce, ConnectionStateChanged, ExactlyOnce}
 import spoke/packet
 import spoke/packet/client/incoming
 import spoke/packet/client/outgoing
@@ -13,6 +13,8 @@ import spoke/packet/client/outgoing
 pub type Command {
   Connect(clean_session: Bool, will: Option(mqtt.PublishData))
   Disconnect
+  PublishMessage(mqtt.PublishData)
+  GetPendingPublishes(Effect(Int))
 }
 
 pub opaque type TimedAction {
@@ -35,6 +37,7 @@ pub type Output {
   OpenTransport
   CloseTransport
   SendData(BytesTree)
+  ReturnPendingPublishes(Effect(Int), Int)
 }
 
 pub opaque type State {
@@ -75,6 +78,9 @@ pub fn handle_input(context: Context, state: State, input: Input) -> Step {
       case action {
         Connect(options, will) -> connect(context, state, options, will)
         Disconnect -> disconnect(context, state)
+        PublishMessage(data) -> publish(context, state, data)
+        GetPendingPublishes(reply) ->
+          get_pending_publishes(context, state, reply)
       }
     Timeout(action) -> handle_timer(context, state, action)
   }
@@ -187,6 +193,48 @@ fn disconnect(context: Context, state: State) -> Step {
   }
 }
 
+fn publish(context: Context, state: State, data: mqtt.PublishData) -> Step {
+  let message =
+    packet.MessageData(
+      topic: data.topic,
+      payload: data.payload,
+      retain: data.retain,
+    )
+
+  let #(session, packet) = case data.qos {
+    AtMostOnce -> #(
+      state.session,
+      outgoing.Publish(packet.PublishDataQoS0(message)),
+    )
+    AtLeastOnce -> session.start_qos1_publish(state.session, message)
+    ExactlyOnce -> session.start_qos2_publish(state.session, message)
+  }
+  let state = State(..state, session:)
+
+  case state.connection {
+    Connected(_) ->
+      context
+      |> drift.output(send(packet))
+      |> drift.continue(state)
+
+    // QoS 0 packets are just dropped, QoS > 0 have been saved in the session
+    _ -> drift.continue(context, state)
+  }
+}
+
+fn get_pending_publishes(
+  context: Context,
+  state: State,
+  reply: Effect(Int),
+) -> Step {
+  context
+  |> drift.output(ReturnPendingPublishes(
+    reply,
+    session.pending_publishes(state.session),
+  ))
+  |> drift.continue(state)
+}
+
 fn transport_established(context: Context, state: State) -> Step {
   case state.connection {
     Connecting(options) -> {
@@ -294,7 +342,7 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
         incoming.ConnAck(_) ->
           kill_connection(context, state, "Got CONNACK while already connected")
         incoming.PingResp -> drift.continue(context, state)
-        incoming.PubAck(_) -> todo
+        incoming.PubAck(id) -> handle_puback(context, state, id)
         incoming.PubComp(_) -> todo
         incoming.PubRec(_) -> todo
         incoming.PubRel(_) -> todo
@@ -311,6 +359,16 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
     // so we just ignore it.
     NotConnected -> drift.continue(context, state)
     Disconnecting -> drift.continue(context, state)
+  }
+}
+
+fn handle_puback(context: Context, state: State, id: Int) -> Step {
+  case session.handle_puback(state.session, id) {
+    session.PublishFinished(session) -> {
+      drift.continue(context, State(..state, session:))
+    }
+    session.InvalidPubAckId ->
+      kill_connection(context, state, "Received invalid PubAck id")
   }
 }
 

@@ -3,9 +3,11 @@ import drift/record
 import gleam/bytes_tree
 import gleam/dynamic
 import gleam/list
+import gleam/option.{None}
 import gleam/string
-import spoke/core
+import spoke/core.{Connect, Perform, TransportEstablished}
 import spoke/mqtt
+import spoke/packet
 import spoke/packet/server/incoming as server_in
 import spoke/packet/server/outgoing as server_out
 
@@ -14,6 +16,14 @@ pub type Recorder =
 
 pub fn default() -> Recorder {
   from_options(mqtt.connect_with_id(0, "my-client"))
+}
+
+pub fn default_connected() -> Recorder {
+  default()
+  |> record.input(Perform(Connect(True, None)))
+  |> record.input(TransportEstablished)
+  |> received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
+  |> record.flush("connect and handshake")
 }
 
 pub fn from_options(options: mqtt.ConnectOptions(_)) -> Recorder {
@@ -51,22 +61,6 @@ pub fn received_many(
 pub fn snap(recorder: Recorder, title: String) -> Nil {
   birdie.snap(record.to_log(recorder), title)
 }
-
-// TODO: these forward declarations aren't great :/
-
-pub fn input(recorder: Recorder, input: core.Input) -> Recorder {
-  record.input(recorder, input)
-}
-
-pub fn flush(recorder: Recorder, what: String) -> Recorder {
-  record.flush(recorder, what)
-}
-
-pub fn time_advance(recorder: Recorder, duration: Int) -> Recorder {
-  record.time_advance(recorder, duration)
-}
-
-// end TODO
 
 fn format_output(output: core.Output) -> String {
   case output {

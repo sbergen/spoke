@@ -1,0 +1,13 @@
+---
+version: 1.2.7
+title: QoS1 publish success
+---
+<flushed connect and handshake>
+  --> Perform(PublishMessage(PublishData("topic", "payload", AtLeastOnce, False)))
+<--   [SendData(Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1)))]
+  --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
+<--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 1)]
+  --> ReceivedPacket(PubAck(1))
+<--   []
+  --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
+<--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 0)]
