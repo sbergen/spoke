@@ -1,0 +1,25 @@
+---
+version: 1.2.7
+title: QoS2 republish after reconnect
+---
+<flushed connect and handshake>
+  --> Perform(PublishMessage(PublishData("topic", "payload", ExactlyOnce, False)))
+<--   [SendData(Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 1)))]
+  --> TransportClosed
+<--   [Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Transport closed")))]
+  --> Perform(Connect(False, None))
+<--   [OpenTransport]
+  --> TransportEstablished
+<--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
+  --> ReceivedPacket(ConnAck(Ok(SessionPresent)))
+<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionPresent))), SendData(Publish(PublishDataQoS2(MessageData("topic", "payload", False), True, 1)))]
+  --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
+<--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 1)]
+  --> ReceivedPacket(PubRec(1))
+<--   []
+  --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
+<--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 1)]
+  --> ReceivedPacket(PubComp(1))
+<--   []
+  --> Perform(GetPendingPublishes(Effect(//fn(a) { ... })))
+<--   [ReturnPendingPublishes(Effect(//fn(a) { ... }), 0)]
