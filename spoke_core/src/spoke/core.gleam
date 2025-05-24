@@ -248,19 +248,15 @@ fn transport_established(context: Context, state: State) -> Step {
 }
 
 fn transport_closed(context: Context, state: State) -> Step {
-  case state.connection {
-    Disconnecting ->
-      context
-      |> drift.cancel_all_timers()
-      |> drift.output(Publish(ConnectionStateChanged(mqtt.Disconnected)))
-      |> drift.continue(State(..state, connection: NotConnected))
-    _ ->
-      unexpected_connection_state(
-        context,
-        state,
-        "closing transport expectedly",
-      )
+  let change = case state.connection {
+    Disconnecting -> mqtt.Disconnected
+    _ -> mqtt.DisconnectedUnexpectedly("Transport closed")
   }
+
+  context
+  |> drift.cancel_all_timers()
+  |> drift.output(Publish(ConnectionStateChanged(change)))
+  |> drift.continue(State(..state, connection: NotConnected))
 }
 
 fn disconnect_unexpectedly(
@@ -297,17 +293,25 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
       case packet {
         None -> drift.continue(context, state)
         Some(incoming.ConnAck(result)) -> {
-          // If a server sends a CONNACK packet containing a non-zero return code
-          // it MUST then close the Network Connection.
-          // We play it safe and close it anyway.
           let update =
             ConnectionStateChanged(convert.to_connection_state(result))
-          let connection = Connected(connection)
+
           case result {
             Ok(_) ->
               context
               |> drift.output(Publish(update))
-              |> start_send_ping_timer(State(..state, connection:))
+              |> drift.output_many(
+                state.session
+                |> session.packets_to_send_after_connect()
+                |> list.map(send),
+              )
+              |> start_send_ping_timer(
+                State(..state, connection: Connected(connection)),
+              )
+
+            // If a server sends a CONNACK packet containing a non-zero return code
+            // it MUST then close the Network Connection.
+            // We play it safe and close it anyway.
             Error(_) ->
               context
               |> drift.output(Publish(update))

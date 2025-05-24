@@ -20,7 +20,7 @@ pub fn default() -> Recorder {
 
 pub fn default_connected() -> Recorder {
   default()
-  |> record.input(Perform(Connect(True, None)))
+  |> record.input(Perform(Connect(False, None)))
   |> record.input(TransportEstablished)
   |> received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> record.flush("connect and handshake")
