@@ -30,6 +30,12 @@ pub fn from_options(options: mqtt.ConnectOptions(_)) -> Recorder {
   record.new(core.new_state(options), core.handle_input, format_output)
 }
 
+pub fn from_state(state: String) -> Recorder {
+  let options = mqtt.connect_with_id(0, "my-client")
+  let assert Ok(state) = core.restore_state(options, state)
+  record.new(state, core.handle_input, format_output)
+}
+
 pub fn received(recorder: Recorder, packet: server_out.Packet) -> Recorder {
   let data = server_out.encode_packet(packet)
   let input = core.ReceivedData(bytes_tree.to_bit_array(data))

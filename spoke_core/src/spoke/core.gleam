@@ -5,6 +5,7 @@ import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
+import gleam/string
 import spoke/core/internal/connection.{type Connection}
 import spoke/core/internal/convert
 import spoke/core/internal/session.{type Session}
@@ -92,7 +93,20 @@ pub type Step =
 pub type Context =
   drift.Context(Input, Output)
 
+pub fn restore_state(
+  options: mqtt.ConnectOptions(_),
+  state: String,
+) -> Result(State, String) {
+  session.from_json(state)
+  |> result.map(new(options, _))
+  |> result.map_error(string.inspect)
+}
+
 pub fn new_state(options: mqtt.ConnectOptions(_)) -> State {
+  new(options, session.new(False))
+}
+
+fn new(options: mqtt.ConnectOptions(_), session: session.Session) -> State {
   let options =
     Options(
       client_id: options.client_id,
@@ -102,7 +116,7 @@ pub fn new_state(options: mqtt.ConnectOptions(_)) -> State {
     )
   State(
     options,
-    session.new(False),
+    session,
     NotConnected,
     dict.new(),
     dict.new(),
