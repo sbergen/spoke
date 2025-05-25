@@ -9,4 +9,4 @@ title: Connection is closed if ping times out
   ... 11000 ms:
   --> Tick
 <--   Close transport
-      DisconnectedUnexpectedly("Ping response timed out")
+      Publish to #1: DisconnectedUnexpectedly("Ping response timed out")

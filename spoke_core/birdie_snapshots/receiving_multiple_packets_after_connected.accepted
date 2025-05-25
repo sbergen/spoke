@@ -6,5 +6,5 @@ title: Receiving multiple packets after connected
   --> Received: 
         * Publish(PublishDataQoS0(MessageData("topic", "payload", False)))
         * Publish(PublishDataQoS0(MessageData("topic2", "payload2", False)))
-<--   ReceivedMessage("topic", "payload", False)
-      ReceivedMessage("topic2", "payload2", False)
+<--   Publish to #1: ReceivedMessage("topic", "payload", False)
+      Publish to #1: ReceivedMessage("topic2", "payload2", False)

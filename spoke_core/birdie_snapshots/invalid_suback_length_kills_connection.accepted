@@ -3,11 +3,11 @@ version: 1.2.7
 title: Invalid suback length kills connection
 ---
 <flushed connect and handshake>
-  --> Subscribe #1
+  --> Subscribe #2
         * topic0 - AtMostOnce
 <--   Send: Subscribe(1, [SubscribeRequest("topic0", QoS0)])
   --> Received: SubAck(1, [Ok(QoS0), Ok(QoS1)])
-<--   Subscribe #1 completed: ProtocolViolation
+<--   Subscribe #2 completed: ProtocolViolation
       Close transport
-      DisconnectedUnexpectedly("Received invalid number of results in subscribe ack")
+      Publish to #1: DisconnectedUnexpectedly("Received invalid number of results in subscribe ack")
   ... 5000 ms:

@@ -5,13 +5,13 @@ title: Wait for publishes to finish clean session
 <flushed connect and handshake>
   --> Publish to "topic": "payload" @ AtLeastOnce, retain: False
 <--   Send: Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1))
-  --> Wait for publishes #1 (timeout 10)
+  --> Wait for publishes #2 (timeout 10)
   --> Transport closed
-<--   DisconnectedUnexpectedly("Transport closed")
+<--   Publish to #1: DisconnectedUnexpectedly("Transport closed")
   --> Connect - clean session: True, will: None
 <--   Open transport
   --> Transport established
 <--   Send: Connect(ConnectOptions(True, "my-client", 15, None, None))
   --> Received: ConnAck(Ok(SessionNotPresent))
-<--   ConnectAccepted(SessionNotPresent)
-      Wait for publishes #1 completed: Error(SessionReset)
+<--   Publish to #1: ConnectAccepted(SessionNotPresent)
+      Wait for publishes #2 completed: Error(SessionReset)

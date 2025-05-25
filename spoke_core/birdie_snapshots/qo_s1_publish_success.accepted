@@ -5,6 +5,6 @@ title: QoS1 publish success
 <flushed connect and handshake>
   --> Publish to "topic": "payload" @ AtLeastOnce, retain: False
 <--   Send: Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1))
-  --> Wait for publishes #1 (timeout 0)
+  --> Wait for publishes #2 (timeout 0)
   --> Received: PubAck(1)
-<--   Wait for publishes #1 completed: Ok(Nil)
+<--   Wait for publishes #2 completed: Ok(Nil)

@@ -5,17 +5,17 @@ title: QoS2 rerelease after reconnect
 <flushed connect and handshake>
   --> Publish to "topic": "payload" @ ExactlyOnce, retain: False
 <--   Send: Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 1))
-  --> Wait for publishes #1 (timeout 0)
+  --> Wait for publishes #2 (timeout 0)
   --> Received: PubRec(1)
 <--   Send: PubRel(1)
   --> Transport closed
-<--   DisconnectedUnexpectedly("Transport closed")
+<--   Publish to #1: DisconnectedUnexpectedly("Transport closed")
   --> Connect - clean session: False, will: None
 <--   Open transport
   --> Transport established
 <--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
   --> Received: ConnAck(Ok(SessionPresent))
-<--   ConnectAccepted(SessionPresent)
+<--   Publish to #1: ConnectAccepted(SessionPresent)
       Send: PubRel(1)
   --> Received: PubComp(1)
-<--   Wait for publishes #1 completed: Ok(Nil)
+<--   Wait for publishes #2 completed: Ok(Nil)

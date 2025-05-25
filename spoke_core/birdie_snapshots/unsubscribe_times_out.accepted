@@ -3,13 +3,13 @@ version: 1.2.7
 title: Unsubscribe times out
 ---
 <flushed connect and handshake>
-  --> Unsubscribe #1
+  --> Unsubscribe #2
         * topic0
         * topic1
 <--   Send: Unsubscribe(1, ["topic0", "topic1"])
   ... 4999 ms:
   ... 5000 ms:
   --> Tick
-<--   Unsubscribe #1 completed: Error(OperationTimedOut)
+<--   Unsubscribe #2 completed: Error(OperationTimedOut)
       Close transport
-      DisconnectedUnexpectedly("Unsubscribe timed out")
+      Publish to #1: DisconnectedUnexpectedly("Unsubscribe timed out")

@@ -3,13 +3,13 @@ version: 1.2.7
 title: Subscribe success path
 ---
 <flushed connect and handshake>
-  --> Subscribe #1
+  --> Subscribe #2
         * topic0 - AtMostOnce
         * topic1 - AtLeastOnce
         * topic2 - ExactlyOnce
 <--   Send: Subscribe(1, [SubscribeRequest("topic0", QoS0), SubscribeRequest("topic1", QoS1), SubscribeRequest("topic2", QoS2)])
   --> Received: SubAck(1, [Ok(QoS0), Ok(QoS1), Ok(QoS2)])
-<--   Subscribe #1 completed: 
+<--   Subscribe #2 completed: 
         * topic0 - AtMostOnce
         * topic1 - AtLeastOnce
         * topic2 - ExactlyOnce

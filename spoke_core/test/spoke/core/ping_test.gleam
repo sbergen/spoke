@@ -30,6 +30,7 @@ fn set_up_connected(keep_alive: Int) -> Recorder {
   |> mqtt.keep_alive_seconds(keep_alive)
   |> mqtt.server_timeout_ms(1000)
   |> recorder.from_options()
+  |> record.input(Perform(core.SubscribeToUpdates(record.discard())))
   |> record.input(Perform(Connect(True, None)))
   |> record.input(TransportEstablished)
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))

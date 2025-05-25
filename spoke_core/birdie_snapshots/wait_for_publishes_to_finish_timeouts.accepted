@@ -5,12 +5,12 @@ title: Wait for publishes to finish timeouts
 <flushed connect and handshake>
   --> Publish to "topic": "payload" @ AtLeastOnce, retain: False
 <--   Send: Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1))
-  --> Wait for publishes #1 (timeout 10)
-  ... 5 ms:
   --> Wait for publishes #2 (timeout 10)
+  ... 5 ms:
+  --> Wait for publishes #3 (timeout 10)
   ... 10 ms:
   --> Tick
-<--   Wait for publishes #1 completed: Error(OperationTimedOut)
+<--   Wait for publishes #2 completed: Error(OperationTimedOut)
   ... 15 ms:
   --> Tick
-<--   Wait for publishes #2 completed: Error(OperationTimedOut)
+<--   Wait for publishes #3 completed: Error(OperationTimedOut)

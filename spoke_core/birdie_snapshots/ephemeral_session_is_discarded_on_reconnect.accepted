@@ -2,21 +2,22 @@
 version: 1.2.7
 title: Ephemeral session is discarded on reconnect
 ---
+  --> Subscribe to updates #1
   --> Connect - clean session: True, will: None
 <--   Open transport
   --> Transport established
 <--   Send: Connect(ConnectOptions(True, "my-client", 15, None, None))
   --> Received: ConnAck(Ok(SessionNotPresent))
-<--   ConnectAccepted(SessionNotPresent)
+<--   Publish to #1: ConnectAccepted(SessionNotPresent)
   --> Publish to "topic": "payload" @ AtLeastOnce, retain: False
 <--   Send: Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1))
   --> Transport closed
-<--   DisconnectedUnexpectedly("Transport closed")
+<--   Publish to #1: DisconnectedUnexpectedly("Transport closed")
   --> Connect - clean session: False, will: None
 <--   Open transport
   --> Transport established
 <--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
   --> Received: ConnAck(Ok(SessionNotPresent))
-<--   ConnectAccepted(SessionNotPresent)
-  --> Get pending publishes #1
-<--   Pending publishes #1 completed: 0
+<--   Publish to #1: ConnectAccepted(SessionNotPresent)
+  --> Get pending publishes #2
+<--   Pending publishes #2 completed: 0

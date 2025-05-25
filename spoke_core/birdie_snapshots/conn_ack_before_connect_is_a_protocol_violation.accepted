@@ -2,8 +2,9 @@
 version: 1.2.7
 title: ConnAck before Connect is a protocol violation
 ---
+  --> Subscribe to updates #1
   --> Connect - clean session: False, will: None
 <--   Open transport
   --> Received: ConnAck(Ok(SessionNotPresent))
 <--   Close transport
-      DisconnectedUnexpectedly("Received data before sending CONNECT")
+      Publish to #1: DisconnectedUnexpectedly("Received data before sending CONNECT")

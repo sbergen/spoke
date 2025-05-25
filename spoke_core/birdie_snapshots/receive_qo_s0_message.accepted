@@ -4,4 +4,4 @@ title: Receive QoS0 message
 ---
 <flushed connect and handshake>
   --> Received: Publish(PublishDataQoS0(MessageData("topic", "payload", False)))
-<--   ReceivedMessage("topic", "payload", False)
+<--   Publish to #1: ReceivedMessage("topic", "payload", False)

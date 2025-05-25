@@ -1,0 +1,18 @@
+---
+version: 1.2.7
+title: Updates can be subscribed and unsubscribed to
+---
+  --> Subscribe to updates #1
+  --> Subscribe to updates #2
+  --> Connect - clean session: True, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(True, "my-client", 15, None, None))
+  --> Received: ConnAck(Ok(SessionNotPresent))
+<--   Publish to #1: ConnectAccepted(SessionNotPresent)
+      Publish to #2: ConnectAccepted(SessionNotPresent)
+  --> Unsubscribe from updates #2
+  --> Received: Publish(PublishDataQoS0(MessageData("topic", "payload", False)))
+<--   Publish to #1: ReceivedMessage("topic", "payload", False)
+  --> Unsubscribe from updates #1
+  --> Transport closed

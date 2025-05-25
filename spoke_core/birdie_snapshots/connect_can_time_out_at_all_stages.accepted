@@ -2,13 +2,14 @@
 version: 1.2.7
 title: Connect can time out at all stages
 ---
+  --> Subscribe to updates #1
   --> Connect - clean session: False, will: None
 <--   Open transport
   ... 999 ms:
   ... 1000 ms:
   --> Tick
 <--   Close transport
-      ConnectFailed("Connecting timed out")
+      Publish to #1: ConnectFailed("Connecting timed out")
   --> Connect - clean session: False, will: None
 <--   Open transport
   ... 1500 ms:
@@ -18,4 +19,4 @@ title: Connect can time out at all stages
   ... 2000 ms:
   --> Tick
 <--   Close transport
-      ConnectFailed("Connecting timed out")
+      Publish to #1: ConnectFailed("Connecting timed out")

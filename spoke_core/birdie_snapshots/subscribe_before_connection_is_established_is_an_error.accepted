@@ -2,8 +2,9 @@
 version: 1.2.7
 title: Subscribe before connection is established is an error
 ---
+  --> Subscribe to updates #1
   --> Connect - clean session: False, will: None
 <--   Open transport
-  --> Subscribe #1
+  --> Subscribe #2
         * topic0 - AtMostOnce
-<--   Subscribe #1 completed: NotConnected
+<--   Subscribe #2 completed: NotConnected

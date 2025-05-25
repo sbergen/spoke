@@ -8,4 +8,4 @@ title: Reconnect after protocol violation
   --> Transport established
 <--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
   --> Received: ConnAck(Ok(SessionNotPresent))
-<--   ConnectAccepted(SessionNotPresent)
+<--   Publish to #1: ConnectAccepted(SessionNotPresent)

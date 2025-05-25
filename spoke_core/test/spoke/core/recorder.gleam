@@ -18,6 +18,7 @@ pub type Recorder =
 
 pub fn default() -> Recorder {
   from_options(mqtt.connect_with_id(0, "my-client"))
+  |> record.input(Perform(core.SubscribeToUpdates(record.discard())))
 }
 
 pub fn default_connected() -> Recorder {
@@ -73,6 +74,12 @@ fn format_input(input: core.Input) -> String {
   case input {
     Perform(command) ->
       case command {
+        core.SubscribeToUpdates(publish) ->
+          "Subscribe to updates " <> format_effect(publish)
+
+        core.UnsubscribeFromUpdates(publish) ->
+          "Unsubscribe from updates " <> format_effect(publish)
+
         core.Disconnect(complete) -> "Disconnect " <> format_effect(complete)
 
         core.GetPendingPublishes(complete) ->
@@ -173,11 +180,15 @@ fn format_output(output: core.Output) -> String {
         server_in.decode_packet(bytes_tree.to_bit_array(data))
       "Send: " <> string.inspect(packet)
     }
-    core.Publish(update) ->
-      case update {
+    core.Publish(action) ->
+      "Publish to "
+      <> format_effect(action.effect)
+      <> ": "
+      <> case action.argument {
         mqtt.ConnectionStateChanged(change) -> string.inspect(change)
-        _ -> string.inspect(update)
+        update -> string.inspect(update)
       }
+
     core.CloseTransport -> "Close transport"
     core.OpenTransport -> "Open transport"
   }

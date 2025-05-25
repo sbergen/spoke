@@ -5,6 +5,7 @@ import gleam/dict.{type Dict}
 import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
+import gleam/set.{type Set}
 import gleam/string
 import spoke/core/internal/connection.{type Connection}
 import spoke/core/internal/convert
@@ -18,20 +19,22 @@ import spoke/packet
 import spoke/packet/client/incoming
 import spoke/packet/client/outgoing
 
+type OperationResult(a) =
+  Result(a, OperationError)
+
 type PublishCompletionEffect =
-  Effect(Result(Nil, OperationError))
+  Effect(OperationResult(Nil))
 
 pub type Command {
+  SubscribeToUpdates(Effect(mqtt.Update))
+  UnsubscribeFromUpdates(Effect(mqtt.Update))
   Connect(clean_session: Bool, will: Option(PublishData))
   Disconnect(Effect(String))
-  Subscribe(
-    List(SubscribeRequest),
-    Effect(Result(List(Subscription), OperationError)),
-  )
-  Unsubscribe(List(String), Effect(Result(Nil, OperationError)))
+  Subscribe(List(SubscribeRequest), Effect(OperationResult(List(Subscription))))
+  Unsubscribe(List(String), Effect(OperationResult(Nil)))
   PublishMessage(PublishData)
   GetPendingPublishes(Effect(Int))
-  WaitForPublishesToFinish(Effect(Result(Nil, OperationError)), Int)
+  WaitForPublishesToFinish(Effect(OperationResult(Nil)), Int)
 }
 
 pub opaque type TimedAction {
@@ -53,14 +56,14 @@ pub type Input {
 }
 
 pub type Output {
-  Publish(mqtt.Update)
+  Publish(Action(mqtt.Update))
   OpenTransport
   CloseTransport
   SendData(BytesTree)
   ReturnPendingPublishes(Action(Int))
-  PublishesCompleted(Action(Result(Nil, OperationError)))
-  SubscribeCompleted(Action(Result(List(Subscription), OperationError)))
-  UnsubscribeCompleted(Action(Result(Nil, OperationError)))
+  PublishesCompleted(Action(OperationResult(Nil)))
+  SubscribeCompleted(Action(OperationResult(List(Subscription))))
+  UnsubscribeCompleted(Action(OperationResult(Nil)))
   ReportStateAtDisconnect(Action(String))
 }
 
@@ -74,6 +77,7 @@ pub opaque type State {
     send_ping_timer: Option(Timer),
     ping_resp_timer: Option(Timer),
     connect_timer: Option(Timer),
+    update_listeners: Set(Effect(mqtt.Update)),
     publish_completion_listeners: Dict(PublishCompletionEffect, Timer),
   )
 }
@@ -97,6 +101,36 @@ pub fn new_state(options: mqtt.ConnectOptions(_)) -> State {
   new(options, session.new(False))
 }
 
+pub fn handle_input(context: Context, state: State, input: Input) -> Step {
+  case input {
+    ReceivedData(data) -> receive(context, state, data)
+    TransportEstablished -> transport_established(context, state)
+    TransportFailed(error) -> disconnect_unexpectedly(context, state, error)
+    TransportClosed -> transport_closed(context, state)
+    Perform(action) ->
+      case action {
+        SubscribeToUpdates(publish) ->
+          subscribe_to_updates(context, state, publish)
+        UnsubscribeFromUpdates(publish) ->
+          unsubscribe_from_updates(context, state, publish)
+        Connect(options, will) -> connect(context, state, options, will)
+        Disconnect(complete) -> disconnect(context, state, complete)
+        Subscribe(requests, effect) ->
+          subscribe(context, state, requests, effect)
+        Unsubscribe(topics, effect) ->
+          unsubscribe(context, state, topics, effect)
+        PublishMessage(data) -> publish(context, state, data)
+        GetPendingPublishes(complete) ->
+          get_pending_publishes(context, state, complete)
+        WaitForPublishesToFinish(complete, timeout) ->
+          wait_for_publishes(context, state, complete, timeout)
+      }
+    Timeout(action) -> handle_timer(context, state, action)
+  }
+}
+
+//===== Privates =====//
+
 fn new(options: mqtt.ConnectOptions(_), session: session.Session) -> State {
   let options =
     Options(
@@ -114,39 +148,16 @@ fn new(options: mqtt.ConnectOptions(_), session: session.Session) -> State {
     None,
     None,
     None,
+    set.new(),
     dict.new(),
   )
-}
-
-pub fn handle_input(context: Context, state: State, input: Input) -> Step {
-  case input {
-    ReceivedData(data) -> receive(context, state, data)
-    TransportEstablished -> transport_established(context, state)
-    TransportFailed(error) -> disconnect_unexpectedly(context, state, error)
-    TransportClosed -> transport_closed(context, state)
-    Perform(action) ->
-      case action {
-        Connect(options, will) -> connect(context, state, options, will)
-        Disconnect(complete) -> disconnect(context, state, complete)
-        Subscribe(requests, effect) ->
-          subscribe(context, state, requests, effect)
-        Unsubscribe(topics, effect) ->
-          unsubscribe(context, state, topics, effect)
-        PublishMessage(data) -> publish(context, state, data)
-        GetPendingPublishes(reply) ->
-          get_pending_publishes(context, state, reply)
-        WaitForPublishesToFinish(reply, timeout) ->
-          wait_for_publishes(context, state, reply, timeout)
-      }
-    Timeout(action) -> handle_timer(context, state, action)
-  }
 }
 
 fn subscribe(
   context: Context,
   state: State,
   all_requests: List(SubscribeRequest),
-  complete: Effect(Result(List(Subscription), OperationError)),
+  complete: Effect(OperationResult(List(Subscription))),
 ) -> Step {
   case all_requests, state.connection {
     [request, ..requests], Connected(_) -> {
@@ -192,7 +203,7 @@ fn unsubscribe(
   context: Context,
   state: State,
   topics: List(String),
-  complete: Effect(Result(Nil, OperationError)),
+  complete: Effect(OperationResult(Nil)),
 ) -> Step {
   case topics, state.connection {
     [topic, ..topics], Connected(_) -> {
@@ -226,7 +237,7 @@ fn unsubscribe(
 fn wait_for_publishes(
   context: Context,
   state: State,
-  complete: Effect(Result(Nil, OperationError)),
+  complete: Effect(OperationResult(Nil)),
   timeout: Int,
 ) -> Step {
   case session.pending_publishes(state.session) {
@@ -249,8 +260,6 @@ fn wait_for_publishes(
   }
 }
 
-//===== Privates =====//
-
 type Options {
   Options(
     client_id: String,
@@ -271,16 +280,13 @@ type ConnectionState {
 type PendingSubscription {
   PendingSubscription(
     topics: List(SubscribeRequest),
-    reply_to: Effect(Result(List(Subscription), OperationError)),
+    complete: Effect(OperationResult(List(Subscription))),
     timeout: Timer,
   )
 }
 
 type PendingUnsubscribe {
-  PendingUnsubscribe(
-    reply_to: Effect(Result(Nil, OperationError)),
-    timeout: Timer,
-  )
+  PendingUnsubscribe(complete: Effect(OperationResult(Nil)), timeout: Timer)
 }
 
 fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
@@ -326,12 +332,12 @@ fn time_out_subscription(context: Context, state: State, id: Int) -> Step {
     // If the key was not found, it means that the suback
     // and timeout were queued to be handled at the same time.
     Error(_) -> drift.continue(context, state)
-    Ok(PendingSubscription(_, reply_to, _)) ->
+    Ok(PendingSubscription(_, complete, _)) ->
       kill_connection(
         drift.perform(
           context,
           SubscribeCompleted,
-          reply_to,
+          complete,
           Error(mqtt.OperationTimedOut),
         ),
         State(..state, pending_subs: dict.delete(pending_subs, id)),
@@ -359,6 +365,24 @@ fn time_out_unsubscribe(context: Context, state: State, id: Int) -> Step {
         "Unsubscribe timed out",
       )
   }
+}
+
+fn subscribe_to_updates(
+  context: Context,
+  state: State,
+  publish: Effect(mqtt.Update),
+) -> Step {
+  let update_listeners = set.insert(state.update_listeners, publish)
+  drift.continue(context, State(..state, update_listeners:))
+}
+
+fn unsubscribe_from_updates(
+  context: Context,
+  state: State,
+  publish: Effect(mqtt.Update),
+) -> Step {
+  let update_listeners = set.delete(state.update_listeners, publish)
+  drift.continue(context, State(..state, update_listeners:))
 }
 
 fn connect(
@@ -472,12 +496,12 @@ fn publish(context: Context, state: State, data: mqtt.PublishData) -> Step {
 fn get_pending_publishes(
   context: Context,
   state: State,
-  reply: Effect(Int),
+  complete: Effect(Int),
 ) -> Step {
   context
   |> drift.perform(
     ReturnPendingPublishes,
-    reply,
+    complete,
     session.pending_publishes(state.session),
   )
   |> drift.continue(state)
@@ -503,7 +527,7 @@ fn transport_closed(context: Context, state: State) -> Step {
 
   context
   |> drift.cancel_all_timers()
-  |> drift.output(Publish(ConnectionStateChanged(change)))
+  |> publish_update(state, ConnectionStateChanged(change))
   |> drift.continue(State(..state, connection: NotConnected))
 }
 
@@ -521,14 +545,16 @@ fn disconnect_unexpectedly(
     WaitingForConnAck(..) -> Some(mqtt.ConnectFailed(error))
   }
 
-  let outputs = case change {
-    None -> []
-    Some(change) -> [CloseTransport, Publish(ConnectionStateChanged(change))]
+  let context = case change {
+    None -> context
+    Some(change) ->
+      context
+      |> drift.output(CloseTransport)
+      |> publish_update(state, ConnectionStateChanged(change))
   }
 
   context
   |> drift.cancel_all_timers()
-  |> drift.output_many(outputs)
   |> drift.continue(State(..state, connection: NotConnected))
 }
 
@@ -600,7 +626,7 @@ fn handle_first_packet(
       case result {
         Ok(_) ->
           context
-          |> drift.output(Publish(update))
+          |> publish_update(state, update)
           |> drift.output_many(
             state.session
             |> session.packets_to_send_after_connect()
@@ -616,7 +642,7 @@ fn handle_first_packet(
         // We play it safe and close it anyway.
         Error(_) ->
           context
-          |> drift.output(Publish(update))
+          |> publish_update(state, update)
           |> drift.output(CloseTransport)
           |> drift.cancel_all_timers()
           |> drift.continue(State(..state, connection: NotConnected))
@@ -666,9 +692,10 @@ fn handle_publish(
 
   let context = case msg {
     Some(msg) ->
-      drift.output(
+      publish_update(
         context,
-        Publish(mqtt.ReceivedMessage(msg.topic, msg.payload, msg.retain)),
+        state,
+        mqtt.ReceivedMessage(msg.topic, msg.payload, msg.retain),
       )
     None -> context
   }
@@ -697,7 +724,7 @@ fn handle_suback(
     let results = list.map(pairs, convert.to_subscription)
     Ok(
       drift.cancel_timer(context, pending_sub.timeout).0
-      |> drift.perform(SubscribeCompleted, pending_sub.reply_to, Ok(results))
+      |> drift.perform(SubscribeCompleted, pending_sub.complete, Ok(results))
       |> drift.continue(State(..state, pending_subs: dict.delete(subs, id))),
     )
   }
@@ -714,7 +741,7 @@ fn handle_unsuback(context: Context, state: State, id: Int) -> Step {
     Ok(pending_unsub) -> {
       let #(context, _) = drift.cancel_timer(context, pending_unsub.timeout)
       context
-      |> drift.perform(UnsubscribeCompleted, pending_unsub.reply_to, Ok(Nil))
+      |> drift.perform(UnsubscribeCompleted, pending_unsub.complete, Ok(Nil))
       |> drift.continue(State(..state, pending_unsubs: dict.delete(unsubs, id)))
     }
     Error(_) ->
@@ -809,7 +836,7 @@ fn reset_publish_completion(context: Context, state: State) -> Step {
 fn check_publish_completion_with(
   context: Context,
   state: State,
-  result: Result(Nil, OperationError),
+  result: OperationResult(Nil),
 ) -> Step {
   case session.pending_publishes(state.session) {
     0 -> {
@@ -833,7 +860,7 @@ fn kill_connection(context: Context, state: State, error: String) -> Step {
   let sub_errors = {
     use pending_sub <- list.map(dict.values(state.pending_subs))
     SubscribeCompleted(effect.bind(
-      pending_sub.reply_to,
+      pending_sub.complete,
       Error(mqtt.ProtocolViolation),
     ))
   }
@@ -841,7 +868,7 @@ fn kill_connection(context: Context, state: State, error: String) -> Step {
   let unsub_errors = {
     use pending_unsub <- list.map(dict.values(state.pending_unsubs))
     UnsubscribeCompleted(effect.bind(
-      pending_unsub.reply_to,
+      pending_unsub.complete,
       Error(mqtt.ProtocolViolation),
     ))
   }
@@ -851,8 +878,9 @@ fn kill_connection(context: Context, state: State, error: String) -> Step {
   |> drift.output_many(sub_errors)
   |> drift.output_many(unsub_errors)
   |> drift.output(CloseTransport)
-  |> drift.output(
-    Publish(ConnectionStateChanged(mqtt.DisconnectedUnexpectedly(error))),
+  |> publish_update(
+    state,
+    ConnectionStateChanged(mqtt.DisconnectedUnexpectedly(error)),
   )
   |> drift.continue(
     State(
@@ -886,6 +914,18 @@ fn unexpected_connection_state(
 
 fn send(packet: outgoing.Packet) -> Output {
   SendData(outgoing.encode_packet(packet))
+}
+
+fn publish_update(
+  context: Context,
+  state: State,
+  update: mqtt.Update,
+) -> Context {
+  let updates = {
+    use listener <- list.map(set.to_list(state.update_listeners))
+    Publish(effect.bind(listener, update))
+  }
+  drift.output_many(context, updates)
 }
 
 fn maybe_cancel_timer(context: Context, timer: Option(drift.Timer)) -> Context {

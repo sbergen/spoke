@@ -3,11 +3,11 @@ version: 1.2.7
 title: Invalid suback kills connection
 ---
 <flushed connect and handshake>
-  --> Subscribe #1
+  --> Subscribe #2
         * topic0 - AtMostOnce
 <--   Send: Subscribe(1, [SubscribeRequest("topic0", QoS0)])
   --> Received: SubAck(2, [Ok(QoS0)])
-<--   Subscribe #1 completed: ProtocolViolation
+<--   Subscribe #2 completed: ProtocolViolation
       Close transport
-      DisconnectedUnexpectedly("Received invalid packet id in subscribe ack")
+      Publish to #1: DisconnectedUnexpectedly("Received invalid packet id in subscribe ack")
   ... 5000 ms:
