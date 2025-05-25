@@ -2,13 +2,15 @@
 version: 1.2.7
 title: Transport failure during connect is published
 ---
-  --> Perform(Connect(False, None))
-<--   [OpenTransport]
+  --> Connect(False, None)
+<--   OpenTransport
   --> TransportFailed("Fake failure")
-<--   [CloseTransport, Publish(ConnectionStateChanged(ConnectFailed("Fake failure")))]
-  --> Perform(Connect(False, None))
-<--   [OpenTransport]
+<--   CloseTransport
+      Publish(ConnectionStateChanged(ConnectFailed("Fake failure")))
+  --> Connect(False, None)
+<--   OpenTransport
   --> TransportEstablished
-<--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
+<--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> TransportFailed("Fake failure")
-<--   [CloseTransport, Publish(ConnectionStateChanged(ConnectFailed("Fake failure")))]
+<--   CloseTransport
+      Publish(ConnectionStateChanged(ConnectFailed("Fake failure")))

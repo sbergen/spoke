@@ -3,9 +3,9 @@ version: 1.2.7
 title: Reconnect after connect failure
 ---
 <flushed failed auth>
-  --> Perform(Connect(False, None))
-<--   [OpenTransport]
+  --> Connect(False, None)
+<--   OpenTransport
   --> TransportEstablished
-<--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
+<--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))]
+<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))

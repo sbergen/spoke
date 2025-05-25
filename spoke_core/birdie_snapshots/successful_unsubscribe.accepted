@@ -3,7 +3,7 @@ version: 1.2.7
 title: Successful unsubscribe
 ---
 <flushed connect and handshake>
-  --> Perform(Unsubscribe(["topic0", "topic1"], Effect(//fn(a) { ... })))
-<--   [SendData(Unsubscribe(1, ["topic0", "topic1"]))]
+  --> Unsubscribe(["topic0", "topic1"], Effect#0)
+<--   SendData(Unsubscribe(1, ["topic0", "topic1"]))
   --> ReceivedPacket(UnsubAck(1))
-<--   [UnsubscribeCompleted(Effect(//fn(a) { ... }), Ok(Nil))]
+<--   UnsubscribeCompleted(Effect#0(Ok(Nil)))

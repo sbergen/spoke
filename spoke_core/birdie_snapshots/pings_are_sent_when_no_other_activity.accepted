@@ -6,12 +6,11 @@ title: Pings are sent when no other activity
   ... 9999 ms:
   ... 10000 ms:
   --> Tick
-<--   [SendData(PingReq)]
+<--   SendData(PingReq)
   ... 10100 ms:
   --> ReceivedPacket(PingResp)
-<--   []
   ... 20099 ms:
   ... 20100 ms:
   --> Tick
-<--   [SendData(PingReq)]
+<--   SendData(PingReq)
   ... 20200 ms:

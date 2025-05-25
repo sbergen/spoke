@@ -2,5 +2,5 @@
 version: 1.2.7
 title: Disconnect before connecting
 ---
-  --> Perform(Disconnect(Effect(//fn(a) { ... })))
-<--   [ReportStateAtDisconnect(Effect(//fn(a) { ... }), "{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}")]
+  --> Disconnect(Effect#0)
+<--   ReportStateAtDisconnect(Effect#0("{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}"))

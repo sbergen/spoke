@@ -1,4 +1,5 @@
 import drift
+import drift/effect
 import drift/record.{discard}
 import gleam/option.{None}
 import spoke/core.{
@@ -20,11 +21,11 @@ pub fn restore_session_success_test() {
   let assert drift.Continue(_, stepper, _) =
     drift.step(stepper, 0, Perform(PublishMessage(msg)), core.handle_input)
 
-  let assert drift.Continue([core.ReportStateAtDisconnect(_, state)], _, _) =
+  let assert drift.Continue([core.ReportStateAtDisconnect(action)], _, _) =
     drift.step(stepper, 0, Perform(Disconnect(discard())), core.handle_input)
 
   // Restore session
-  recorder.from_state(state)
+  recorder.from_state(effect.extract_arg(action))
   |> record.input(Perform(Connect(False, None)))
   |> record.input(TransportEstablished)
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionPresent)))

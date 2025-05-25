@@ -2,13 +2,15 @@
 version: 1.2.7
 title: Connect and Disconnect
 ---
-  --> Perform(Connect(False, Some(PublishData("will/topic", "will-data", AtLeastOnce, False))))
-<--   [OpenTransport]
+  --> Connect(False, Some(PublishData("will/topic", "will-data", AtLeastOnce, False)))
+<--   OpenTransport
   --> TransportEstablished
-<--   [SendData(Connect(ConnectOptions(False, "ping-client", 15, Some(AuthOptions("username", Some("password"))), Some(#(MessageData("will/topic", "will-data", False), QoS1)))))]
+<--   SendData(Connect(ConnectOptions(False, "ping-client", 15, Some(AuthOptions("username", Some("password"))), Some(#(MessageData("will/topic", "will-data", False), QoS1)))))
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))]
-  --> Perform(Disconnect(Effect(//fn(a) { ... })))
-<--   [SendData(Disconnect), CloseTransport, ReportStateAtDisconnect(Effect(//fn(a) { ... }), "{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}")]
+<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))
+  --> Disconnect(Effect#0)
+<--   SendData(Disconnect)
+      CloseTransport
+      ReportStateAtDisconnect(Effect#0("{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}"))
   --> TransportClosed
-<--   [Publish(ConnectionStateChanged(Disconnected))]
+<--   Publish(ConnectionStateChanged(Disconnected))

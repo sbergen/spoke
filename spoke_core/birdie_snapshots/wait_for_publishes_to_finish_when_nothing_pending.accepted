@@ -3,5 +3,5 @@ version: 1.2.7
 title: Wait for publishes to finish when nothing pending
 ---
 <flushed connect and handshake>
-  --> Perform(WaitForPublishesToFinish(Effect(//fn(a) { ... }), 0))
-<--   [PublishesCompleted(Effect(//fn(a) { ... }), Ok(Nil))]
+  --> WaitForPublishesToFinish(Effect#0, 0)
+<--   PublishesCompleted(Effect#0(Ok(Nil)))

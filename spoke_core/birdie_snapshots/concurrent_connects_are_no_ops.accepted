@@ -2,15 +2,12 @@
 version: 1.2.7
 title: Concurrent connects are no-ops
 ---
-  --> Perform(Connect(False, None))
-<--   [OpenTransport]
-  --> Perform(Connect(False, None))
-<--   []
+  --> Connect(False, None)
+<--   OpenTransport
+  --> Connect(False, None)
   --> TransportEstablished
-<--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
-  --> Perform(Connect(False, None))
-<--   []
+<--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  --> Connect(False, None)
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))]
-  --> Perform(Connect(False, None))
-<--   []
+<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))
+  --> Connect(False, None)

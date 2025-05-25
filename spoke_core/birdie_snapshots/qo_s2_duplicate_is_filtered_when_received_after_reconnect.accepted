@@ -4,18 +4,21 @@ title: QoS2 duplicate is filtered when received after reconnect
 ---
 <flushed connect and handshake>
   --> ReceivedPacket(Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 42)))
-<--   [SendData(PubRec(42)), Publish(ReceivedMessage("topic", "payload", False))]
+<--   SendData(PubRec(42))
+      Publish(ReceivedMessage("topic", "payload", False))
   --> TransportClosed
-<--   [Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Transport closed")))]
-  --> Perform(Connect(False, None))
-<--   [OpenTransport]
+<--   Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Transport closed")))
+  --> Connect(False, None)
+<--   OpenTransport
   --> TransportEstablished
-<--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
+<--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> ReceivedPacket(ConnAck(Ok(SessionPresent)))
-<--   [Publish(ConnectionStateChanged(ConnectAccepted(SessionPresent)))]
+<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionPresent)))
   --> ReceivedPacket(Publish(PublishDataQoS2(MessageData("topic", "payload", False), True, 42)))
-<--   [SendData(PubRec(42))]
+<--   SendData(PubRec(42))
   --> ReceivedPacket(PubRel(42))
-<--   [SendData(PubComp(42))]
-  --> Perform(Disconnect(Effect(//fn(a) { ... })))
-<--   [SendData(Disconnect), CloseTransport, ReportStateAtDisconnect(Effect(//fn(a) { ... }), "{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}")]
+<--   SendData(PubComp(42))
+  --> Disconnect(Effect#0)
+<--   SendData(Disconnect)
+      CloseTransport
+      ReportStateAtDisconnect(Effect#0("{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}"))

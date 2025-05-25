@@ -2,7 +2,8 @@
 version: 1.2.7
 title: Disconnect before connection established
 ---
-  --> Perform(Connect(False, None))
-<--   [OpenTransport]
-  --> Perform(Disconnect(Effect(//fn(a) { ... })))
-<--   [CloseTransport, ReportStateAtDisconnect(Effect(//fn(a) { ... }), "{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}")]
+  --> Connect(False, None)
+<--   OpenTransport
+  --> Disconnect(Effect#0)
+<--   CloseTransport
+      ReportStateAtDisconnect(Effect#0("{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}"))

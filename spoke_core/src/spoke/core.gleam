@@ -1,4 +1,5 @@
-import drift.{type Effect, type Timer}
+import drift.{type Timer}
+import drift/effect.{type Action, type Effect}
 import drift/reference.{type Reference}
 import gleam/bytes_tree.{type BytesTree}
 import gleam/dict.{type Dict}
@@ -54,20 +55,11 @@ pub type Output {
   OpenTransport
   CloseTransport
   SendData(BytesTree)
-  ReturnPendingPublishes(Effect(Int), Int)
-  PublishesCompleted(
-    Effect(Result(Nil, OperationError)),
-    Result(Nil, OperationError),
-  )
-  SubscribeCompleted(
-    Effect(Result(List(Subscription), OperationError)),
-    Result(List(Subscription), OperationError),
-  )
-  UnsubscribeCompleted(
-    Effect(Result(Nil, OperationError)),
-    Result(Nil, OperationError),
-  )
-  ReportStateAtDisconnect(Effect(String), String)
+  ReturnPendingPublishes(Action(Int))
+  PublishesCompleted(Action(Result(Nil, OperationError)))
+  SubscribeCompleted(Action(Result(List(Subscription), OperationError)))
+  UnsubscribeCompleted(Action(Result(Nil, OperationError)))
+  ReportStateAtDisconnect(Action(String))
 }
 
 pub opaque type State {
@@ -155,7 +147,7 @@ fn subscribe(
   context: Context,
   state: State,
   all_requests: List(SubscribeRequest),
-  effect: Effect(Result(List(Subscription), OperationError)),
+  complete: Effect(Result(List(Subscription), OperationError)),
 ) -> Step {
   case all_requests, state.connection {
     [request, ..requests], Connected(_) -> {
@@ -172,7 +164,7 @@ fn subscribe(
         dict.insert(
           state.pending_subs,
           id,
-          PendingSubscription(all_requests, effect, timer),
+          PendingSubscription(all_requests, complete, timer),
         )
 
       context
@@ -188,11 +180,11 @@ fn subscribe(
     [], Connected(_) ->
       // Empty list is a no-op
       context
-      |> drift.output(SubscribeCompleted(effect, Ok([])))
+      |> drift.perform(SubscribeCompleted, complete, Ok([]))
       |> drift.continue(state)
     _, _ ->
       context
-      |> drift.output(SubscribeCompleted(effect, Error(mqtt.NotConnected)))
+      |> drift.perform(SubscribeCompleted, complete, Error(mqtt.NotConnected))
       |> drift.continue(state)
   }
 }
@@ -223,11 +215,11 @@ fn unsubscribe(
     [], Connected(_) ->
       // Empty list is a no-op
       context
-      |> drift.output(UnsubscribeCompleted(complete, Ok(Nil)))
+      |> drift.perform(UnsubscribeCompleted, complete, Ok(Nil))
       |> drift.continue(state)
     _, _ ->
       context
-      |> drift.output(UnsubscribeCompleted(complete, Error(mqtt.NotConnected)))
+      |> drift.perform(UnsubscribeCompleted, complete, Error(mqtt.NotConnected))
       |> drift.continue(state)
   }
 }
@@ -235,13 +227,13 @@ fn unsubscribe(
 fn wait_for_publishes(
   context: Context,
   state: State,
-  reply: Effect(Result(Nil, OperationError)),
+  complete: Effect(Result(Nil, OperationError)),
   timeout: Int,
 ) -> Step {
   case session.pending_publishes(state.session) {
     0 ->
       context
-      |> drift.output(PublishesCompleted(reply, Ok(Nil)))
+      |> drift.perform(PublishesCompleted, complete, Ok(Nil))
       |> drift.continue(state)
 
     _ -> {
@@ -253,7 +245,7 @@ fn wait_for_publishes(
           Timeout(WaitForPublishesTimeout(ref)),
         )
       let publish_completion_listeners =
-        dict.insert(state.publish_completion_listeners, ref, #(reply, timer))
+        dict.insert(state.publish_completion_listeners, ref, #(complete, timer))
       drift.continue(context, State(..state, publish_completion_listeners:))
     }
   }
@@ -325,7 +317,7 @@ fn time_out_wait_for_publish(
     dict.get(state.publish_completion_listeners, ref)
 
   context
-  |> drift.output(PublishesCompleted(effect, Error(mqtt.OperationTimedOut)))
+  |> drift.perform(PublishesCompleted, effect, Error(mqtt.OperationTimedOut))
   |> drift.continue(state)
 }
 
@@ -338,9 +330,11 @@ fn time_out_subscription(context: Context, state: State, id: Int) -> Step {
     Error(_) -> drift.continue(context, state)
     Ok(PendingSubscription(_, reply_to, _)) ->
       kill_connection(
-        drift.output(
+        drift.perform(
           context,
-          SubscribeCompleted(reply_to, Error(mqtt.OperationTimedOut)),
+          SubscribeCompleted,
+          reply_to,
+          Error(mqtt.OperationTimedOut),
         ),
         State(..state, pending_subs: dict.delete(pending_subs, id)),
         "Subscribe timed out",
@@ -357,9 +351,11 @@ fn time_out_unsubscribe(context: Context, state: State, id: Int) -> Step {
     Error(_) -> drift.continue(context, state)
     Ok(PendingUnsubscribe(complete, _)) ->
       kill_connection(
-        drift.output(
+        drift.perform(
           context,
-          UnsubscribeCompleted(complete, Error(mqtt.OperationTimedOut)),
+          UnsubscribeCompleted,
+          complete,
+          Error(mqtt.OperationTimedOut),
         ),
         State(..state, pending_unsubs: dict.delete(pending_unsubs, id)),
         "Unsubscribe timed out",
@@ -427,7 +423,11 @@ fn disconnect(context: Context, state: State, complete: Effect(String)) -> Step 
     NotConnected -> None
   }
 
-  let result = ReportStateAtDisconnect(complete, session.to_json(state.session))
+  let result =
+    ReportStateAtDisconnect(effect.bind(
+      complete,
+      session.to_json(state.session),
+    ))
 
   case outputs {
     Some(outputs) ->
@@ -477,10 +477,11 @@ fn get_pending_publishes(
   reply: Effect(Int),
 ) -> Step {
   context
-  |> drift.output(ReturnPendingPublishes(
+  |> drift.perform(
+    ReturnPendingPublishes,
     reply,
     session.pending_publishes(state.session),
-  ))
+  )
   |> drift.continue(state)
 }
 
@@ -698,7 +699,7 @@ fn handle_suback(
     let results = list.map(pairs, convert.to_subscription)
     Ok(
       drift.cancel_timer(context, pending_sub.timeout).0
-      |> drift.output(SubscribeCompleted(pending_sub.reply_to, Ok(results)))
+      |> drift.perform(SubscribeCompleted, pending_sub.reply_to, Ok(results))
       |> drift.continue(State(..state, pending_subs: dict.delete(subs, id))),
     )
   }
@@ -715,7 +716,7 @@ fn handle_unsuback(context: Context, state: State, id: Int) -> Step {
     Ok(pending_unsub) -> {
       let #(context, _) = drift.cancel_timer(context, pending_unsub.timeout)
       context
-      |> drift.output(UnsubscribeCompleted(pending_unsub.reply_to, Ok(Nil)))
+      |> drift.perform(UnsubscribeCompleted, pending_unsub.reply_to, Ok(Nil))
       |> drift.continue(State(..state, pending_unsubs: dict.delete(unsubs, id)))
     }
     Error(_) ->
@@ -820,7 +821,7 @@ fn check_publish_completion_with(
           context,
         )
         let context = drift.cancel_timer(context, timer).0
-        drift.output(context, PublishesCompleted(effect, result))
+        drift.perform(context, PublishesCompleted, effect, result)
       }
       |> drift.continue(
         State(..state, publish_completion_listeners: dict.new()),
@@ -833,12 +834,18 @@ fn check_publish_completion_with(
 fn kill_connection(context: Context, state: State, error: String) -> Step {
   let sub_errors = {
     use pending_sub <- list.map(dict.values(state.pending_subs))
-    SubscribeCompleted(pending_sub.reply_to, Error(mqtt.ProtocolViolation))
+    SubscribeCompleted(effect.bind(
+      pending_sub.reply_to,
+      Error(mqtt.ProtocolViolation),
+    ))
   }
 
   let unsub_errors = {
     use pending_unsub <- list.map(dict.values(state.pending_unsubs))
-    UnsubscribeCompleted(pending_unsub.reply_to, Error(mqtt.ProtocolViolation))
+    UnsubscribeCompleted(effect.bind(
+      pending_unsub.reply_to,
+      Error(mqtt.ProtocolViolation),
+    ))
   }
 
   context

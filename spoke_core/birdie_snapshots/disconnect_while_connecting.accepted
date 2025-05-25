@@ -2,9 +2,10 @@
 version: 1.2.7
 title: Disconnect while connecting
 ---
-  --> Perform(Connect(False, None))
-<--   [OpenTransport]
+  --> Connect(False, None)
+<--   OpenTransport
   --> TransportEstablished
-<--   [SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))]
-  --> Perform(Disconnect(Effect(//fn(a) { ... })))
-<--   [CloseTransport, ReportStateAtDisconnect(Effect(//fn(a) { ... }), "{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}")]
+<--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  --> Disconnect(Effect#0)
+<--   CloseTransport
+      ReportStateAtDisconnect(Effect#0("{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}"))
