@@ -8,4 +8,4 @@ title: Unsubscribe ack with invalid packet id is protocol violation
   --> ReceivedPacket(UnsubAck(2))
 <--   UnsubscribeCompleted(Effect#0(Error(ProtocolViolation)))
       CloseTransport
-      Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Received invalid packet id in unsubscribe ack")))
+      DisconnectedUnexpectedly("Received invalid packet id in unsubscribe ack")

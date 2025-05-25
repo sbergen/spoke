@@ -7,11 +7,11 @@ title: Wait for publishes to finish clean session
 <--   SendData(Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1)))
   --> WaitForPublishesToFinish(Effect#0, 10)
   --> TransportClosed
-<--   Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Transport closed")))
+<--   DisconnectedUnexpectedly("Transport closed")
   --> Connect(True, None)
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(True, "my-client", 15, None, None)))
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))
+<--   ConnectAccepted(SessionNotPresent)
       PublishesCompleted(Effect#0(Error(SessionReset)))

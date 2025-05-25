@@ -7,5 +7,5 @@ title: Receiving multiple packets in first chunk of data
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> ReceivedPackets([ConnAck(Ok(SessionPresent)), Publish(PublishDataQoS0(MessageData("topic", "payload", False)))])
-<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionPresent)))
-      Publish(ReceivedMessage("topic", "payload", False))
+<--   ConnectAccepted(SessionPresent)
+      ReceivedMessage("topic", "payload", False)

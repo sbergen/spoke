@@ -9,4 +9,4 @@ title: Connection is closed if ping times out
   ... 11000 ms:
   --> Tick
 <--   CloseTransport
-      Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Ping response timed out")))
+      DisconnectedUnexpectedly("Ping response timed out")

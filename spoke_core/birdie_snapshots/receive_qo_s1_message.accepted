@@ -5,4 +5,4 @@ title: Receive QoS1 message
 <flushed connect and handshake>
   --> ReceivedPacket(Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 42)))
 <--   SendData(PubAck(42))
-      Publish(ReceivedMessage("topic", "payload", False))
+      ReceivedMessage("topic", "payload", False)

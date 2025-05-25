@@ -5,15 +5,15 @@ title: QoS2 duplicate is filtered when received after reconnect
 <flushed connect and handshake>
   --> ReceivedPacket(Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 42)))
 <--   SendData(PubRec(42))
-      Publish(ReceivedMessage("topic", "payload", False))
+      ReceivedMessage("topic", "payload", False)
   --> TransportClosed
-<--   Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Transport closed")))
+<--   DisconnectedUnexpectedly("Transport closed")
   --> Connect(False, None)
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> ReceivedPacket(ConnAck(Ok(SessionPresent)))
-<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionPresent)))
+<--   ConnectAccepted(SessionPresent)
   --> ReceivedPacket(Publish(PublishDataQoS2(MessageData("topic", "payload", False), True, 42)))
 <--   SendData(PubRec(42))
   --> ReceivedPacket(PubRel(42))

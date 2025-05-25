@@ -9,4 +9,4 @@ title: Transport failure while disconnecting is published
       ReportStateAtDisconnect(Effect#0("{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}"))
   --> TransportFailed("Fake failure")
 <--   CloseTransport
-      Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Fake failure")))
+      DisconnectedUnexpectedly("Fake failure")

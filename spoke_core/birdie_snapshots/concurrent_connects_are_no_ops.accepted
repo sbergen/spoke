@@ -9,5 +9,5 @@ title: Concurrent connects are no-ops
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> Connect(False, None)
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))
+<--   ConnectAccepted(SessionNotPresent)
   --> Connect(False, None)

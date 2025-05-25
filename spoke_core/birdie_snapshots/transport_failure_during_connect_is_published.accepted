@@ -6,11 +6,11 @@ title: Transport failure during connect is published
 <--   OpenTransport
   --> TransportFailed("Fake failure")
 <--   CloseTransport
-      Publish(ConnectionStateChanged(ConnectFailed("Fake failure")))
+      ConnectFailed("Fake failure")
   --> Connect(False, None)
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> TransportFailed("Fake failure")
 <--   CloseTransport
-      Publish(ConnectionStateChanged(ConnectFailed("Fake failure")))
+      ConnectFailed("Fake failure")

@@ -9,13 +9,13 @@ title: QoS2 rerelease after reconnect
   --> ReceivedPacket(PubRec(1))
 <--   SendData(PubRel(1))
   --> TransportClosed
-<--   Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Transport closed")))
+<--   DisconnectedUnexpectedly("Transport closed")
   --> Connect(False, None)
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> ReceivedPacket(ConnAck(Ok(SessionPresent)))
-<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionPresent)))
+<--   ConnectAccepted(SessionPresent)
       SendData(PubRel(1))
   --> ReceivedPacket(PubComp(1))
 <--   PublishesCompleted(Effect#0(Ok(Nil)))

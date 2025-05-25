@@ -156,6 +156,10 @@ fn format_output(
         server_in.decode_packet(bytes_tree.to_bit_array(data))
       #(formatter, string.inspect(SendData(packet)))
     }
+    core.Publish(update) -> #(formatter, case update {
+      mqtt.ConnectionStateChanged(change) -> string.inspect(change)
+      _ -> string.inspect(update)
+    })
     other -> #(formatter, string.inspect(other))
   }
 }

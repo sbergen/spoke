@@ -10,4 +10,4 @@ title: Subscribes time out after server timeout
   --> Tick
 <--   SubscribeCompleted(Effect#0(Error(OperationTimedOut)))
       CloseTransport
-      Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Subscribe timed out")))
+      DisconnectedUnexpectedly("Subscribe timed out")

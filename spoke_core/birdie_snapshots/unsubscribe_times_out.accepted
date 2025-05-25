@@ -10,4 +10,4 @@ title: Unsubscribe times out
   --> Tick
 <--   UnsubscribeCompleted(Effect#0(Error(OperationTimedOut)))
       CloseTransport
-      Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Unsubscribe timed out")))
+      DisconnectedUnexpectedly("Unsubscribe timed out")

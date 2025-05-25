@@ -8,5 +8,5 @@ title: Invalid suback length kills connection
   --> ReceivedPacket(SubAck(1, [Ok(QoS0), Ok(QoS1)]))
 <--   SubscribeCompleted(Effect#0(Error(ProtocolViolation)))
       CloseTransport
-      Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Received invalid number of results in subscribe ack")))
+      DisconnectedUnexpectedly("Received invalid number of results in subscribe ack")
   ... 5000 ms:

@@ -8,4 +8,4 @@ title: Reconnect after connect failure
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))
+<--   ConnectAccepted(SessionNotPresent)

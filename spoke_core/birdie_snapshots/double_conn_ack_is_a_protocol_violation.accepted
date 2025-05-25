@@ -7,7 +7,7 @@ title: Double ConnAck is a protocol violation
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))
+<--   ConnectAccepted(SessionNotPresent)
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
 <--   CloseTransport
-      Publish(ConnectionStateChanged(DisconnectedUnexpectedly("Got CONNACK while already connected")))
+      DisconnectedUnexpectedly("Got CONNACK while already connected")

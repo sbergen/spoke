@@ -7,10 +7,10 @@ title: Connect and Disconnect
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "ping-client", 15, Some(AuthOptions("username", Some("password"))), Some(#(MessageData("will/topic", "will-data", False), QoS1)))))
   --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
-<--   Publish(ConnectionStateChanged(ConnectAccepted(SessionNotPresent)))
+<--   ConnectAccepted(SessionNotPresent)
   --> Disconnect(Effect#0)
 <--   SendData(Disconnect)
       CloseTransport
       ReportStateAtDisconnect(Effect#0("{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}"))
   --> TransportClosed
-<--   Publish(ConnectionStateChanged(Disconnected))
+<--   Disconnected

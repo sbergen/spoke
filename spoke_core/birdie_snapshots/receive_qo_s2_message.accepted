@@ -5,7 +5,7 @@ title: Receive QoS2 message
 <flushed connect and handshake>
   --> ReceivedPacket(Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 42)))
 <--   SendData(PubRec(42))
-      Publish(ReceivedMessage("topic", "payload", False))
+      ReceivedMessage("topic", "payload", False)
   --> ReceivedPacket(PubRel(42))
 <--   SendData(PubComp(42))
   --> Disconnect(Effect#0)
