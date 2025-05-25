@@ -1,6 +1,5 @@
 import drift.{type Timer}
 import drift/effect.{type Action, type Effect}
-import drift/reference.{type Reference}
 import gleam/bytes_tree.{type BytesTree}
 import gleam/dict.{type Dict}
 import gleam/list
@@ -18,6 +17,9 @@ import spoke/mqtt.{
 import spoke/packet
 import spoke/packet/client/incoming
 import spoke/packet/client/outgoing
+
+type PublishCompletionEffect =
+  Effect(Result(Nil, OperationError))
 
 pub type Command {
   Connect(clean_session: Bool, will: Option(PublishData))
@@ -38,7 +40,7 @@ pub opaque type TimedAction {
   ConnectTimedOut
   SubscribeTimedOut(Int)
   UnsubscribeTimedOut(Int)
-  WaitForPublishesTimeout(Reference)
+  WaitForPublishesTimeout(PublishCompletionEffect)
 }
 
 pub type Input {
@@ -72,10 +74,7 @@ pub opaque type State {
     send_ping_timer: Option(Timer),
     ping_resp_timer: Option(Timer),
     connect_timer: Option(Timer),
-    publish_completion_listeners: Dict(
-      Reference,
-      #(Effect(Result(Nil, OperationError)), Timer),
-    ),
+    publish_completion_listeners: Dict(PublishCompletionEffect, Timer),
   )
 }
 
@@ -237,15 +236,14 @@ fn wait_for_publishes(
       |> drift.continue(state)
 
     _ -> {
-      let ref = reference.new()
       let #(context, timer) =
         drift.handle_after(
           context,
           timeout,
-          Timeout(WaitForPublishesTimeout(ref)),
+          Timeout(WaitForPublishesTimeout(complete)),
         )
       let publish_completion_listeners =
-        dict.insert(state.publish_completion_listeners, ref, #(complete, timer))
+        dict.insert(state.publish_completion_listeners, complete, timer)
       drift.continue(context, State(..state, publish_completion_listeners:))
     }
   }
@@ -311,14 +309,14 @@ fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
 fn time_out_wait_for_publish(
   context: Context,
   state: State,
-  ref: Reference,
+  complete: PublishCompletionEffect,
 ) -> Step {
-  let assert Ok(#(effect, _timer)) =
-    dict.get(state.publish_completion_listeners, ref)
+  let publish_completion_listeners =
+    dict.delete(state.publish_completion_listeners, complete)
 
   context
-  |> drift.perform(PublishesCompleted, effect, Error(mqtt.OperationTimedOut))
-  |> drift.continue(state)
+  |> drift.perform(PublishesCompleted, complete, Error(mqtt.OperationTimedOut))
+  |> drift.continue(State(..state, publish_completion_listeners:))
 }
 
 fn time_out_subscription(context: Context, state: State, id: Int) -> Step {
@@ -816,12 +814,12 @@ fn check_publish_completion_with(
   case session.pending_publishes(state.session) {
     0 -> {
       {
-        use context, #(effect, timer) <- list.fold(
-          dict.values(state.publish_completion_listeners),
+        use context, complete, timer <- dict.fold(
+          state.publish_completion_listeners,
           context,
         )
         let context = drift.cancel_timer(context, timer).0
-        drift.perform(context, PublishesCompleted, effect, result)
+        drift.perform(context, PublishesCompleted, complete, result)
       }
       |> drift.continue(
         State(..state, publish_completion_listeners: dict.new()),

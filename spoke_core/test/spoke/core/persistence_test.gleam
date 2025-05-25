@@ -1,5 +1,4 @@
 import drift
-import drift/effect
 import drift/record.{discard}
 import gleam/option.{None}
 import spoke/core.{
@@ -25,7 +24,7 @@ pub fn restore_session_success_test() {
     drift.step(stepper, 0, Perform(Disconnect(discard())), core.handle_input)
 
   // Restore session
-  recorder.from_state(effect.extract_arg(action))
+  recorder.from_state(action.argument)
   |> record.input(Perform(Connect(False, None)))
   |> record.input(TransportEstablished)
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionPresent)))

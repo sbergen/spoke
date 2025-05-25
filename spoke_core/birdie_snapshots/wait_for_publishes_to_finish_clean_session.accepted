@@ -3,15 +3,15 @@ version: 1.2.7
 title: Wait for publishes to finish clean session
 ---
 <flushed connect and handshake>
-  --> PublishMessage(PublishData("topic", "payload", AtLeastOnce, False))
-<--   SendData(Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1)))
-  --> WaitForPublishesToFinish(Effect#0, 10)
-  --> TransportClosed
+  --> Publish to "topic": "payload" @ AtLeastOnce, retain: False
+<--   Send: Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1))
+  --> Wait for publishes #1 (timeout 10)
+  --> Transport closed
 <--   DisconnectedUnexpectedly("Transport closed")
-  --> Connect(True, None)
-<--   OpenTransport
-  --> TransportEstablished
-<--   SendData(Connect(ConnectOptions(True, "my-client", 15, None, None)))
+  --> Connect - clean session: True, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(True, "my-client", 15, None, None))
   --> Received: ConnAck(Ok(SessionNotPresent))
 <--   ConnectAccepted(SessionNotPresent)
-      PublishesCompleted(Effect#0(Error(SessionReset)))
+      Wait for publishes #1 completed: Error(SessionReset)

@@ -4,5 +4,5 @@ title: Receive QoS1 message
 ---
 <flushed connect and handshake>
   --> Received: Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 42))
-<--   SendData(PubAck(42))
+<--   Send: PubAck(42)
       ReceivedMessage("topic", "payload", False)

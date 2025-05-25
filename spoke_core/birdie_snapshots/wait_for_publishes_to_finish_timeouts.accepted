@@ -3,14 +3,14 @@ version: 1.2.7
 title: Wait for publishes to finish timeouts
 ---
 <flushed connect and handshake>
-  --> PublishMessage(PublishData("topic", "payload", AtLeastOnce, False))
-<--   SendData(Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1)))
-  --> WaitForPublishesToFinish(Effect#0, 10)
+  --> Publish to "topic": "payload" @ AtLeastOnce, retain: False
+<--   Send: Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1))
+  --> Wait for publishes #1 (timeout 10)
   ... 5 ms:
-  --> WaitForPublishesToFinish(Effect#1, 10)
+  --> Wait for publishes #2 (timeout 10)
   ... 10 ms:
   --> Tick
-<--   PublishesCompleted(Effect#0(Error(OperationTimedOut)))
+<--   Wait for publishes #1 completed: Error(OperationTimedOut)
   ... 15 ms:
   --> Tick
-<--   PublishesCompleted(Effect#1(Error(OperationTimedOut)))
+<--   Wait for publishes #2 completed: Error(OperationTimedOut)

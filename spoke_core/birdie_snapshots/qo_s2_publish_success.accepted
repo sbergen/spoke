@@ -3,10 +3,10 @@ version: 1.2.7
 title: QoS2 publish success
 ---
 <flushed connect and handshake>
-  --> PublishMessage(PublishData("topic", "payload", ExactlyOnce, False))
-<--   SendData(Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 1)))
-  --> WaitForPublishesToFinish(Effect#0, 0)
+  --> Publish to "topic": "payload" @ ExactlyOnce, retain: False
+<--   Send: Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 1))
+  --> Wait for publishes #1 (timeout 0)
   --> Received: PubRec(1)
-<--   SendData(PubRel(1))
+<--   Send: PubRel(1)
   --> Received: PubComp(1)
-<--   PublishesCompleted(Effect#0(Ok(Nil)))
+<--   Wait for publishes #1 completed: Ok(Nil)

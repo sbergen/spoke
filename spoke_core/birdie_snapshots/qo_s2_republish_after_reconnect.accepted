@@ -3,19 +3,19 @@ version: 1.2.7
 title: QoS2 republish after reconnect
 ---
 <flushed connect and handshake>
-  --> PublishMessage(PublishData("topic", "payload", ExactlyOnce, False))
-<--   SendData(Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 1)))
-  --> WaitForPublishesToFinish(Effect#0, 0)
-  --> TransportClosed
+  --> Publish to "topic": "payload" @ ExactlyOnce, retain: False
+<--   Send: Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 1))
+  --> Wait for publishes #1 (timeout 0)
+  --> Transport closed
 <--   DisconnectedUnexpectedly("Transport closed")
-  --> Connect(False, None)
-<--   OpenTransport
-  --> TransportEstablished
-<--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
   --> Received: ConnAck(Ok(SessionPresent))
 <--   ConnectAccepted(SessionPresent)
-      SendData(Publish(PublishDataQoS2(MessageData("topic", "payload", False), True, 1)))
+      Send: Publish(PublishDataQoS2(MessageData("topic", "payload", False), True, 1))
   --> Received: PubRec(1)
-<--   SendData(PubRel(1))
+<--   Send: PubRel(1)
   --> Received: PubComp(1)
-<--   PublishesCompleted(Effect#0(Ok(Nil)))
+<--   Wait for publishes #1 completed: Ok(Nil)

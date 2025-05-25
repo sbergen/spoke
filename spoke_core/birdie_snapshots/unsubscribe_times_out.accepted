@@ -3,11 +3,13 @@ version: 1.2.7
 title: Unsubscribe times out
 ---
 <flushed connect and handshake>
-  --> Unsubscribe(["topic0", "topic1"], Effect#0)
-<--   SendData(Unsubscribe(1, ["topic0", "topic1"]))
+  --> Unsubscribe #1
+        * topic0
+        * topic1
+<--   Send: Unsubscribe(1, ["topic0", "topic1"])
   ... 4999 ms:
   ... 5000 ms:
   --> Tick
-<--   UnsubscribeCompleted(Effect#0(Error(OperationTimedOut)))
-      CloseTransport
+<--   Unsubscribe #1 completed: Error(OperationTimedOut)
+      Close transport
       DisconnectedUnexpectedly("Unsubscribe timed out")

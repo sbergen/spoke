@@ -2,9 +2,10 @@
 version: 1.2.7
 title: Unsubscribe when not connected is an error
 ---
-  --> Connect(True, None)
-<--   OpenTransport
-  --> TransportEstablished
-<--   SendData(Connect(ConnectOptions(True, "my-client", 15, None, None)))
-  --> Unsubscribe(["topic1"], Effect#0)
-<--   UnsubscribeCompleted(Effect#0(Error(NotConnected)))
+  --> Connect - clean session: True, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(True, "my-client", 15, None, None))
+  --> Unsubscribe #1
+        * topic1
+<--   Unsubscribe #1 completed: Error(NotConnected)

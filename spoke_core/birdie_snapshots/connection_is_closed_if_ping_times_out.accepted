@@ -5,8 +5,8 @@ title: Connection is closed if ping times out
 <flushed connect and handshake>
   ... 10000 ms:
   --> Tick
-<--   SendData(PingReq)
+<--   Send: PingReq
   ... 11000 ms:
   --> Tick
-<--   CloseTransport
+<--   Close transport
       DisconnectedUnexpectedly("Ping response timed out")

@@ -1,8 +1,8 @@
 import birdie
 import drift/effect
 import drift/record
-import drift/record/format
 import gleam/bytes_tree
+import gleam/function
 import gleam/list
 import gleam/option.{None}
 import gleam/string
@@ -14,7 +14,7 @@ import spoke/packet/server/incoming as server_in
 import spoke/packet/server/outgoing as server_out
 
 pub type Recorder =
-  record.Recorder(core.State, core.Input, core.Output, String, effect.Formatter)
+  record.Recorder(core.State, core.Input, core.Output, String)
 
 pub fn default() -> Recorder {
   from_options(mqtt.connect_with_id(0, "my-client"))
@@ -29,13 +29,13 @@ pub fn default_connected() -> Recorder {
 }
 
 pub fn from_options(options: mqtt.ConnectOptions(_)) -> Recorder {
-  record.new(core.new_state(options), core.handle_input, formatter())
+  record.new(core.new_state(options), core.handle_input, formatter)
 }
 
 pub fn from_state(state: String) -> Recorder {
   let options = mqtt.connect_with_id(0, "my-client")
   let assert Ok(state) = core.restore_state(options, state)
-  record.new(state, core.handle_input, formatter())
+  record.new(state, core.handle_input, formatter)
 }
 
 pub fn received(recorder: Recorder, packet: server_out.Packet) -> Recorder {
@@ -62,121 +62,145 @@ pub fn snap(recorder: Recorder, title: String) -> Nil {
   birdie.snap(record.to_log(recorder), title)
 }
 
-fn formatter() -> format.Formatter(
-  effect.Formatter,
-  record.Message(core.Input, core.Output),
-) {
-  use formatter, msg <- format.stateful(effect.new_formatter())
-
+fn formatter(msg: record.Message(core.Input, core.Output)) -> String {
   case msg {
-    record.Input(input) -> format_input(formatter, input)
-    record.Output(output) -> format_output(formatter, output)
+    record.Input(input) -> format_input(input)
+    record.Output(output) -> format_output(output)
   }
 }
 
-fn format_input(
-  formatter: effect.Formatter,
-  input: core.Input,
-) -> #(effect.Formatter, String) {
+fn format_input(input: core.Input) -> String {
   case input {
     Perform(command) ->
       case command {
-        core.Disconnect(complete) -> {
-          use complete <- format.map(effect.inspect(formatter, complete))
-          format_record("Disconnect", [complete])
-        }
-        core.GetPendingPublishes(complete) -> {
-          use complete <- format.map(effect.inspect(formatter, complete))
-          format_record("GetPendingPublishes", [complete])
-        }
-        core.Subscribe(requests, complete) -> {
-          use complete <- format.map(effect.inspect(formatter, complete))
-          format_record("Subscribe", [string.inspect(requests), complete])
-        }
-        core.Unsubscribe(topics, complete) -> {
-          use complete <- format.map(effect.inspect(formatter, complete))
-          format_record("Unsubscribe", [string.inspect(topics), complete])
-        }
-        core.WaitForPublishesToFinish(complete, timeout) -> {
-          use complete <- format.map(effect.inspect(formatter, complete))
-          format_record("WaitForPublishesToFinish", [
-            complete,
-            string.inspect(timeout),
-          ])
-        }
-        other -> #(formatter, string.inspect(other))
-      }
-    core.ReceivedData(data) -> {
-      let result = case client_in.decode_packets(data) {
-        Error(_) -> format_record("ReceivedData", [string.inspect(data)])
-        Ok(#([packet], <<>>)) -> "Received: " <> string.inspect(packet)
-        Ok(#(packets, leftover)) -> {
-          let received =
-            packets
-            |> list.map(string.inspect)
-            |> list.prepend("Received:")
-            |> string.join("\n  ")
+        core.Disconnect(complete) -> "Disconnect " <> format_effect(complete)
 
+        core.GetPendingPublishes(complete) ->
+          "Get pending publishes " <> format_effect(complete)
+
+        core.Subscribe(requests, complete) ->
+          "Subscribe "
+          <> format_effect(complete)
+          <> format_list(requests, fn(req) {
+            let mqtt.SubscribeRequest(topic, qos) = req
+            topic <> " - " <> string.inspect(qos)
+          })
+
+        core.Unsubscribe(topics, complete) ->
+          "Unsubscribe "
+          <> format_effect(complete)
+          <> format_list(topics, function.identity)
+
+        core.WaitForPublishesToFinish(complete, timeout) ->
+          "Wait for publishes "
+          <> format_effect(complete)
+          <> " (timeout "
+          <> string.inspect(timeout)
+          <> ")"
+
+        Connect(clean_session, will) ->
+          "Connect - clean session: "
+          <> string.inspect(clean_session)
+          <> ", will: "
+          <> string.inspect(will)
+
+        core.PublishMessage(data) -> {
+          let mqtt.PublishData(topic, payload, qos, retain) = data
+          "Publish to "
+          <> string.inspect(topic)
+          <> ": "
+          <> string.inspect(payload)
+          <> " @ "
+          <> string.inspect(qos)
+          <> ", retain: "
+          <> string.inspect(retain)
+        }
+      }
+
+    core.ReceivedData(data) -> {
+      "Received: "
+      <> case client_in.decode_packets(data) {
+        Error(e) -> string.inspect(data) <> ", error: " <> string.inspect(e)
+        Ok(#([packet], <<>>)) -> string.inspect(packet)
+        Ok(#(packets, leftover)) -> {
+          let received = format_list(packets, string.inspect)
           case leftover {
             <<>> -> received
             data -> received <> "\n  Left over data: " <> string.inspect(data)
           }
         }
       }
-      #(formatter, result)
     }
     core.Timeout(_) -> panic as "Should only be used in tick!"
-    other -> #(formatter, string.inspect(other))
+    TransportEstablished -> "Transport established"
+    core.TransportClosed -> "Transport closed"
+    core.TransportFailed(e) -> "Transport failed: " <> e
   }
 }
 
-fn format_output(
-  formatter: effect.Formatter,
-  output: core.Output,
-) -> #(effect.Formatter, String) {
+fn format_output(output: core.Output) -> String {
   case output {
-    core.PublishesCompleted(action) -> {
-      let assert Ok(action) =
-        effect.inspect_action(formatter, action, string.inspect)
-      #(formatter, format_record("PublishesCompleted", [action]))
-    }
-    core.ReportStateAtDisconnect(action) -> {
-      let assert Ok(action) =
-        effect.inspect_action(formatter, action, string.inspect)
-      #(formatter, format_record("ReportStateAtDisconnect", [action]))
-    }
-    core.ReturnPendingPublishes(action) -> {
-      let assert Ok(action) =
-        effect.inspect_action(formatter, action, string.inspect)
-      #(formatter, format_record("ReturnPendingPublishes", [action]))
-    }
-    core.SubscribeCompleted(action) -> {
-      let assert Ok(action) =
-        effect.inspect_action(formatter, action, string.inspect)
-      #(formatter, format_record("SubscribeCompleted", [action]))
-    }
-    core.UnsubscribeCompleted(action) -> {
-      let assert Ok(action) =
-        effect.inspect_action(formatter, action, string.inspect)
-      #(formatter, format_record("UnsubscribeCompleted", [action]))
-    }
+    core.PublishesCompleted(action) ->
+      "Wait for publishes " <> format_action(action, string.inspect)
+
+    core.ReportStateAtDisconnect(action) ->
+      "Disconnect " <> format_action(action, function.identity)
+
+    core.ReturnPendingPublishes(action) ->
+      "Pending publishes " <> format_action(action, string.inspect)
+
+    core.SubscribeCompleted(action) ->
+      "Subscribe "
+      <> format_action(action, fn(result) {
+        case result {
+          Error(e) -> string.inspect(e)
+          Ok(subscriptions) -> {
+            use sub <- format_list(subscriptions)
+            case sub {
+              mqtt.FailedSubscription(topic) -> topic <> " - Failed!"
+              mqtt.SuccessfulSubscription(topic, qos) ->
+                topic <> " - " <> string.inspect(qos)
+            }
+          }
+        }
+      })
+
+    core.UnsubscribeCompleted(action) ->
+      "Unsubscribe " <> format_action(action, string.inspect)
+
     core.SendData(data) -> {
       let assert Ok(#(packet, <<>>)) =
         server_in.decode_packet(bytes_tree.to_bit_array(data))
-      #(formatter, string.inspect(SendData(packet)))
+      "Send: " <> string.inspect(packet)
     }
-    core.Publish(update) -> #(formatter, case update {
-      mqtt.ConnectionStateChanged(change) -> string.inspect(change)
-      _ -> string.inspect(update)
-    })
-    other -> #(formatter, string.inspect(other))
+    core.Publish(update) ->
+      case update {
+        mqtt.ConnectionStateChanged(change) -> string.inspect(change)
+        _ -> string.inspect(update)
+      }
+    core.CloseTransport -> "Close transport"
+    core.OpenTransport -> "Open transport"
   }
 }
 
-fn format_record(name: String, args: List(String)) -> String {
-  name <> "(" <> string.join(args, ", ") <> ")"
+fn format_effect(e: effect.Effect(a)) -> String {
+  "#" <> string.inspect(effect.id(e))
 }
 
-type FormatHelper {
-  SendData(server_in.Packet)
+fn format_action(a: effect.Action(a), inspect: fn(a) -> String) -> String {
+  "#"
+  <> string.inspect(effect.id(a.effect))
+  <> " completed: "
+  <> inspect(a.argument)
+}
+
+fn format_list(items: List(a), inspect: fn(a) -> String) -> String {
+  case items {
+    [] -> ""
+    items ->
+      "\n"
+      <> items
+      |> list.map(fn(val) { "  * " <> inspect(val) })
+      |> string.join("\n")
+  }
 }

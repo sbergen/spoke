@@ -2,15 +2,15 @@
 version: 1.2.7
 title: Transport failure during connect is published
 ---
-  --> Connect(False, None)
-<--   OpenTransport
-  --> TransportFailed("Fake failure")
-<--   CloseTransport
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport failed: Fake failure
+<--   Close transport
       ConnectFailed("Fake failure")
-  --> Connect(False, None)
-<--   OpenTransport
-  --> TransportEstablished
-<--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  --> TransportFailed("Fake failure")
-<--   CloseTransport
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
+  --> Transport failed: Fake failure
+<--   Close transport
       ConnectFailed("Fake failure")

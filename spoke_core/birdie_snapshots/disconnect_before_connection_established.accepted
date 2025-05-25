@@ -2,8 +2,8 @@
 version: 1.2.7
 title: Disconnect before connection established
 ---
-  --> Connect(False, None)
-<--   OpenTransport
-  --> Disconnect(Effect#0)
-<--   CloseTransport
-      ReportStateAtDisconnect(Effect#0("{\"version\":1,\"data\":{\"packet_id\":1,\"unacked_qos1\":{},\"unreceived_qos2\":{},\"unreleased_qos2\":[],\"incomplete_qos2_in\":[]}}"))
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Disconnect #1
+<--   Close transport
+      Disconnect #1 completed: {"version":1,"data":{"packet_id":1,"unacked_qos1":{},"unreceived_qos2":{},"unreleased_qos2":[],"incomplete_qos2_in":[]}}

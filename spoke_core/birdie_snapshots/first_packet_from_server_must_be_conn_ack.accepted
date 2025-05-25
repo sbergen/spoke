@@ -2,10 +2,10 @@
 version: 1.2.7
 title: First packet from server MUST be ConnAck
 ---
-  --> Connect(False, None)
-<--   OpenTransport
-  --> TransportEstablished
-<--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
   --> Received: PingResp
-<--   CloseTransport
+<--   Close transport
       DisconnectedUnexpectedly("The first packet sent from the Server to the Client MUST be a CONNACK Packet")

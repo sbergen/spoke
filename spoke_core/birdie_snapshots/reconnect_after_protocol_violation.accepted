@@ -3,9 +3,9 @@ version: 1.2.7
 title: Reconnect after protocol violation
 ---
 <flushed protocol violation>
-  --> Connect(False, None)
-<--   OpenTransport
-  --> TransportEstablished
-<--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
   --> Received: ConnAck(Ok(SessionNotPresent))
 <--   ConnectAccepted(SessionNotPresent)

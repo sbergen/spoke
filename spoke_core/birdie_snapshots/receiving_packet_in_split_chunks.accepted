@@ -3,7 +3,7 @@ version: 1.2.7
 title: Receiving packet in split chunks
 ---
 <flushed connect and handshake>
-  --> Received:
+  --> Received: 
         Left over data: "0\u{000E}\u{0000}\u{0005}t"
-  --> ReceivedData("opicpayload")
+  --> Received: "opicpayload", error: InvalidData
 <--   ReceivedMessage("topic", "payload", False)

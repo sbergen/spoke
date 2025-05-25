@@ -2,12 +2,12 @@
 version: 1.2.7
 title: Receiving multiple packets in first chunk of data
 ---
-  --> Connect(False, None)
-<--   OpenTransport
-  --> TransportEstablished
-<--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  --> Received:
-        ConnAck(Ok(SessionPresent))
-        Publish(PublishDataQoS0(MessageData("topic", "payload", False)))
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
+  --> Received: 
+        * ConnAck(Ok(SessionPresent))
+        * Publish(PublishDataQoS0(MessageData("topic", "payload", False)))
 <--   ConnectAccepted(SessionPresent)
       ReceivedMessage("topic", "payload", False)
