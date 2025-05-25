@@ -8,6 +8,6 @@ title: Concurrent connects are no-ops
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
   --> Connect(False, None)
-  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+  --> Received: ConnAck(Ok(SessionNotPresent))
 <--   ConnectAccepted(SessionNotPresent)
   --> Connect(False, None)

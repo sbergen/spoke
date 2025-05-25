@@ -5,7 +5,7 @@ title: Invalid suback kills connection
 <flushed connect and handshake>
   --> Subscribe([SubscribeRequest("topic0", AtMostOnce)], Effect#0)
 <--   SendData(Subscribe(1, [SubscribeRequest("topic0", QoS0)]))
-  --> ReceivedPacket(SubAck(2, [Ok(QoS0)]))
+  --> Received: SubAck(2, [Ok(QoS0)])
 <--   SubscribeCompleted(Effect#0(Error(ProtocolViolation)))
       CloseTransport
       DisconnectedUnexpectedly("Received invalid packet id in subscribe ack")

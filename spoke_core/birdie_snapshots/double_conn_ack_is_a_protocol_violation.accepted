@@ -6,8 +6,8 @@ title: Double ConnAck is a protocol violation
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+  --> Received: ConnAck(Ok(SessionNotPresent))
 <--   ConnectAccepted(SessionNotPresent)
-  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+  --> Received: ConnAck(Ok(SessionNotPresent))
 <--   CloseTransport
       DisconnectedUnexpectedly("Got CONNACK while already connected")

@@ -4,6 +4,6 @@ title: ConnAck before Connect is a protocol violation
 ---
   --> Connect(False, None)
 <--   OpenTransport
-  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+  --> Received: ConnAck(Ok(SessionNotPresent))
 <--   CloseTransport
       DisconnectedUnexpectedly("Received data before sending CONNECT")

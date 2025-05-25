@@ -9,10 +9,10 @@ title: Wait for publishes to finish happy path
 <--   SendData(Publish(PublishDataQoS2(MessageData("topic2", "payload2", False), False, 2)))
   --> WaitForPublishesToFinish(Effect#0, 10)
   --> WaitForPublishesToFinish(Effect#1, 10)
-  --> ReceivedPacket(PubAck(1))
-  --> ReceivedPacket(PubRec(2))
+  --> Received: PubAck(1)
+  --> Received: PubRec(2)
 <--   SendData(PubRel(2))
-  --> ReceivedPacket(PubComp(2))
+  --> Received: PubComp(2)
 <--   PublishesCompleted(Effect#0(Ok(Nil)))
       PublishesCompleted(Effect#1(Ok(Nil)))
   ... 100 ms:

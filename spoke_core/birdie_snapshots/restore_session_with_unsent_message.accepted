@@ -6,6 +6,6 @@ title: Restore session with unsent message
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  --> ReceivedPacket(ConnAck(Ok(SessionPresent)))
+  --> Received: ConnAck(Ok(SessionPresent))
 <--   ConnectAccepted(SessionPresent)
       SendData(Publish(PublishDataQoS1(MessageData("topic", "", False), True, 1)))

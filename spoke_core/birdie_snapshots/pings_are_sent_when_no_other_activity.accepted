@@ -8,7 +8,7 @@ title: Pings are sent when no other activity
   --> Tick
 <--   SendData(PingReq)
   ... 10100 ms:
-  --> ReceivedPacket(PingResp)
+  --> Received: PingResp
   ... 20099 ms:
   ... 20100 ms:
   --> Tick

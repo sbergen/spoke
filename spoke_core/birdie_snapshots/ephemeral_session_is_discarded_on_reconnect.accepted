@@ -6,7 +6,7 @@ title: Ephemeral session is discarded on reconnect
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(True, "my-client", 15, None, None)))
-  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+  --> Received: ConnAck(Ok(SessionNotPresent))
 <--   ConnectAccepted(SessionNotPresent)
   --> PublishMessage(PublishData("topic", "payload", AtLeastOnce, False))
 <--   SendData(Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1)))
@@ -16,7 +16,7 @@ title: Ephemeral session is discarded on reconnect
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+  --> Received: ConnAck(Ok(SessionNotPresent))
 <--   ConnectAccepted(SessionNotPresent)
   --> GetPendingPublishes(Effect#0)
 <--   ReturnPendingPublishes(Effect#0(0))

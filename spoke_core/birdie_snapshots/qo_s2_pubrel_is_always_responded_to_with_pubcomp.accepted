@@ -3,10 +3,10 @@ version: 1.2.7
 title: QoS2 pubrel is always responded to with pubcomp
 ---
 <flushed connect and handshake>
-  --> ReceivedPacket(Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 42)))
+  --> Received: Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 42))
 <--   SendData(PubRec(42))
       ReceivedMessage("topic", "payload", False)
-  --> ReceivedPacket(PubRel(42))
+  --> Received: PubRel(42)
 <--   SendData(PubComp(42))
   --> TransportClosed
 <--   DisconnectedUnexpectedly("Transport closed")
@@ -14,9 +14,9 @@ title: QoS2 pubrel is always responded to with pubcomp
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  --> ReceivedPacket(ConnAck(Ok(SessionPresent)))
+  --> Received: ConnAck(Ok(SessionPresent))
 <--   ConnectAccepted(SessionPresent)
-  --> ReceivedPacket(PubRel(42))
+  --> Received: PubRel(42)
 <--   SendData(PubComp(42))
   --> Disconnect(Effect#0)
 <--   SendData(Disconnect)

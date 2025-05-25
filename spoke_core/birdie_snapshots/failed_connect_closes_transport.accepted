@@ -6,6 +6,6 @@ title: Failed connect closes transport
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  --> ReceivedPacket(ConnAck(Error(BadUsernameOrPassword)))
+  --> Received: ConnAck(Error(BadUsernameOrPassword))
 <--   ConnectRejected(BadUsernameOrPassword)
       CloseTransport

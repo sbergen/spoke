@@ -12,6 +12,6 @@ title: Wait for publishes to finish clean session
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(True, "my-client", 15, None, None)))
-  --> ReceivedPacket(ConnAck(Ok(SessionNotPresent)))
+  --> Received: ConnAck(Ok(SessionNotPresent))
 <--   ConnectAccepted(SessionNotPresent)
       PublishesCompleted(Effect#0(Error(SessionReset)))

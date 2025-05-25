@@ -12,8 +12,8 @@ title: QoS1 republish after reconnect
 <--   OpenTransport
   --> TransportEstablished
 <--   SendData(Connect(ConnectOptions(False, "my-client", 15, None, None)))
-  --> ReceivedPacket(ConnAck(Ok(SessionPresent)))
+  --> Received: ConnAck(Ok(SessionPresent))
 <--   ConnectAccepted(SessionPresent)
       SendData(Publish(PublishDataQoS1(MessageData("topic", "payload", False), True, 1)))
-  --> ReceivedPacket(PubAck(1))
+  --> Received: PubAck(1)
 <--   PublishesCompleted(Effect#0(Ok(Nil)))

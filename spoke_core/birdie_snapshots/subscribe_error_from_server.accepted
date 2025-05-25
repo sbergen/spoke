@@ -5,5 +5,5 @@ title: Subscribe error from server
 <flushed connect and handshake>
   --> Subscribe([SubscribeRequest("topic0", AtMostOnce), SubscribeRequest("topic1", AtLeastOnce)], Effect#0)
 <--   SendData(Subscribe(1, [SubscribeRequest("topic0", QoS0), SubscribeRequest("topic1", QoS1)]))
-  --> ReceivedPacket(SubAck(1, [Ok(QoS0), Error(Nil)]))
+  --> Received: SubAck(1, [Ok(QoS0), Error(Nil)])
 <--   SubscribeCompleted(Effect#0(Ok([SuccessfulSubscription("topic0", AtMostOnce), FailedSubscription("topic1")])))

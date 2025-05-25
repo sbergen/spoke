@@ -3,6 +3,7 @@ version: 1.2.7
 title: Receiving packet in split chunks
 ---
 <flushed connect and handshake>
-  --> ReceivedPartial([], "0\u{000E}\u{0000}\u{0005}t")
+  --> Received:
+        Left over data: "0\u{000E}\u{0000}\u{0005}t"
   --> ReceivedData("opicpayload")
 <--   ReceivedMessage("topic", "payload", False)

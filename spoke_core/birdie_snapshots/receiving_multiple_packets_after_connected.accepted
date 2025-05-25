@@ -3,6 +3,8 @@ version: 1.2.7
 title: Receiving multiple packets after connected
 ---
 <flushed connect and handshake>
-  --> ReceivedPackets([Publish(PublishDataQoS0(MessageData("topic", "payload", False))), Publish(PublishDataQoS0(MessageData("topic2", "payload2", False)))])
+  --> Received:
+        Publish(PublishDataQoS0(MessageData("topic", "payload", False)))
+        Publish(PublishDataQoS0(MessageData("topic2", "payload2", False)))
 <--   ReceivedMessage("topic", "payload", False)
       ReceivedMessage("topic2", "payload2", False)

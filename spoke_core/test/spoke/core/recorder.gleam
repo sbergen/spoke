@@ -82,23 +82,23 @@ fn format_input(
     Perform(command) ->
       case command {
         core.Disconnect(complete) -> {
-          use complete <- format.map(formatter, effect.inspect, complete)
+          use complete <- format.map(effect.inspect(formatter, complete))
           format_record("Disconnect", [complete])
         }
         core.GetPendingPublishes(complete) -> {
-          use complete <- format.map(formatter, effect.inspect, complete)
+          use complete <- format.map(effect.inspect(formatter, complete))
           format_record("GetPendingPublishes", [complete])
         }
         core.Subscribe(requests, complete) -> {
-          use complete <- format.map(formatter, effect.inspect, complete)
+          use complete <- format.map(effect.inspect(formatter, complete))
           format_record("Subscribe", [string.inspect(requests), complete])
         }
         core.Unsubscribe(topics, complete) -> {
-          use complete <- format.map(formatter, effect.inspect, complete)
+          use complete <- format.map(effect.inspect(formatter, complete))
           format_record("Unsubscribe", [string.inspect(topics), complete])
         }
         core.WaitForPublishesToFinish(complete, timeout) -> {
-          use complete <- format.map(formatter, effect.inspect, complete)
+          use complete <- format.map(effect.inspect(formatter, complete))
           format_record("WaitForPublishesToFinish", [
             complete,
             string.inspect(timeout),
@@ -109,10 +109,19 @@ fn format_input(
     core.ReceivedData(data) -> {
       let result = case client_in.decode_packets(data) {
         Error(_) -> format_record("ReceivedData", [string.inspect(data)])
-        Ok(#([packet], <<>>)) -> string.inspect(ReceivedPacket(packet))
-        Ok(#(packets, <<>>)) -> string.inspect(ReceivedPackets(packets))
-        Ok(#(packets, leftover)) ->
-          string.inspect(ReceivedPartial(packets, leftover))
+        Ok(#([packet], <<>>)) -> "Received: " <> string.inspect(packet)
+        Ok(#(packets, leftover)) -> {
+          let received =
+            packets
+            |> list.map(string.inspect)
+            |> list.prepend("Received:")
+            |> string.join("\n  ")
+
+          case leftover {
+            <<>> -> received
+            data -> received <> "\n  Left over data: " <> string.inspect(data)
+          }
+        }
       }
       #(formatter, result)
     }
@@ -170,7 +179,4 @@ fn format_record(name: String, args: List(String)) -> String {
 
 type FormatHelper {
   SendData(server_in.Packet)
-  ReceivedPacket(client_in.Packet)
-  ReceivedPackets(List(client_in.Packet))
-  ReceivedPartial(List(client_in.Packet), BitArray)
 }
