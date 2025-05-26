@@ -515,7 +515,18 @@ fn transport_established(context: Context, state: State) -> Step {
       |> drift.output(send(outgoing.Connect(options)))
       |> drift.continue(State(..state, connection:))
     }
-    _ -> unexpected_connection_state(context, state, "establishing transport")
+    _ ->
+      drift.stop_with_error(
+        context,
+        "Unexpected connection state when establishing transport:"
+          <> case state.connection {
+          Connected(..) -> "Connected"
+          Connecting(..) -> "Connecting"
+          Disconnecting -> "Disconnecting"
+          NotConnected -> "Not connected"
+          WaitingForConnAck(..) -> "Waiting for CONNACK"
+        },
+      )
   }
 }
 
@@ -781,7 +792,6 @@ fn handle_pubcomp(context: Context, state: State, id: Int) -> Step {
 }
 
 fn handle_pubrel(context: Context, state: State, id: Int) -> Step {
-  // TODO, what if not connected?
   context
   // Whether or not we already sent PubComp, we always do it when receiving PubRel.
   // This is in case we lose the connection after PubRec
@@ -889,26 +899,6 @@ fn kill_connection(context: Context, state: State, error: String) -> Step {
       pending_subs: dict.new(),
       pending_unsubs: dict.new(),
     ),
-  )
-}
-
-fn unexpected_connection_state(
-  context: Context,
-  state: State,
-  operation: String,
-) -> Step {
-  drift.stop_with_error(
-    context,
-    "Unexpected connection state when "
-      <> operation
-      <> ": "
-      <> case state.connection {
-      Connected(..) -> "Connected"
-      Connecting(..) -> "Connecting"
-      Disconnecting -> "Disconnecting"
-      NotConnected -> "Not connected"
-      WaitingForConnAck(..) -> "Waiting for CONNACK"
-    },
   )
 }
 
