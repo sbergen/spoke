@@ -149,6 +149,7 @@ fn close_transport(
     Some(socket) -> {
       // TODO Can we do anything with the error here?
       let _ = mug.shutdown(socket)
+      process.send(state.self, core.TransportClosed)
       IoState(..state, socket: None)
     }
   }
