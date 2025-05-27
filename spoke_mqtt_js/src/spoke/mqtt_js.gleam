@@ -1,9 +1,11 @@
 import drift/effect
 import drift/js/runtime.{type Runtime}
 import gleam/bytes_tree.{type BytesTree}
+import gleam/javascript/promise.{type Promise}
 import gleam/option.{type Option, None, Some}
+import gleam/result
 import gleam/string
-import spoke/core
+import spoke/core.{Connect, Perform, Subscribe, SubscribeToUpdates}
 import spoke/mqtt
 import spoke/mqtt_js/internal/websocket
 
@@ -28,6 +30,38 @@ pub fn using_websocket(
 
 pub fn start_session(options: mqtt.ConnectOptions(TransportOptions)) -> Client {
   from_state(options, core.new_state(options))
+}
+
+pub fn subscribe_to_updates(
+  client: Client,
+  callback: fn(mqtt.Update) -> Nil,
+) -> Nil {
+  let publish = effect.from(callback)
+  runtime.send(client.self, Perform(SubscribeToUpdates(publish)))
+}
+
+pub fn connect(
+  client: Client,
+  clean_session: Bool,
+  will: Option(mqtt.PublishData),
+) -> Nil {
+  runtime.send(client.self, Perform(Connect(clean_session, will)))
+}
+
+pub fn subscribe(
+  client: Client,
+  requests: List(mqtt.SubscribeRequest),
+) -> Promise(Result(List(mqtt.Subscription), mqtt.OperationError)) {
+  // TODO: Add call with timeout to drift
+  use result <- promise.map({
+    use effect <- runtime.call_forever(client.self)
+    Perform(Subscribe(requests, effect))
+  })
+
+  // TODO: Think about errors
+  result
+  |> result.replace_error(mqtt.OperationTimedOut)
+  |> result.flatten
 }
 
 //===== Privates =====/
@@ -74,9 +108,8 @@ fn open_transport(
 ) -> effect.Context(IoState, Nil) {
   use state <- effect.map_context(ctx)
   let WebsocketOptions(host, port, timeout) = state.options
-  case websocket.connect(host, port, timeout) {
+  case websocket.connect(host, port, timeout, send) {
     Ok(socket) -> {
-      send(core.TransportEstablished)
       IoState(..state, socket: Some(socket))
     }
     Error(e) -> {
