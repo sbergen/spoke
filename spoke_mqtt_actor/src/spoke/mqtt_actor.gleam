@@ -106,10 +106,10 @@ fn new_io(options: TransportOptions) -> #(IoState, Selector(core.Input)) {
 }
 
 fn handle_output(
-  ctx: effect.Context(IoState),
+  ctx: effect.Context(IoState, Selector(core.Input)),
   output: core.Output,
-) -> actor.IoResult(effect.Context(IoState), a) {
-  actor.IoOk(case output {
+) -> Result(effect.Context(IoState, Selector(core.Input)), a) {
+  Ok(case output {
     core.OpenTransport -> open_transport(ctx)
     core.CloseTransport -> close_transport(ctx)
     core.SendData(data) -> send_data(ctx, data)
@@ -122,7 +122,9 @@ fn handle_output(
   })
 }
 
-fn open_transport(ctx: effect.Context(IoState)) -> effect.Context(IoState) {
+fn open_transport(
+  ctx: effect.Context(IoState, Selector(core.Input)),
+) -> effect.Context(IoState, Selector(core.Input)) {
   use state <- effect.map_context(ctx)
   let TcpOptions(host, port, timeout) = state.options
   case mug.connect(mug.ConnectionOptions(host, port, timeout)) {
@@ -138,7 +140,9 @@ fn open_transport(ctx: effect.Context(IoState)) -> effect.Context(IoState) {
   }
 }
 
-fn close_transport(ctx: effect.Context(IoState)) -> effect.Context(IoState) {
+fn close_transport(
+  ctx: effect.Context(IoState, Selector(core.Input)),
+) -> effect.Context(IoState, Selector(core.Input)) {
   use state <- effect.map_context(ctx)
   case state.socket {
     None -> state
@@ -151,9 +155,9 @@ fn close_transport(ctx: effect.Context(IoState)) -> effect.Context(IoState) {
 }
 
 fn send_data(
-  ctx: effect.Context(IoState),
+  ctx: effect.Context(IoState, Selector(core.Input)),
   data: BytesTree,
-) -> effect.Context(IoState) {
+) -> effect.Context(IoState, Selector(core.Input)) {
   use state <- effect.map_context(ctx)
   case state.socket {
     None -> {

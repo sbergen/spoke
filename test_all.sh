@@ -3,7 +3,7 @@ cd "$(dirname "$0")"
 
 set -e
 
-for dirname in "spoke_packet" "spoke_mqtt" "spoke_core" "spoke_tcp"; do
+for dirname in "spoke_packet" "spoke_mqtt" "spoke_core" "spoke_tcp" "spoke_mqtt_actor"; do
     pushd "$dirname" > /dev/null
     echo "======================================="
     echo " Testing $dirname"
