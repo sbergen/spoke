@@ -164,7 +164,7 @@ fn subscribe(
       let #(session, id) = session.reserve_packet_id(state.session)
 
       let #(context, timer) =
-        drift.handle_after(
+        drift.start_timer(
           context,
           state.options.server_timeout,
           Timeout(SubscribeTimedOut(id)),
@@ -209,7 +209,7 @@ fn unsubscribe(
     [topic, ..topics], Connected(_) -> {
       let #(session, id) = session.reserve_packet_id(state.session)
       let #(context, timer) =
-        drift.handle_after(
+        drift.start_timer(
           context,
           state.options.server_timeout,
           Timeout(UnsubscribeTimedOut(id)),
@@ -248,7 +248,7 @@ fn wait_for_publishes(
 
     _ -> {
       let #(context, timer) =
-        drift.handle_after(
+        drift.start_timer(
           context,
           timeout,
           Timeout(WaitForPublishesTimeout(complete)),
@@ -413,7 +413,7 @@ fn connect(
         )
 
       let #(context, timer) =
-        drift.handle_after(
+        drift.start_timer(
           context,
           state.options.server_timeout,
           Timeout(ConnectTimedOut),
@@ -809,7 +809,7 @@ fn start_send_ping_timer(context: Context, state: State) -> Step {
     |> maybe_cancel_timer(state.connect_timer)
 
   let #(context, timer) =
-    drift.handle_after(context, state.options.keep_alive, Timeout(SendPing))
+    drift.start_timer(context, state.options.keep_alive, Timeout(SendPing))
 
   drift.continue(
     context,
@@ -826,7 +826,7 @@ fn start_ping_timeout_timer(context: Context, state: State) -> Step {
   let context = maybe_cancel_timer(context, state.ping_resp_timer)
 
   let #(context, timer) =
-    drift.handle_after(
+    drift.start_timer(
       context,
       state.options.server_timeout,
       Timeout(PingRespTimedOut),
