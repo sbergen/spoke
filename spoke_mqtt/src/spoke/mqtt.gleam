@@ -79,6 +79,9 @@ pub type OperationError {
   ProtocolViolation
   /// The session was reset, invalidating the operation
   SessionReset
+  /// The client runtime ran into an error.
+  /// These errors are most likely not recoverable.
+  ClientRuntimeError(String)
 }
 
 /// The result of a subscribe operation

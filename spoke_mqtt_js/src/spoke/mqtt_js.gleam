@@ -52,15 +52,16 @@ pub fn subscribe(
   client: Client,
   requests: List(mqtt.SubscribeRequest),
 ) -> Promise(Result(List(mqtt.Subscription), mqtt.OperationError)) {
-  // TODO: Add call with timeout to drift
   use result <- promise.map({
-    use effect <- runtime.call_forever(client.self)
+    use effect <- runtime.call(
+      client.self,
+      2 * client.options.server_timeout_ms,
+    )
     Perform(Subscribe(requests, effect))
   })
 
-  // TODO: Think about errors
   result
-  |> result.replace_error(mqtt.OperationTimedOut)
+  |> result.map_error(fn(e) { mqtt.ClientRuntimeError(string.inspect(e)) })
   |> result.flatten
 }
 
