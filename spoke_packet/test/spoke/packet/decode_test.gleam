@@ -59,5 +59,5 @@ pub fn all_multiple_packets_test() {
 
 pub fn all_invalid_data_test() {
   let assert Error(packet.InvalidPacketIdentifier(_)) =
-    decode.all(<<13:4, 0:4, 0:8, 0xdeadbeef>>, incoming.decode_packet)
+    decode.all(<<13:4, 0:4, 0:8, 255>>, incoming.decode_packet)
 }
