@@ -63,10 +63,11 @@ pub fn snap(recorder: Recorder, title: String) -> Nil {
   birdie.snap(record.to_log(recorder), title)
 }
 
-fn formatter(msg: record.Message(core.Input, core.Output)) -> String {
+fn formatter(msg: record.Message(core.Input, core.Output, String)) -> String {
   case msg {
     record.Input(input) -> format_input(input)
     record.Output(output) -> format_output(output)
+    record.Error(error) -> error
   }
 }
 

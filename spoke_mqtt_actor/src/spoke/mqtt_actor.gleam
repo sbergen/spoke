@@ -95,7 +95,7 @@ type IoState {
 fn new_io(options: TransportOptions) -> #(IoState, Selector(core.Input)) {
   let self = process.new_subject()
   let tcp_selector = {
-    use msg <- mug.selecting_tcp_messages(process.new_selector())
+    use msg <- mug.select_tcp_messages(process.new_selector())
     case msg {
       mug.Packet(_, data) -> core.ReceivedData(data)
       mug.SocketClosed(_) -> core.TransportClosed
@@ -127,7 +127,9 @@ fn open_transport(
 ) -> effect.Context(IoState, Selector(core.Input)) {
   use state <- effect.map_context(ctx)
   let TcpOptions(host, port, timeout) = state.options
-  case mug.connect(mug.ConnectionOptions(host, port, timeout)) {
+  case
+    mug.connect(mug.ConnectionOptions(host, port, timeout, mug.Ipv6Preferred))
+  {
     Ok(socket) -> {
       mug.receive_all_packets_as_messages(socket)
       process.send(state.self, core.TransportEstablished)
