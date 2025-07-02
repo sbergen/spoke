@@ -137,6 +137,17 @@ pub fn connect_timeout_test() {
   |> recorder.snap("Connect can time out at all stages")
 }
 
+pub fn invalid_data_during_connect_test() {
+  mqtt.connect_with_id(0, "my-client")
+  |> mqtt.server_timeout_ms(1000)
+  |> recorder.from_options()
+  |> record.input(Perform(core.SubscribeToUpdates(record.discard())))
+  |> record.input(Perform(Connect(False, None)))
+  |> record.input(TransportEstablished)
+  |> record.input(core.ReceivedData(<<1>>))
+  |> recorder.snap("Invalid data during handshake closes connection")
+}
+
 fn protocol_violation_after_connect(recorder: Recorder) -> Recorder {
   recorder
   |> record.input(Perform(Connect(False, None)))

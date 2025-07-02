@@ -15,6 +15,9 @@ pub fn new() -> Connection {
   Connection(<<>>)
 }
 
+/// Attempts to decode the first incoming packet.
+/// If there is not enough data, will return success with `None`,
+/// but if there is a decoding error, will return an error.
 pub fn receive_one(
   connection: Connection,
   data: BitArray,
@@ -29,6 +32,7 @@ pub fn receive_one(
   Ok(#(Connection(data), packet))
 }
 
+/// Attempts to decode all available incoming packets.
 pub fn receive_all(
   connection: Connection,
   data: BitArray,

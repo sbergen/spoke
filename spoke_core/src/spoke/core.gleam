@@ -572,18 +572,25 @@ fn disconnect_unexpectedly(
 fn receive(context: Context, state: State, data: BitArray) -> Step {
   case state.connection {
     WaitingForConnAck(connection) -> {
-      let assert Ok(#(connection, packet)) =
-        connection.receive_one(connection, data)
-
-      case packet {
-        Some(packet) -> {
+      case connection.receive_one(connection, data) {
+        Error(e) ->
+          kill_connection(
+            context,
+            state,
+            "Received invalid data while connecting: " <> string.inspect(e),
+          )
+        Ok(#(connection, Some(packet))) -> {
           let step = handle_first_packet(context, state, connection, packet)
 
           // Process the rest of the data, if any
           use context, state <- drift.chain(step)
           receive(context, state, <<>>)
         }
-        None -> drift.continue(context, state)
+        Ok(#(connection, None)) ->
+          drift.continue(
+            context,
+            State(..state, connection: WaitingForConnAck(connection)),
+          )
       }
     }
 
