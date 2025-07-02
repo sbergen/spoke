@@ -80,6 +80,12 @@ pub fn receive_message_qos2_duplicate_pubrel_test() {
   |> recorder.snap("QoS2 pubrel is always responded to with pubcomp")
 }
 
+pub fn receive_invalid_data_while_connected_test() {
+  recorder.default_connected()
+  |> record.input(core.ReceivedData(<<1>>))
+  |> recorder.snap("Receiving invalid data while connected closes connection")
+}
+
 fn reconnect(recorder: recorder.Recorder) -> recorder.Recorder {
   recorder
   |> record.input(Perform(Connect(False, None)))

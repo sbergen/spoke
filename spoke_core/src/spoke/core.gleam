@@ -595,29 +595,20 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
     }
 
     Connected(connection) -> {
-      let assert Ok(#(connection, packets)) =
-        connection.receive_all(connection, data)
-
-      let step =
-        start_send_ping_timer(
-          context,
-          State(..state, connection: Connected(connection)),
-        )
-
-      use step, packet <- list.fold(packets, step)
-      use context, state <- drift.chain(step)
-      case packet {
-        incoming.ConnAck(_) ->
-          kill_connection(context, state, "Got CONNACK while already connected")
-        incoming.PingResp -> drift.continue(context, state)
-        incoming.PubAck(id) -> handle_puback(context, state, id)
-        incoming.PubRec(id) -> handle_pubrec(context, state, id)
-        incoming.PubComp(id) -> handle_pubcomp(context, state, id)
-        incoming.PubRel(id) -> handle_pubrel(context, state, id)
-        incoming.Publish(data) -> handle_publish(context, state, data)
-        incoming.SubAck(id, return_codes) ->
-          handle_suback(context, state, id, return_codes)
-        incoming.UnsubAck(id) -> handle_unsuback(context, state, id)
+      case connection.receive_all(connection, data) {
+        Error(e) ->
+          kill_connection(
+            context,
+            state,
+            "Received invalid data while connected: " <> string.inspect(e),
+          )
+        Ok(#(connection, packets)) -> {
+          start_send_ping_timer(
+            context,
+            State(..state, connection: Connected(connection)),
+          )
+          |> handle_packets_while_connected(packets)
+        }
       }
     }
 
@@ -628,6 +619,27 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
     // so we just ignore it.
     NotConnected -> drift.continue(context, state)
     Disconnecting -> drift.continue(context, state)
+  }
+}
+
+fn handle_packets_while_connected(
+  step: Step,
+  packets: List(incoming.Packet),
+) -> Step {
+  use step, packet <- list.fold(packets, step)
+  use context, state <- drift.chain(step)
+  case packet {
+    incoming.ConnAck(_) ->
+      kill_connection(context, state, "Got CONNACK while already connected")
+    incoming.PingResp -> drift.continue(context, state)
+    incoming.PubAck(id) -> handle_puback(context, state, id)
+    incoming.PubRec(id) -> handle_pubrec(context, state, id)
+    incoming.PubComp(id) -> handle_pubcomp(context, state, id)
+    incoming.PubRel(id) -> handle_pubrel(context, state, id)
+    incoming.Publish(data) -> handle_publish(context, state, data)
+    incoming.SubAck(id, return_codes) ->
+      handle_suback(context, state, id, return_codes)
+    incoming.UnsubAck(id) -> handle_unsuback(context, state, id)
   }
 }
 
