@@ -1,4 +1,4 @@
-import drift/effect
+import drift.{type EffectContext}
 import drift/js/runtime.{type Runtime}
 import gleam/bytes_tree.{type BytesTree}
 import gleam/javascript/promise.{type Promise}
@@ -36,7 +36,7 @@ pub fn subscribe_to_updates(
   client: Client,
   callback: fn(mqtt.Update) -> Nil,
 ) -> Nil {
-  let publish = effect.from(callback)
+  let publish = drift.new_effect(callback)
   runtime.send(client.self, Perform(SubscribeToUpdates(publish)))
 }
 
@@ -86,28 +86,28 @@ type IoState {
 }
 
 fn handle_output(
-  ctx: effect.Context(IoState, Nil),
+  ctx: EffectContext(IoState),
   output: core.Output,
   send: fn(core.Input) -> Nil,
-) -> Result(effect.Context(IoState, Nil), a) {
+) -> Result(EffectContext(IoState), a) {
   Ok(case output {
     core.OpenTransport -> open_transport(ctx, send)
     core.CloseTransport -> close_transport(ctx, send)
     core.SendData(data) -> send_data(ctx, data, send)
-    core.Publish(action) -> effect.perform(ctx, action)
-    core.PublishesCompleted(action) -> effect.perform(ctx, action)
-    core.SubscribeCompleted(action) -> effect.perform(ctx, action)
-    core.UnsubscribeCompleted(action) -> effect.perform(ctx, action)
-    core.ReportStateAtDisconnect(action) -> effect.perform(ctx, action)
-    core.ReturnPendingPublishes(action) -> effect.perform(ctx, action)
+    core.Publish(action) -> drift.perform_effect(ctx, action)
+    core.PublishesCompleted(action) -> drift.perform_effect(ctx, action)
+    core.SubscribeCompleted(action) -> drift.perform_effect(ctx, action)
+    core.UnsubscribeCompleted(action) -> drift.perform_effect(ctx, action)
+    core.ReportStateAtDisconnect(action) -> drift.perform_effect(ctx, action)
+    core.ReturnPendingPublishes(action) -> drift.perform_effect(ctx, action)
   })
 }
 
 fn open_transport(
-  ctx: effect.Context(IoState, Nil),
+  ctx: EffectContext(IoState),
   send: fn(core.Input) -> Nil,
-) -> effect.Context(IoState, Nil) {
-  use state <- effect.map_context(ctx)
+) -> EffectContext(IoState) {
+  use state <- drift.use_effect_context(ctx)
   let WebsocketOptions(host, port, timeout) = state.options
   case websocket.connect(host, port, timeout, send) {
     Ok(socket) -> {
@@ -121,10 +121,10 @@ fn open_transport(
 }
 
 fn close_transport(
-  ctx: effect.Context(IoState, Nil),
+  ctx: EffectContext(IoState),
   send: fn(core.Input) -> Nil,
-) -> effect.Context(IoState, Nil) {
-  use state <- effect.map_context(ctx)
+) -> EffectContext(IoState) {
+  use state <- drift.use_effect_context(ctx)
   case state.socket {
     None -> state
     Some(socket) -> {
@@ -136,11 +136,11 @@ fn close_transport(
 }
 
 fn send_data(
-  ctx: effect.Context(IoState, Nil),
+  ctx: EffectContext(IoState),
   data: BytesTree,
   send: fn(core.Input) -> Nil,
-) -> effect.Context(IoState, Nil) {
-  use state <- effect.map_context(ctx)
+) -> EffectContext(IoState) {
+  use state <- drift.use_effect_context(ctx)
   case state.socket {
     None -> {
       send(core.TransportFailed("Not connected"))

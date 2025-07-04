@@ -1,5 +1,4 @@
-import drift.{type Timer}
-import drift/effect.{type Action, type Effect}
+import drift.{type Action, type Effect, type Timer}
 import gleam/bytes_tree.{type BytesTree}
 import gleam/dict.{type Dict}
 import gleam/list
@@ -446,7 +445,7 @@ fn disconnect(context: Context, state: State, complete: Effect(String)) -> Step 
   }
 
   let result =
-    ReportStateAtDisconnect(effect.bind(
+    ReportStateAtDisconnect(drift.bind_effect(
       complete,
       session.to_json(state.session),
     ))
@@ -874,8 +873,9 @@ fn check_publish_completion_with(
           state.publish_completion_listeners,
           context,
         )
-        let context = drift.cancel_timer(context, timer).0
-        drift.perform(context, PublishesCompleted, complete, result)
+
+        drift.cancel_timer(context, timer).0
+        |> drift.perform(PublishesCompleted, complete, result)
       }
       |> drift.continue(
         State(..state, publish_completion_listeners: dict.new()),
@@ -888,7 +888,7 @@ fn check_publish_completion_with(
 fn kill_connection(context: Context, state: State, error: String) -> Step {
   let sub_errors = {
     use pending_sub <- list.map(dict.values(state.pending_subs))
-    SubscribeCompleted(effect.bind(
+    SubscribeCompleted(drift.bind_effect(
       pending_sub.complete,
       Error(mqtt.ProtocolViolation),
     ))
@@ -896,7 +896,7 @@ fn kill_connection(context: Context, state: State, error: String) -> Step {
 
   let unsub_errors = {
     use pending_unsub <- list.map(dict.values(state.pending_unsubs))
-    UnsubscribeCompleted(effect.bind(
+    UnsubscribeCompleted(drift.bind_effect(
       pending_unsub.complete,
       Error(mqtt.ProtocolViolation),
     ))
@@ -932,7 +932,7 @@ fn publish_update(
 ) -> Context {
   let updates = {
     use listener <- list.map(set.to_list(state.update_listeners))
-    Publish(effect.bind(listener, update))
+    Publish(drift.bind_effect(listener, update))
   }
   drift.output_many(context, updates)
 }

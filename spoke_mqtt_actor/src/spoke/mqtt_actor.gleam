@@ -1,5 +1,5 @@
+import drift.{type EffectContext}
 import drift/actor
-import drift/effect
 import gleam/bytes_tree.{type BytesTree}
 import gleam/erlang/process.{type Selector, type Subject}
 import gleam/option.{type Option, None, Some}
@@ -50,7 +50,7 @@ pub fn restore_session(
 
 pub fn subscribe_to_updates(client: Client) -> Subject(mqtt.Update) {
   let updates = process.new_subject()
-  let publish = effect.from(process.send(updates, _))
+  let publish = drift.new_effect(process.send(updates, _))
   process.send(client.self, Perform(SubscribeToUpdates(publish)))
   updates
 }
@@ -79,7 +79,11 @@ fn from_state(
   options: mqtt.ConnectOptions(TransportOptions),
   state: core.State,
 ) -> Result(Client, otp_actor.StartError) {
-  actor.using_io(fn() { new_io(options.transport_options) }, handle_output)
+  actor.using_io(
+    fn() { new_io(options.transport_options) },
+    fn(io_state) { io_state.selector },
+    handle_output,
+  )
   |> actor.start(1000, state, core.handle_input)
   |> result.map(Client(_, options))
 }
@@ -87,12 +91,13 @@ fn from_state(
 type IoState {
   IoState(
     self: Subject(core.Input),
+    selector: Selector(core.Input),
     options: TransportOptions,
     socket: Option(Socket),
   )
 }
 
-fn new_io(options: TransportOptions) -> #(IoState, Selector(core.Input)) {
+fn new_io(options: TransportOptions) -> IoState {
   let self = process.new_subject()
   let tcp_selector = {
     use msg <- mug.select_tcp_messages(process.new_selector())
@@ -102,30 +107,29 @@ fn new_io(options: TransportOptions) -> #(IoState, Selector(core.Input)) {
       mug.TcpError(_, error) -> core.TransportFailed(string.inspect(error))
     }
   }
-  #(IoState(self, options, None), process.select(tcp_selector, self))
+
+  IoState(self, process.select(tcp_selector, self), options, None)
 }
 
 fn handle_output(
-  ctx: effect.Context(IoState, Selector(core.Input)),
+  ctx: EffectContext(IoState),
   output: core.Output,
-) -> Result(effect.Context(IoState, Selector(core.Input)), a) {
+) -> Result(EffectContext(IoState), a) {
   Ok(case output {
     core.OpenTransport -> open_transport(ctx)
     core.CloseTransport -> close_transport(ctx)
     core.SendData(data) -> send_data(ctx, data)
-    core.Publish(action) -> effect.perform(ctx, action)
-    core.PublishesCompleted(action) -> effect.perform(ctx, action)
-    core.SubscribeCompleted(action) -> effect.perform(ctx, action)
-    core.UnsubscribeCompleted(action) -> effect.perform(ctx, action)
-    core.ReportStateAtDisconnect(action) -> effect.perform(ctx, action)
-    core.ReturnPendingPublishes(action) -> effect.perform(ctx, action)
+    core.Publish(action) -> drift.perform_effect(ctx, action)
+    core.PublishesCompleted(action) -> drift.perform_effect(ctx, action)
+    core.SubscribeCompleted(action) -> drift.perform_effect(ctx, action)
+    core.UnsubscribeCompleted(action) -> drift.perform_effect(ctx, action)
+    core.ReportStateAtDisconnect(action) -> drift.perform_effect(ctx, action)
+    core.ReturnPendingPublishes(action) -> drift.perform_effect(ctx, action)
   })
 }
 
-fn open_transport(
-  ctx: effect.Context(IoState, Selector(core.Input)),
-) -> effect.Context(IoState, Selector(core.Input)) {
-  use state <- effect.map_context(ctx)
+fn open_transport(ctx: EffectContext(IoState)) -> EffectContext(IoState) {
+  use state <- drift.use_effect_context(ctx)
   let TcpOptions(host, port, timeout) = state.options
   case
     mug.connect(mug.ConnectionOptions(host, port, timeout, mug.Ipv6Preferred))
@@ -142,10 +146,8 @@ fn open_transport(
   }
 }
 
-fn close_transport(
-  ctx: effect.Context(IoState, Selector(core.Input)),
-) -> effect.Context(IoState, Selector(core.Input)) {
-  use state <- effect.map_context(ctx)
+fn close_transport(ctx: EffectContext(IoState)) -> EffectContext(IoState) {
+  use state <- drift.use_effect_context(ctx)
   case state.socket {
     None -> state
     Some(socket) -> {
@@ -158,10 +160,10 @@ fn close_transport(
 }
 
 fn send_data(
-  ctx: effect.Context(IoState, Selector(core.Input)),
+  ctx: EffectContext(IoState),
   data: BytesTree,
-) -> effect.Context(IoState, Selector(core.Input)) {
-  use state <- effect.map_context(ctx)
+) -> EffectContext(IoState) {
+  use state <- drift.use_effect_context(ctx)
   case state.socket {
     None -> {
       process.send(state.self, core.TransportFailed("Not connected"))

@@ -1,5 +1,5 @@
 import birdie
-import drift/effect
+import drift
 import drift/record
 import gleam/bytes_tree
 import gleam/function
@@ -195,13 +195,13 @@ fn format_output(output: core.Output) -> String {
   }
 }
 
-fn format_effect(e: effect.Effect(a)) -> String {
-  "#" <> string.inspect(effect.id(e))
+fn format_effect(e: drift.Effect(a)) -> String {
+  "#" <> string.inspect(drift.effect_id(e))
 }
 
-fn format_action(a: effect.Action(a), inspect: fn(a) -> String) -> String {
+fn format_action(a: drift.Action(a), inspect: fn(a) -> String) -> String {
   "#"
-  <> string.inspect(effect.id(a.effect))
+  <> string.inspect(drift.effect_id(a.effect))
   <> " completed: "
   <> inspect(a.argument)
 }

@@ -13,7 +13,7 @@ pub fn restore_session_success_test() {
   let #(stepper, _) =
     mqtt.connect_with_id(0, "my-client")
     |> core.new_state()
-    |> drift.new(Nil, Nil)
+    |> drift.new(Nil)
 
   // First session, no need to even connect
   let msg = mqtt.PublishData("topic", <<>>, mqtt.AtLeastOnce, False)
