@@ -1,22 +1,10 @@
 import gleam/bytes_tree.{type BytesTree}
-import gleam/erlang/process.{type Selector}
+import gleam/erlang/process
 import gleam/result
 import gleam/string
 import mug
-
-/// Send, receive, and shutdown functions,
-/// as defined in the main spoke package.
-pub type TransportChannel =
-  #(
-    fn(BytesTree) -> Result(Nil, String),
-    fn() -> Selector(Result(BitArray, String)),
-    fn() -> Nil,
-  )
-
-/// Re-definition of what spoke uses for transport channels
-/// (simplifies package dependencies).
-pub type TransportChannelConnector =
-  fn() -> Result(TransportChannel, String)
+import spoke/core
+import spoke/mqtt_actor.{type TransportChannel, type TransportChannelConnector}
 
 /// Constructs an (unencrypted) TCP connector using the defaults of
 /// connecting to port 1883 on the given host.
@@ -45,24 +33,21 @@ fn connect(
     mug.connect(options) |> map_mug_error("Connect error"),
   )
 
+  let subject = process.new_subject()
   let selector =
     process.new_selector()
     |> mug.select_tcp_messages(map_tcp_message)
+    |> process.select(subject)
 
-  Ok(
-    #(
-      send(socket, _),
-      fn() {
-        mug.receive_next_packet_as_message(socket)
-        selector
-      },
-      fn() {
-        // Nothing to do if this fails
-        let _ = mug.shutdown(socket)
-        Nil
-      },
-    ),
-  )
+  process.send(subject, core.TransportEstablished)
+  mug.receive_next_packet_as_message(socket)
+
+  Ok(mqtt_actor.TransportChannel(
+    //
+    selector,
+    send(socket, _),
+    fn() { mug.shutdown(socket) |> map_mug_error("Shutdown error") },
+  ))
 }
 
 fn send(socket: mug.Socket, data: BytesTree) -> Result(Nil, String) {
@@ -70,11 +55,15 @@ fn send(socket: mug.Socket, data: BytesTree) -> Result(Nil, String) {
   |> map_mug_error("Send error")
 }
 
-fn map_tcp_message(msg: mug.TcpMessage) -> Result(BitArray, String) {
+fn map_tcp_message(msg: mug.TcpMessage) -> core.TransportEvent {
   case msg {
-    mug.Packet(_, data) -> Ok(data)
-    mug.SocketClosed(_) -> Error("Channel closed")
-    mug.TcpError(_, e) -> Error("TCP error: " <> string.inspect(e))
+    mug.Packet(socket, data) -> {
+      mug.receive_next_packet_as_message(socket)
+      core.ReceivedData(data)
+    }
+    mug.SocketClosed(_) -> core.TransportClosed
+    mug.TcpError(_, e) ->
+      core.TransportFailed("TCP error: " <> string.inspect(e))
   }
 }
 

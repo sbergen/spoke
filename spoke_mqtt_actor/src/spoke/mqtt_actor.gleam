@@ -6,39 +6,41 @@ import gleam/option.{type Option, None, Some}
 import gleam/otp/actor as otp_actor
 import gleam/result
 import gleam/string
-import mug.{type Socket}
-import spoke/core.{Connect, Perform, Subscribe, SubscribeToUpdates}
+import spoke/core.{
+  Connect, Perform, Subscribe, SubscribeToUpdates, TransportFailed,
+}
 import spoke/mqtt
 
 pub opaque type Client {
   Client(
     self: Subject(core.Input),
-    options: mqtt.ConnectOptions(TransportOptions),
+    options: mqtt.ConnectOptions(TransportChannelConnector),
   )
 }
 
-pub opaque type TransportOptions {
-  TcpOptions(host: String, port: Int, connect_timeout: Int)
+/// Provides the abstraction over a transport channel,
+/// e.g. TCP or WebSocket.
+pub type TransportChannel {
+  TransportChannel(
+    events: Selector(core.TransportEvent),
+    send: fn(BytesTree) -> Result(Nil, String),
+    close: fn() -> Result(Nil, String),
+  )
 }
 
-pub fn using_tcp(
-  host host: String,
-  port port: Int,
-  connect_timeout connect_timeout: Int,
-) -> TransportOptions {
-  TcpOptions(host, port, connect_timeout)
-}
+pub type TransportChannelConnector =
+  fn() -> Result(TransportChannel, String)
 
 // TODO: Better error types below:
 
 pub fn start_session(
-  options: mqtt.ConnectOptions(TransportOptions),
+  options: mqtt.ConnectOptions(TransportChannelConnector),
 ) -> Result(Client, otp_actor.StartError) {
   from_state(options, core.new_state(options))
 }
 
 pub fn restore_session(
-  options: mqtt.ConnectOptions(TransportOptions),
+  options: mqtt.ConnectOptions(TransportChannelConnector),
   state: String,
 ) -> Result(Client, otp_actor.StartError) {
   core.restore_state(options, state)
@@ -76,11 +78,15 @@ pub fn subscribe(
 //===== Privates =====/
 
 fn from_state(
-  options: mqtt.ConnectOptions(TransportOptions),
+  options: mqtt.ConnectOptions(TransportChannelConnector),
   state: core.State,
 ) -> Result(Client, otp_actor.StartError) {
   actor.using_io(
-    fn() { new_io(options.transport_options) },
+    fn() {
+      let self = process.new_subject()
+      let selector = process.new_selector() |> process.select(self)
+      IoState(self, selector, options.transport_options, None)
+    },
     fn(io_state) { io_state.selector },
     handle_output,
   )
@@ -92,26 +98,9 @@ type IoState {
   IoState(
     self: Subject(core.Input),
     selector: Selector(core.Input),
-    options: TransportOptions,
-    socket: Option(Socket),
+    connector: TransportChannelConnector,
+    channel: Option(TransportChannel),
   )
-}
-
-fn new_io(options: TransportOptions) -> IoState {
-  let self = process.new_subject()
-  let tcp_selector = {
-    use msg <- mug.select_tcp_messages(process.new_selector())
-    case msg {
-      mug.Packet(socket, data) -> {
-        mug.receive_next_packet_as_message(socket)
-        core.ReceivedData(data)
-      }
-      mug.SocketClosed(_) -> core.TransportClosed
-      mug.TcpError(_, error) -> core.TransportFailed(string.inspect(error))
-    }
-  }
-
-  IoState(self, process.select(tcp_selector, self), options, None)
 }
 
 fn handle_output(
@@ -133,17 +122,16 @@ fn handle_output(
 
 fn open_transport(ctx: EffectContext(IoState)) -> EffectContext(IoState) {
   use state <- drift.use_effect_context(ctx)
-  let TcpOptions(host, port, timeout) = state.options
-  case
-    mug.connect(mug.ConnectionOptions(host, port, timeout, mug.Ipv6Preferred))
-  {
-    Ok(socket) -> {
-      mug.receive_next_packet_as_message(socket)
-      process.send(state.self, core.TransportEstablished)
-      IoState(..state, socket: Some(socket))
+  case state.connector() {
+    Ok(channel) -> {
+      let selector =
+        channel.events
+        |> process.map_selector(core.Handle)
+        |> process.select(state.self)
+      IoState(..state, selector:, channel: Some(channel))
     }
     Error(e) -> {
-      process.send(state.self, core.TransportFailed(string.inspect(e)))
+      process.send(state.self, core.Handle(TransportFailed(string.inspect(e))))
       state
     }
   }
@@ -151,13 +139,16 @@ fn open_transport(ctx: EffectContext(IoState)) -> EffectContext(IoState) {
 
 fn close_transport(ctx: EffectContext(IoState)) -> EffectContext(IoState) {
   use state <- drift.use_effect_context(ctx)
-  case state.socket {
+  case state.channel {
     None -> state
-    Some(socket) -> {
-      // TODO Can we do anything with the error here?
-      let _ = mug.shutdown(socket)
-      process.send(state.self, core.TransportClosed)
-      IoState(..state, socket: None)
+    Some(channel) -> {
+      let update = case channel.close() {
+        Ok(_) -> core.TransportClosed
+        Error(e) -> TransportFailed(e)
+      }
+
+      process.send(state.self, core.Handle(update))
+      IoState(..state, channel: None)
     }
   }
 }
@@ -167,19 +158,24 @@ fn send_data(
   data: BytesTree,
 ) -> EffectContext(IoState) {
   use state <- drift.use_effect_context(ctx)
-  case state.socket {
+  case state.channel {
     None -> {
-      process.send(state.self, core.TransportFailed("Not connected"))
+      process.send(state.self, core.Handle(TransportFailed("Not connected")))
       state
     }
-    Some(socket) ->
-      case mug.send_builder(socket, data) {
+    Some(channel) ->
+      case channel.send(data) {
         Error(error) -> {
           process.send(
             state.self,
-            core.TransportFailed("Send failed: " <> string.inspect(error)),
+            core.Handle(TransportFailed(
+              "Send failed: " <> string.inspect(error),
+            )),
           )
-          IoState(..state, socket: None)
+
+          // Close the channel, just in case. Ignore errors.
+          let _ = channel.close()
+          IoState(..state, channel: None)
         }
         Ok(_) -> state
       }

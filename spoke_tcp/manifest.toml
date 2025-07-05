@@ -26,4 +26,5 @@ gleam_stdlib = { version = ">= 0.60.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 glisten = { version = ">= 8.0.0 and < 9.0.0" }
 mug = { version = ">= 3.0.0 and < 4.0.0" }
+spoke_core = { path = "../spoke_core" }
 spoke_mqtt_actor = { path = "../spoke_mqtt_actor" }
