@@ -1,7 +1,7 @@
 import drift/record.{discard}
 import gleam/option.{None, Some}
 import spoke/core.{
-  Connect, Disconnect, Perform, TransportClosed, TransportEstablished,
+  Connect, Disconnect, Handle, Perform, TransportClosed, TransportEstablished,
   TransportFailed,
 }
 import spoke/core/recorder.{type Recorder}
@@ -19,10 +19,10 @@ pub fn connect_and_disconnect_test() {
   |> recorder.from_options()
   |> record.input(Perform(core.SubscribeToUpdates(record.discard())))
   |> record.input(Perform(Connect(False, Some(will))))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> record.input(Perform(Disconnect(discard())))
-  |> record.input(TransportClosed)
+  |> record.input(Handle(TransportClosed))
   |> recorder.snap("Connect and Disconnect")
 }
 
@@ -64,7 +64,7 @@ pub fn disconnect_before_establish_test() {
 pub fn disconnect_while_connecting_test() {
   recorder.default()
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> record.input(Perform(Disconnect(discard())))
   |> recorder.snap("Disconnect while connecting")
 }
@@ -73,7 +73,7 @@ pub fn concurrent_connect_test() {
   recorder.default()
   |> record.input(Perform(Connect(False, None)))
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> record.input(Perform(Connect(False, None)))
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> record.input(Perform(Connect(False, None)))
@@ -83,7 +83,7 @@ pub fn concurrent_connect_test() {
 pub fn double_connack_test() {
   recorder.default()
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> recorder.snap("Double ConnAck is a protocol violation")
@@ -105,10 +105,10 @@ pub fn connack_must_be_first_test() {
 pub fn transport_error_during_connect_test() {
   recorder.default()
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportFailed("Fake failure"))
+  |> record.input(Handle(TransportFailed("Fake failure")))
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
-  |> record.input(TransportFailed("Fake failure"))
+  |> record.input(Handle(TransportEstablished))
+  |> record.input(Handle(TransportFailed("Fake failure")))
   |> recorder.snap("Transport failure during connect is published")
 }
 
@@ -117,7 +117,7 @@ pub fn transport_error_while_disconnecting_test() {
   |> connect_with_defaults()
   |> record.flush("connect")
   |> record.input(Perform(Disconnect(discard())))
-  |> record.input(TransportFailed("Fake failure"))
+  |> record.input(Handle(TransportFailed("Fake failure")))
   |> recorder.snap("Transport failure while disconnecting is published")
 }
 
@@ -131,7 +131,7 @@ pub fn connect_timeout_test() {
   |> record.time_advance(1)
   |> record.input(Perform(Connect(False, None)))
   |> record.time_advance(500)
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> record.time_advance(499)
   |> record.time_advance(1)
   |> recorder.snap("Connect can time out at all stages")
@@ -143,28 +143,28 @@ pub fn invalid_data_during_connect_test() {
   |> recorder.from_options()
   |> record.input(Perform(core.SubscribeToUpdates(record.discard())))
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
-  |> record.input(core.ReceivedData(<<1>>))
+  |> record.input(Handle(TransportEstablished))
+  |> record.input(Handle(core.ReceivedData(<<1>>)))
   |> recorder.snap("Invalid data during handshake closes connection")
 }
 
 fn protocol_violation_after_connect(recorder: Recorder) -> Recorder {
   recorder
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> recorder.received(server_out.PingResp)
 }
 
 fn fail_auth(recorder: Recorder) -> Recorder {
   recorder
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> recorder.received(server_out.ConnAck(Error(packet.BadUsernameOrPassword)))
 }
 
 fn connect_with_defaults(recorder: Recorder) -> Recorder {
   recorder
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
 }

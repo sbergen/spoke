@@ -1,8 +1,8 @@
 import drift/record
 import gleam/option.{None}
 import spoke/core.{
-  Connect, Perform, SubscribeToUpdates, TransportClosed, TransportEstablished,
-  UnsubscribeFromUpdates,
+  Connect, Handle, Perform, SubscribeToUpdates, TransportClosed,
+  TransportEstablished, UnsubscribeFromUpdates,
 }
 import spoke/core/recorder
 import spoke/mqtt
@@ -31,11 +31,11 @@ pub fn updates_subscribe_unsubscribe_test() {
   |> record.input(Perform(SubscribeToUpdates(subscriber1)))
   |> record.input(Perform(SubscribeToUpdates(subscriber2)))
   |> record.input(Perform(Connect(True, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> record.input(Perform(UnsubscribeFromUpdates(subscriber2)))
   |> recorder.received(packet)
   |> record.input(Perform(UnsubscribeFromUpdates(subscriber1)))
-  |> record.input(TransportClosed)
+  |> record.input(Handle(TransportClosed))
   |> recorder.snap("Updates can be subscribed and unsubscribed to")
 }

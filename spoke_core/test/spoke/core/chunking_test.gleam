@@ -2,7 +2,7 @@ import drift/record
 import gleam/bytes_tree
 import gleam/list
 import gleam/option.{None}
-import spoke/core.{Connect, Perform, ReceivedData, TransportEstablished}
+import spoke/core.{Connect, Handle, Perform, ReceivedData, TransportEstablished}
 import spoke/core/recorder
 import spoke/packet
 import spoke/packet/server/outgoing as server_out
@@ -22,8 +22,8 @@ pub fn multiple_packets_at_connect_test() {
 
   recorder.default()
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
-  |> record.input(ReceivedData(bits))
+  |> record.input(Handle(TransportEstablished))
+  |> record.input(Handle(ReceivedData(bits)))
   |> recorder.snap("Receiving multiple packets in first chunk of data")
 }
 
@@ -47,7 +47,7 @@ pub fn multiple_packets_after_connect_test() {
     ])
 
   recorder.default_connected()
-  |> record.input(ReceivedData(bits))
+  |> record.input(Handle(ReceivedData(bits)))
   |> recorder.snap("Receiving multiple packets after connected")
 }
 
@@ -64,8 +64,8 @@ pub fn split_packet_test() {
     bytes_tree.to_bit_array(server_out.encode_packet(packet))
 
   recorder.default_connected()
-  |> record.input(ReceivedData(begin))
-  |> record.input(ReceivedData(end))
+  |> record.input(Handle(ReceivedData(begin)))
+  |> record.input(Handle(ReceivedData(end)))
   |> recorder.snap("Receiving packet in split chunks")
 }
 

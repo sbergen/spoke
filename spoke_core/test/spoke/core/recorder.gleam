@@ -6,7 +6,7 @@ import gleam/function
 import gleam/list
 import gleam/option.{None}
 import gleam/string
-import spoke/core.{Connect, Perform, TransportEstablished}
+import spoke/core.{Connect, Handle, Perform, TransportEstablished}
 import spoke/mqtt
 import spoke/packet
 import spoke/packet/client/incoming as client_in
@@ -24,7 +24,7 @@ pub fn default() -> Recorder {
 pub fn default_connected() -> Recorder {
   default()
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> record.flush("connect and handshake")
 }
@@ -42,7 +42,7 @@ pub fn from_state(state: String) -> Recorder {
 pub fn received(recorder: Recorder, packet: server_out.Packet) -> Recorder {
   let data = server_out.encode_packet(packet)
   let input = core.ReceivedData(bytes_tree.to_bit_array(data))
-  record.input(recorder, input)
+  record.input(recorder, Handle(input))
 }
 
 pub fn received_many(
@@ -56,7 +56,7 @@ pub fn received_many(
   }
 
   let input = core.ReceivedData(bytes_tree.to_bit_array(data))
-  record.input(recorder, input)
+  record.input(recorder, Handle(input))
 }
 
 pub fn snap(recorder: Recorder, title: String) -> Nil {
@@ -125,7 +125,7 @@ fn format_input(input: core.Input) -> String {
         }
       }
 
-    core.ReceivedData(data) -> {
+    Handle(core.ReceivedData(data)) -> {
       "Received: "
       <> case client_in.decode_packets(data) {
         Error(e) -> string.inspect(data) <> ", error: " <> string.inspect(e)
@@ -140,9 +140,9 @@ fn format_input(input: core.Input) -> String {
       }
     }
     core.Timeout(_) -> panic as "Should only be used in tick!"
-    TransportEstablished -> "Transport established"
-    core.TransportClosed -> "Transport closed"
-    core.TransportFailed(e) -> "Transport failed: " <> e
+    Handle(TransportEstablished) -> "Transport established"
+    Handle(core.TransportClosed) -> "Transport closed"
+    Handle(core.TransportFailed(e)) -> "Transport failed: " <> e
   }
 }
 

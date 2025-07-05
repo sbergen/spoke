@@ -45,12 +45,16 @@ pub opaque type TimedAction {
   WaitForPublishesTimeout(PublishCompletionEffect)
 }
 
-pub type Input {
-  Perform(Command)
+pub type TransportEvent {
   TransportEstablished
   TransportFailed(String)
   TransportClosed
   ReceivedData(BitArray)
+}
+
+pub type Input {
+  Perform(Command)
+  Handle(TransportEvent)
   Timeout(TimedAction)
 }
 
@@ -102,10 +106,13 @@ pub fn new_state(options: mqtt.ConnectOptions(_)) -> State {
 
 pub fn handle_input(context: Context, state: State, input: Input) -> Step {
   case input {
-    ReceivedData(data) -> receive(context, state, data)
-    TransportEstablished -> transport_established(context, state)
-    TransportFailed(error) -> disconnect_unexpectedly(context, state, error)
-    TransportClosed -> transport_closed(context, state)
+    Handle(event) ->
+      case event {
+        ReceivedData(data) -> receive(context, state, data)
+        TransportEstablished -> transport_established(context, state)
+        TransportFailed(error) -> disconnect_unexpectedly(context, state, error)
+        TransportClosed -> transport_closed(context, state)
+      }
     Perform(action) ->
       case action {
         SubscribeToUpdates(publish) ->

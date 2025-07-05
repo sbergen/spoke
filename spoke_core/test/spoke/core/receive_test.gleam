@@ -1,6 +1,6 @@
 import drift/record.{discard}
 import gleam/option.{None}
-import spoke/core.{Connect, Disconnect, Perform, TransportEstablished}
+import spoke/core.{Connect, Disconnect, Handle, Perform, TransportEstablished}
 import spoke/core/recorder
 import spoke/packet
 import spoke/packet/server/outgoing as server_out
@@ -56,7 +56,7 @@ pub fn receive_message_qos2_duplicate_filtering_test() {
 
   recorder.default_connected()
   |> recorder.received(server_out.Publish(data))
-  |> record.input(core.TransportClosed)
+  |> record.input(Handle(core.TransportClosed))
   |> reconnect
   // Re-send data, as we didn't receive the PubRec
   |> recorder.received(server_out.Publish(resend_data))
@@ -73,7 +73,7 @@ pub fn receive_message_qos2_duplicate_pubrel_test() {
   recorder.default_connected()
   |> recorder.received(server_out.Publish(data))
   |> recorder.received(server_out.PubRel(42))
-  |> record.input(core.TransportClosed)
+  |> record.input(Handle(core.TransportClosed))
   |> reconnect
   |> recorder.received(server_out.PubRel(42))
   |> record.input(Perform(Disconnect(discard())))
@@ -82,13 +82,13 @@ pub fn receive_message_qos2_duplicate_pubrel_test() {
 
 pub fn receive_invalid_data_while_connected_test() {
   recorder.default_connected()
-  |> record.input(core.ReceivedData(<<1>>))
+  |> record.input(Handle(core.ReceivedData(<<1>>)))
   |> recorder.snap("Receiving invalid data while connected closes connection")
 }
 
 fn reconnect(recorder: recorder.Recorder) -> recorder.Recorder {
   recorder
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionPresent)))
 }

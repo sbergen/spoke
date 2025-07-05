@@ -1,6 +1,6 @@
 import drift/record
 import gleam/option.{None}
-import spoke/core.{Connect, Perform, TransportEstablished}
+import spoke/core.{Connect, Handle, Perform, TransportEstablished}
 import spoke/core/recorder.{type Recorder}
 import spoke/mqtt
 import spoke/packet
@@ -32,7 +32,7 @@ fn set_up_connected(keep_alive: Int) -> Recorder {
   |> recorder.from_options()
   |> record.input(Perform(core.SubscribeToUpdates(record.discard())))
   |> record.input(Perform(Connect(True, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionNotPresent)))
   |> record.flush("connect and handshake")
 }

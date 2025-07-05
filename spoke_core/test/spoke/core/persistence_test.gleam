@@ -2,7 +2,7 @@ import drift
 import drift/record.{discard}
 import gleam/option.{None}
 import spoke/core.{
-  Connect, Disconnect, Perform, PublishMessage, TransportEstablished,
+  Connect, Disconnect, Handle, Perform, PublishMessage, TransportEstablished,
 }
 import spoke/core/recorder
 import spoke/mqtt
@@ -26,7 +26,7 @@ pub fn restore_session_success_test() {
   // Restore session
   recorder.from_state(action.argument)
   |> record.input(Perform(Connect(False, None)))
-  |> record.input(TransportEstablished)
+  |> record.input(Handle(TransportEstablished))
   |> recorder.received(server_out.ConnAck(Ok(packet.SessionPresent)))
   |> recorder.snap("Restore session with unsent message")
 }

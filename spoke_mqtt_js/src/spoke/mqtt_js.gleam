@@ -5,7 +5,10 @@ import gleam/javascript/promise.{type Promise}
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
-import spoke/core.{Connect, Perform, Subscribe, SubscribeToUpdates}
+import spoke/core.{
+  Connect, Perform, Subscribe, SubscribeToUpdates, TransportClosed,
+  TransportFailed,
+}
 import spoke/mqtt
 import spoke/mqtt_js/internal/websocket
 
@@ -114,7 +117,7 @@ fn open_transport(
       IoState(..state, socket: Some(socket))
     }
     Error(e) -> {
-      send(core.TransportFailed(string.inspect(e)))
+      send(core.Handle(TransportFailed(string.inspect(e))))
       state
     }
   }
@@ -129,7 +132,7 @@ fn close_transport(
     None -> state
     Some(socket) -> {
       websocket.close(socket)
-      send(core.TransportClosed)
+      send(core.Handle(TransportClosed))
       IoState(..state, socket: None)
     }
   }
@@ -143,13 +146,13 @@ fn send_data(
   use state <- drift.use_effect_context(ctx)
   case state.socket {
     None -> {
-      send(core.TransportFailed("Not connected"))
+      send(core.Handle(TransportFailed("Not connected")))
       state
     }
     Some(socket) ->
       case websocket.send(socket, data) {
         Error(error) -> {
-          send(core.TransportFailed("Send failed: " <> error))
+          send(core.Handle(TransportFailed("Send failed: " <> error)))
           IoState(..state, socket: None)
         }
         Ok(_) -> state
