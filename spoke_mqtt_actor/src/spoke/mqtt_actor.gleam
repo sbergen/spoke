@@ -119,6 +119,16 @@ pub fn pending_publishes(client: Client) -> Int {
   todo
 }
 
+/// Wait for all pending QoS > 0 publishes to complete.
+/// Returns an error if the operation times out,
+/// or panics if the client is killed while waiting.
+pub fn wait_for_publishes_to_finish(
+  client: Client,
+  timeout: Int,
+) -> Result(Nil, Nil) {
+  todo
+}
+
 //===== Privates =====/
 
 fn from_state(
