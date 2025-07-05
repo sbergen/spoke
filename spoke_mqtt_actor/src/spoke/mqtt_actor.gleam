@@ -7,7 +7,8 @@ import gleam/otp/actor as otp_actor
 import gleam/result
 import gleam/string
 import spoke/core.{
-  Connect, Perform, Subscribe, SubscribeToUpdates, TransportFailed,
+  Connect, Disconnect, Perform, PublishMessage, Subscribe, SubscribeToUpdates,
+  TransportFailed,
 }
 import spoke/mqtt
 
@@ -79,14 +80,15 @@ pub fn connect(
 /// this will be a no-op.
 /// Returns the serialized session state to be potentially restored later.
 pub fn disconnect(client: Client) -> String {
-  todo
+  use effect <- actor.call(client.self, 2 * client.options.server_timeout_ms)
+  Perform(Disconnect(effect))
 }
 
 /// Publishes a new message, which will be sent to the sever.
 /// If not connected, Qos 0 messages will be dropped,
 /// and higher QoS level messages will be sent once connected.
 pub fn publish(client: Client, data: mqtt.PublishData) -> Nil {
-  todo
+  process.send(client.self, Perform(PublishMessage(data)))
 }
 
 /// Subscribes to the given topics.
@@ -183,12 +185,11 @@ fn close_transport(ctx: EffectContext(IoState)) -> EffectContext(IoState) {
   case state.channel {
     None -> state
     Some(channel) -> {
-      let update = case channel.close() {
-        Ok(_) -> core.TransportClosed
-        Error(e) -> TransportFailed(e)
+      case channel.close() {
+        Ok(_) -> Nil
+        Error(e) -> process.send(state.self, core.Handle(TransportFailed(e)))
       }
 
-      process.send(state.self, core.Handle(update))
       IoState(..state, channel: None)
     }
   }

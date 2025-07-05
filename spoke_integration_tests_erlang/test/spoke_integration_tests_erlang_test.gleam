@@ -15,9 +15,9 @@ pub fn subscribe_and_publish_qos0_test() -> Nil {
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("subscribe_and_publish")
     |> mqtt_actor.start_session
-  let updates = mqtt_actor.subscribe_to_updates(client)
 
   connect_and_wait(client, True, None)
+  let updates = mqtt_actor.subscribe_to_updates(client)
 
   let topic = "subscribe_and_publish"
   let assert Ok(_) =
@@ -89,9 +89,13 @@ fn receive_after_reconnect(qos: mqtt.QoS) -> Nil {
   disconnect_and_wait(sender_client)
 
   // Now reconnect without cleaning session: the message should be received
-  connect_and_wait(receiver_client, False, None)
-
   let updates = mqtt_actor.subscribe_to_updates(receiver_client)
+  mqtt_actor.connect(receiver_client, False, None)
+  assert process.receive(updates, 1000)
+    == Ok(
+      mqtt.ConnectionStateChanged(mqtt.ConnectAccepted(mqtt.SessionPresent)),
+    )
+
   let assert Ok(mqtt.ReceivedMessage("qos_topic", <<"persisted msg">>, False)) =
     process.receive(updates, 1000)
     as "QoS > 0 message should be received when reconnecting without cleaning session"
@@ -127,7 +131,7 @@ pub fn will_disconnect_test() -> Nil {
       mqtt_actor.subscribe(client, [
         mqtt.SubscribeRequest("/#/", mqtt.AtLeastOnce),
       ])
-    process.sleep(1000)
+    process.sleep(100)
   })
 
   let assert Ok(mqtt.ReceivedMessage(_, <<"will message">>, False)) =

@@ -524,7 +524,7 @@ fn transport_established(context: Context, state: State) -> Step {
     _ ->
       drift.stop_with_error(
         context,
-        "Unexpected connection state when establishing transport:"
+        "Unexpected connection state when establishing transport: "
           <> case state.connection {
           Connected(..) -> "Connected"
           Connecting(..) -> "Connecting"
