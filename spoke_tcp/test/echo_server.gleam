@@ -9,8 +9,13 @@ pub fn start(on_close: fn() -> Nil) -> Int {
   let assert Ok(_) =
     glisten.new(fn(_conn) { #(Nil, None) }, fn(state, msg, conn) {
       let assert Packet(msg) = msg
-      let assert Ok(_) = glisten.send(conn, bytes_tree.from_bit_array(msg))
-      glisten.continue(state)
+      case msg {
+        <<"stop">> -> glisten.stop()
+        _ -> {
+          let assert Ok(_) = glisten.send(conn, bytes_tree.from_bit_array(msg))
+          glisten.continue(state)
+        }
+      }
     })
     |> glisten.with_close(fn(_) { on_close() })
     |> glisten.start_with_listener_name(0, listener_name)

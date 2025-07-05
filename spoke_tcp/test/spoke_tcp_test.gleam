@@ -1,6 +1,7 @@
 import echo_server
 import gleam/bytes_tree
 import gleam/erlang/process.{type Selector}
+import gleam/string
 import gleeunit
 import spoke/core
 import spoke/tcp
@@ -26,6 +27,19 @@ pub fn send_receive_and_shutdown_test() {
   let assert Ok(_) = channel.close()
   assert receive_next(channel.events) == Ok(core.TransportClosed)
   let assert Ok(_) = process.receive(shutdowns, 10)
+}
+
+pub fn unexpected_close_test() {
+  let port = echo_server.start(fn() { Nil })
+  let assert Ok(channel) =
+    tcp.connector("localhost", port: port, connect_timeout: 100)()
+
+  assert receive_next(channel.events) == Ok(core.TransportEstablished)
+  assert channel.send(bytes_tree.from_string("stop")) == Ok(Nil)
+  assert receive_next(channel.events) == Ok(core.TransportClosed)
+
+  let assert Error(error) = channel.send(bytes_tree.from_string("hello?"))
+  assert string.contains(error, "Closed")
 }
 
 fn receive_next(
