@@ -27,6 +27,6 @@ pub fn send_receive_and_shutdown_test() {
 }
 
 fn receive_next(next: Selector(Result(BitArray, String))) -> BitArray {
-  let assert Ok(Ok(bytes)) = process.select(next, 100)
+  let assert Ok(Ok(bytes)) = process.selector_receive(next, 100)
   bytes
 }

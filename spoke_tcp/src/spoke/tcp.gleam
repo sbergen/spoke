@@ -38,14 +38,16 @@ fn connect(
   port: Int,
   connect_timeout: Int,
 ) -> Result(TransportChannel, String) {
-  let options = mug.ConnectionOptions(host, port, connect_timeout)
+  // TODO: add ip preference
+  let options =
+    mug.ConnectionOptions(host, port, connect_timeout, mug.Ipv6Preferred)
   use socket <- result.try(
     mug.connect(options) |> map_mug_error("Connect error"),
   )
 
   let selector =
     process.new_selector()
-    |> mug.selecting_tcp_messages(map_tcp_message)
+    |> mug.select_tcp_messages(map_tcp_message)
 
   Ok(
     #(
@@ -76,6 +78,6 @@ fn map_tcp_message(msg: mug.TcpMessage) -> Result(BitArray, String) {
   }
 }
 
-fn map_mug_error(r: Result(a, mug.Error), reason: String) -> Result(a, String) {
+fn map_mug_error(r: Result(a, e), reason: String) -> Result(a, String) {
   result.map_error(r, fn(e) { reason <> ": " <> string.inspect(e) })
 }
