@@ -141,6 +141,38 @@ pub fn will_disconnect_test() -> Nil {
   Nil
 }
 
+pub fn unsubscribe_test() -> Nil {
+  let assert Ok(client) =
+    tcp.connector_with_defaults("localhost")
+    |> mqtt.connect_with_id("unsubscribe")
+    |> mqtt_actor.start_session
+
+  connect_and_wait(client, True, None)
+  let updates = mqtt_actor.subscribe_to_updates(client)
+
+  let topic = "unsubscribe"
+  let assert Ok(_) =
+    mqtt_actor.subscribe(client, [
+      mqtt.SubscribeRequest(topic, mqtt.AtLeastOnce),
+    ])
+    as "Should subscribe successfully"
+
+  let assert Ok(_) = mqtt_actor.unsubscribe(client, [topic])
+    as "Should unsubscribe successfully"
+
+  let message =
+    mqtt.PublishData(
+      topic,
+      <<"Hello from spoke!">>,
+      mqtt.AtMostOnce,
+      retain: False,
+    )
+  mqtt_actor.publish(client, message)
+
+  assert process.receive(updates, 100) == Error(Nil)
+  disconnect_and_wait(client)
+}
+
 fn flush_server_state(client: mqtt_actor.Client) -> Nil {
   // Connect with clean session set to true, then disconnect
   connect_and_wait(client, True, None)

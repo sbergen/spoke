@@ -8,7 +8,7 @@ import gleam/result
 import gleam/string
 import spoke/core.{
   Connect, Disconnect, Perform, PublishMessage, Subscribe, SubscribeToUpdates,
-  TransportFailed,
+  TransportFailed, Unsubscribe,
 }
 import spoke/mqtt
 
@@ -109,7 +109,8 @@ pub fn unsubscribe(
   client: Client,
   topics: List(String),
 ) -> Result(Nil, mqtt.OperationError) {
-  todo
+  use effect <- actor.call(client.self, 2 * client.options.server_timeout_ms)
+  Perform(Unsubscribe(topics, effect))
 }
 
 /// Returns the number of QoS > 0 publishes that haven't yet been completely published.
