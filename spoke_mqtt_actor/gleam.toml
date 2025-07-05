@@ -14,13 +14,13 @@ version = "1.0.0"
 
 [dependencies]
 gleam_stdlib = ">= 0.60.0 and < 2.0.0"
-gleam_otp = ">= 1.0.0-rc1 and < 2.0.0"
-gleam_erlang = ">= 1.0.0-rc1 and < 2.0.0"
+gleam_otp = ">= 1.0.0 and < 2.0.0"
+gleam_erlang = ">= 1.0.0 and < 2.0.0"
 drift = { path = "../../drift/drift" }
 drift_actor = { path = "../../drift/drift_actor" }
 spoke_core = { path = "../spoke_core" }
 spoke_mqtt = { path = "../spoke_mqtt" }
-mug = { path = "../../mug" }
+mug = ">= 3.0.0 and < 4.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

@@ -43,7 +43,7 @@ pub fn restore_session(
 ) -> Result(Client, otp_actor.StartError) {
   core.restore_state(options, state)
   |> result.map_error(otp_actor.InitFailed)
-  |> result.then(from_state(options, _))
+  |> result.try(from_state(options, _))
 }
 
 // END TODO
@@ -102,7 +102,10 @@ fn new_io(options: TransportOptions) -> IoState {
   let tcp_selector = {
     use msg <- mug.select_tcp_messages(process.new_selector())
     case msg {
-      mug.Packet(_, data) -> core.ReceivedData(data)
+      mug.Packet(socket, data) -> {
+        mug.receive_next_packet_as_message(socket)
+        core.ReceivedData(data)
+      }
       mug.SocketClosed(_) -> core.TransportClosed
       mug.TcpError(_, error) -> core.TransportFailed(string.inspect(error))
     }
@@ -135,7 +138,7 @@ fn open_transport(ctx: EffectContext(IoState)) -> EffectContext(IoState) {
     mug.connect(mug.ConnectionOptions(host, port, timeout, mug.Ipv6Preferred))
   {
     Ok(socket) -> {
-      mug.receive_all_packets_as_messages(socket)
+      mug.receive_next_packet_as_message(socket)
       process.send(state.self, core.TransportEstablished)
       IoState(..state, socket: Some(socket))
     }
