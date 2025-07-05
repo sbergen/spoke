@@ -50,6 +50,8 @@ pub fn restore_session(
 
 // END TODO
 
+/// Returns a `Subject` (owned by the current process) for receiving client updates
+/// (received messages and connection state changes).
 pub fn subscribe_to_updates(client: Client) -> Subject(mqtt.Update) {
   let updates = process.new_subject()
   let publish = drift.new_effect(process.send(updates, _))
@@ -57,6 +59,12 @@ pub fn subscribe_to_updates(client: Client) -> Subject(mqtt.Update) {
   updates
 }
 
+/// Starts connecting to the MQTT server.
+/// The connection state will be published as an update.
+/// If a connection is already established or being established,
+/// this will be a no-op.
+/// Note that switching between `clean_session` values
+/// while already connecting is currently not well handled.
 pub fn connect(
   client: Client,
   clean_session: Bool,
@@ -65,6 +73,25 @@ pub fn connect(
   process.send(client.self, Perform(Connect(clean_session, will)))
 }
 
+/// Disconnects from the MQTT server.
+/// The connection state change will also be published as an update.
+/// If a connection is not established or being established,
+/// this will be a no-op.
+/// Returns the serialized session state to be potentially restored later.
+pub fn disconnect(client: Client) -> String {
+  todo
+}
+
+/// Publishes a new message, which will be sent to the sever.
+/// If not connected, Qos 0 messages will be dropped,
+/// and higher QoS level messages will be sent once connected.
+pub fn publish(client: Client, data: mqtt.PublishData) -> Nil {
+  todo
+}
+
+/// Subscribes to the given topics.
+/// Will block until we get a response from the server,
+/// returning the result of the operation.
 pub fn subscribe(
   client: Client,
   requests: List(mqtt.SubscribeRequest),
@@ -73,7 +100,21 @@ pub fn subscribe(
   Perform(Subscribe(requests, effect))
 }
 
-// TODO: Add more wrappers
+/// Unsubscribes from the given topics.
+/// Will block until we get a response from the server,
+/// returning the result of the operation.
+pub fn unsubscribe(
+  client: Client,
+  topics: List(String),
+) -> Result(Nil, mqtt.OperationError) {
+  todo
+}
+
+/// Returns the number of QoS > 0 publishes that haven't yet been completely published.
+/// Also see `wait_for_publishes_to_finish`.
+pub fn pending_publishes(client: Client) -> Int {
+  todo
+}
 
 //===== Privates =====/
 
