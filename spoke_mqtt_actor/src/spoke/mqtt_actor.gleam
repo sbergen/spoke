@@ -7,8 +7,8 @@ import gleam/otp/actor as otp_actor
 import gleam/result
 import gleam/string
 import spoke/core.{
-  Connect, Disconnect, Perform, PublishMessage, Subscribe, SubscribeToUpdates,
-  TransportFailed, Unsubscribe,
+  Connect, Disconnect, GetPendingPublishes, Perform, PublishMessage, Subscribe,
+  SubscribeToUpdates, TransportFailed, Unsubscribe, WaitForPublishesToFinish,
 }
 import spoke/mqtt
 
@@ -113,20 +113,24 @@ pub fn unsubscribe(
   Perform(Unsubscribe(topics, effect))
 }
 
+// TODO: test
 /// Returns the number of QoS > 0 publishes that haven't yet been completely published.
 /// Also see `wait_for_publishes_to_finish`.
 pub fn pending_publishes(client: Client) -> Int {
-  todo
+  use effect <- actor.call(client.self, 2 * client.options.server_timeout_ms)
+  Perform(GetPendingPublishes(effect))
 }
 
+// TODO: test
 /// Wait for all pending QoS > 0 publishes to complete.
 /// Returns an error if the operation times out,
 /// or panics if the client is killed while waiting.
 pub fn wait_for_publishes_to_finish(
   client: Client,
   timeout: Int,
-) -> Result(Nil, Nil) {
-  todo
+) -> Result(Nil, mqtt.OperationError) {
+  use effect <- actor.call_forever(client.self)
+  Perform(WaitForPublishesToFinish(effect, timeout))
 }
 
 //===== Privates =====/
