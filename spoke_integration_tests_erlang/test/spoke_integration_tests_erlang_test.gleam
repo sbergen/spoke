@@ -17,7 +17,8 @@ pub fn subscribe_and_publish_qos0_test() -> Nil {
     |> mqtt_actor.start_session
 
   connect_and_wait(client, True, None)
-  let updates = mqtt_actor.subscribe_to_updates(client)
+  let updates = process.new_subject()
+  mqtt_actor.subscribe_to_updates(client, updates)
 
   let topic = "subscribe_and_publish"
   let assert Ok(_) =
@@ -89,7 +90,8 @@ fn receive_after_reconnect(qos: mqtt.QoS) -> Nil {
   disconnect_and_wait(sender_client)
 
   // Now reconnect without cleaning session: the message should be received
-  let updates = mqtt_actor.subscribe_to_updates(receiver_client)
+  let updates = process.new_subject()
+  mqtt_actor.subscribe_to_updates(receiver_client, updates)
   mqtt_actor.connect(receiver_client, False, None)
   assert process.receive(updates, 1000)
     == Ok(
@@ -115,7 +117,8 @@ pub fn will_disconnect_test() -> Nil {
     mqtt_actor.subscribe(client, [mqtt.SubscribeRequest(topic, mqtt.AtMostOnce)])
 
   // Subscribe to updates before triggering the will message
-  let updates = mqtt_actor.subscribe_to_updates(client)
+  let updates = process.new_subject()
+  mqtt_actor.subscribe_to_updates(client, updates)
 
   process.spawn_unlinked(fn() {
     let assert Ok(client) =
@@ -148,7 +151,8 @@ pub fn unsubscribe_test() -> Nil {
     |> mqtt_actor.start_session
 
   connect_and_wait(client, True, None)
-  let updates = mqtt_actor.subscribe_to_updates(client)
+  let updates = process.new_subject()
+  mqtt_actor.subscribe_to_updates(client, updates)
 
   let topic = "unsubscribe"
   let assert Ok(_) =
@@ -184,7 +188,8 @@ fn connect_and_wait(
   clean_session: Bool,
   will: Option(mqtt.PublishData),
 ) -> Nil {
-  let updates = mqtt_actor.subscribe_to_updates(client)
+  let updates = process.new_subject()
+  mqtt_actor.subscribe_to_updates(client, updates)
   mqtt_actor.connect(client, clean_session, will)
   let assert Ok(mqtt.ConnectionStateChanged(mqtt.ConnectAccepted(_))) =
     process.receive(updates, 1000)
@@ -193,7 +198,8 @@ fn connect_and_wait(
 }
 
 fn disconnect_and_wait(client: mqtt_actor.Client) -> Nil {
-  let updates = mqtt_actor.subscribe_to_updates(client)
+  let updates = process.new_subject()
+  mqtt_actor.subscribe_to_updates(client, updates)
   mqtt_actor.disconnect(client)
   let assert Ok(mqtt.ConnectionStateChanged(mqtt.Disconnected)) =
     process.receive(updates, 1000)

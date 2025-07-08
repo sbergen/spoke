@@ -51,14 +51,16 @@ pub fn restore_session(
 
 // END TODO
 
-/// Returns a `Subject` (owned by the current process) for receiving client updates
-/// (received messages and connection state changes).
-pub fn subscribe_to_updates(client: Client) -> Subject(mqtt.Update) {
-  let updates = process.new_subject()
+/// Will start publishing client updates to the given subject.
+pub fn subscribe_to_updates(
+  client: Client,
+  updates: Subject(mqtt.Update),
+) -> Nil {
   let publish = drift.new_effect(process.send(updates, _))
   process.send(client.self, Perform(SubscribeToUpdates(publish)))
-  updates
 }
+
+// TODO: Add a method for unsubscribing from updates
 
 /// Starts connecting to the MQTT server.
 /// The connection state will be published as an update.

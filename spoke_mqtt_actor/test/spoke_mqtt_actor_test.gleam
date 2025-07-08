@@ -6,12 +6,13 @@ import spoke/mqtt_actor
 pub fn main() -> Nil {
   //gleeunit.main()
 
+  let updates = process.new_subject()
   let assert Ok(client) =
     mqtt_actor.using_tcp("mqtt.beatwaves.net", 1883, 1000)
     |> mqtt.connect_with_id("spoke-test")
     |> mqtt_actor.start_session()
 
-  let updates = mqtt_actor.subscribe_to_updates(client)
+  mqtt_actor.subscribe_to_updates(client, updates)
 
   mqtt_actor.connect(client, True, None)
   echo process.receive_forever(updates)
