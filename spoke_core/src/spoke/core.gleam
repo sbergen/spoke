@@ -28,7 +28,7 @@ pub type Command {
   SubscribeToUpdates(Effect(mqtt.Update))
   UnsubscribeFromUpdates(Effect(mqtt.Update))
   Connect(clean_session: Bool, will: Option(PublishData))
-  Disconnect(Effect(String))
+  Disconnect(Effect(Nil))
   Subscribe(List(SubscribeRequest), Effect(OperationResult(List(Subscription))))
   Unsubscribe(List(String), Effect(OperationResult(Nil)))
   PublishMessage(PublishData)
@@ -67,7 +67,7 @@ pub type Output {
   PublishesCompleted(Action(OperationResult(Nil)))
   SubscribeCompleted(Action(OperationResult(List(Subscription))))
   UnsubscribeCompleted(Action(OperationResult(Nil)))
-  ReportStateAtDisconnect(Action(String))
+  CompleteDisconnect(Action(Nil))
 }
 
 pub opaque type State {
@@ -91,14 +91,14 @@ pub type Step =
 pub type Context =
   drift.Context(Input, Output)
 
-pub fn restore_state(
-  options: mqtt.ConnectOptions(_),
-  state: String,
-) -> Result(State, String) {
-  session.from_json(state)
-  |> result.map(new(options, _))
-  |> result.map_error(string.inspect)
-}
+//pub fn restore_state(
+//  options: mqtt.ConnectOptions(_),
+//  state: String,
+//) -> Result(State, String) {
+//  session.from_json(state)
+//  |> result.map(new(options, _))
+//  |> result.map_error(string.inspect)
+//}
 
 pub fn new_state(options: mqtt.ConnectOptions(_)) -> State {
   new(options, session.new(False))
@@ -442,7 +442,7 @@ fn connect(
   }
 }
 
-fn disconnect(context: Context, state: State, complete: Effect(String)) -> Step {
+fn disconnect(context: Context, state: State, complete: Effect(Nil)) -> Step {
   let outputs = case state.connection {
     Connecting(..) -> Some([CloseTransport])
     WaitingForConnAck(..) -> Some([CloseTransport])
@@ -451,11 +451,7 @@ fn disconnect(context: Context, state: State, complete: Effect(String)) -> Step 
     NotConnected -> None
   }
 
-  let result =
-    ReportStateAtDisconnect(drift.bind_effect(
-      complete,
-      session.to_json(state.session),
-    ))
+  let result = CompleteDisconnect(drift.bind_effect(complete, Nil))
 
   case outputs {
     Some(outputs) ->

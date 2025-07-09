@@ -3,6 +3,7 @@ import drift
 import drift/record
 import gleam/bytes_tree
 import gleam/function
+import gleam/int
 import gleam/list
 import gleam/option.{None}
 import gleam/string
@@ -33,11 +34,11 @@ pub fn from_options(options: mqtt.ConnectOptions(_)) -> Recorder {
   record.new(core.new_state(options), core.handle_input, formatter, None)
 }
 
-pub fn from_state(state: String) -> Recorder {
-  let options = mqtt.connect_with_id(0, "my-client")
-  let assert Ok(state) = core.restore_state(options, state)
-  record.new(state, core.handle_input, formatter, None)
-}
+//pub fn from_state(state: String) -> Recorder {
+//  let options = mqtt.connect_with_id(0, "my-client")
+//  let assert Ok(state) = core.restore_state(options, state)
+//  record.new(state, core.handle_input, formatter, None)
+//}
 
 pub fn received(recorder: Recorder, packet: server_out.Packet) -> Recorder {
   let data = server_out.encode_packet(packet)
@@ -151,11 +152,11 @@ fn format_output(output: core.Output) -> String {
     core.PublishesCompleted(action) ->
       "Wait for publishes " <> format_action(action, string.inspect)
 
-    core.ReportStateAtDisconnect(action) ->
-      "Disconnect " <> format_action(action, function.identity)
+    core.CompleteDisconnect(action) ->
+      "Disconnect " <> format_action(action, string.inspect)
 
     core.ReturnPendingPublishes(action) ->
-      "Pending publishes " <> format_action(action, string.inspect)
+      "Pending publishes " <> format_action(action, int.to_string)
 
     core.SubscribeCompleted(action) ->
       "Subscribe "

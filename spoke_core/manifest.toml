@@ -29,7 +29,6 @@ packages = [
 birdie = { version = ">= 1.2.7 and < 2.0.0" }
 drift = { path = "../../drift/drift/" }
 drift_record = { path = "../../drift/drift_record/" }
-gleam_json = { version = ">= 3.0.1 and < 4.0.0" }
 gleam_stdlib = { version = ">= 0.60.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 spoke_mqtt = { path = "../spoke_mqtt" }

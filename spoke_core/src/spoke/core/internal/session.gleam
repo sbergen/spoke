@@ -7,24 +7,17 @@
 //// 
 //// Also, to simplify things, we keep the packet id also.
 
-import gleam/bit_array
 import gleam/dict.{type Dict}
-import gleam/dynamic/decode
-import gleam/int
-import gleam/json
 import gleam/list
-import gleam/option.{None, Some}
 import gleam/set.{type Set}
 import spoke/packet
 import spoke/packet/client/outgoing
-
-const json_version = 1
 
 pub opaque type Session {
   Session(
     clean_session: Bool,
     packet_id: Int,
-    /// Published QoS 2 messages waiting or PubRec,
+    /// Published QoS 1 messages waiting for PubAck,
     /// used for re-transmission of Publish.
     unacked_qos1: Dict(Int, packet.MessageData),
     /// Published QoS 2 messages waiting for PubRec,
@@ -54,109 +47,6 @@ pub fn new(clean_session: Bool) -> Session {
     unreleased_qos2: set.new(),
     incomplete_qos2_in: set.new(),
   )
-}
-
-pub fn from_json(state: String) -> Result(Session, json.DecodeError) {
-  let decode_payload =
-    decode.string
-    |> decode.then(fn(str) {
-      case bit_array.base64_decode(str) {
-        Ok(payload) -> decode.success(payload)
-        Error(Nil) -> decode.failure(<<>>, "BitArray")
-      }
-    })
-
-  let decode_id_key =
-    decode.string
-    |> decode.then(fn(str) {
-      case int.parse(str) {
-        Ok(id) -> decode.success(id)
-        Error(Nil) -> decode.failure(0, "Int")
-      }
-    })
-
-  let decode_message = {
-    use topic <- decode.field("topic", decode.string)
-    use payload <- decode.field("payload", decode_payload)
-    use retain <- decode.field("retain", decode.bool)
-    decode.success(packet.MessageData(topic:, payload:, retain:))
-  }
-
-  let decode_message_dict = decode.dict(decode_id_key, decode_message)
-  let decode_id_set = decode.list(decode.int) |> decode.map(set.from_list)
-
-  let core_decoder = {
-    use packet_id <- decode.field("packet_id", decode.int)
-    use unacked_qos1 <- decode.field("unacked_qos1", decode_message_dict)
-    use unreceived_qos2 <- decode.field("unreceived_qos2", decode_message_dict)
-    use unreleased_qos2 <- decode.field("unreleased_qos2", decode_id_set)
-    use incomplete_qos2_in <- decode.field("incomplete_qos2_in", decode_id_set)
-
-    decode.success(Session(
-      clean_session: False,
-      packet_id:,
-      unacked_qos1:,
-      unreceived_qos2:,
-      unreleased_qos2:,
-      incomplete_qos2_in:,
-    ))
-  }
-
-  let decoder =
-    {
-      use version <- decode.field("version", decode.int)
-
-      case version {
-        1 -> decode.success(version)
-        _ -> decode.failure(version, "known version")
-      }
-    }
-    |> decode.then(fn(_version) {
-      {
-        use session <- decode.field("data", decode.optional(core_decoder))
-        decode.success(option.unwrap(session, new(True)))
-      }
-    })
-
-  json.parse(state, decoder)
-}
-
-pub fn to_json(session: Session) -> String {
-  let encode_message = fn(msg: packet.MessageData) {
-    json.object([
-      #("topic", json.string(msg.topic)),
-      #("payload", json.string(bit_array.base64_encode(msg.payload, True))),
-      #("retain", json.bool(msg.retain)),
-    ])
-  }
-
-  let encode_message_dict = json.dict(_, int.to_string, encode_message)
-  let encode_id_set = fn(ids) { json.array(set.to_list(ids), json.int) }
-
-  let data = case session {
-    Session(
-      False,
-      packet_id,
-      unacked_qos1,
-      unreceived_qos2,
-      unreleased_qos2,
-      incomplete_qos2_in,
-    ) ->
-      Some([
-        #("packet_id", json.int(packet_id)),
-        #("unacked_qos1", encode_message_dict(unacked_qos1)),
-        #("unreceived_qos2", encode_message_dict(unreceived_qos2)),
-        #("unreleased_qos2", encode_id_set(unreleased_qos2)),
-        #("incomplete_qos2_in", encode_id_set(incomplete_qos2_in)),
-      ])
-    _ -> None
-  }
-
-  json.object([
-    #("version", json.int(json_version)),
-    #("data", json.nullable(data, json.object)),
-  ])
-  |> json.to_string
 }
 
 pub fn is_ephemeral(session: Session) -> Bool {

@@ -1,5 +1,5 @@
 ---
-version: 1.2.7
+version: 1.3.0
 title: Disconnect before connection established
 ---
   --> Subscribe to updates #1
@@ -7,4 +7,4 @@ title: Disconnect before connection established
 <--   Open transport
   --> Disconnect #2
 <--   Close transport
-      Disconnect #2 completed: {"version":1,"data":{"packet_id":1,"unacked_qos1":{},"unreceived_qos2":{},"unreleased_qos2":[],"incomplete_qos2_in":[]}}
+      Disconnect #2 completed: Nil

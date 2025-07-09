@@ -1,34 +1,5 @@
 import gleeunit/should
 import spoke/core/internal/session.{type Session}
-import spoke/packet
-
-pub fn ephemeral_session_serialize_test() {
-  session.new(True)
-  |> session.to_json
-  |> session.from_json
-  |> should.equal(Ok(session.new(True)))
-}
-
-pub fn invalid_version_fails_deserialization_test() {
-  session.from_json("{ \"version\": 42 }")
-  |> should.be_error
-}
-
-pub fn non_ephemeral_session_persists_state_test() {
-  let message_data = packet.MessageData("topic", <<"payload">>, False)
-
-  let session = session.new(False)
-  let #(session, _) = session.reserve_packet_id(session)
-  let #(session, _) = session.start_qos1_publish(session, message_data)
-  let #(session, _) = session.start_qos2_receive(session, 42)
-  let #(session, _) = session.start_qos2_publish(session, message_data)
-  let session = session.handle_pubrec(session, 43)
-
-  session
-  |> session.to_json
-  |> session.from_json
-  |> should.equal(Ok(session))
-}
 
 pub fn packet_id_increment_test() {
   let session = session.new(True)

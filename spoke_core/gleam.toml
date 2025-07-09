@@ -14,7 +14,6 @@ version = "1.0.0"
 
 [dependencies]
 gleam_stdlib = ">= 0.60.0 and < 2.0.0"
-gleam_json = ">= 3.0.1 and < 4.0.0"
 spoke_packet = { path = "../spoke_packet" }
 spoke_mqtt = { path = "../spoke_mqtt" }
 drift = { path = "../../drift/drift/" }
