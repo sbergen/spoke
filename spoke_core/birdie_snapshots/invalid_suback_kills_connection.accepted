@@ -1,11 +1,12 @@
 ---
-version: 1.2.7
+version: 1.3.0
 title: Invalid suback kills connection
 ---
 <flushed connect and handshake>
   --> Subscribe #2
         * topic0 - AtMostOnce
 <--   Send: Subscribe(1, [SubscribeRequest("topic0", QoS0)])
+      Persist next packet id: 2
   --> Received: SubAck(2, [Ok(QoS0)])
 <--   Subscribe #2 completed: ProtocolViolation
       Close transport

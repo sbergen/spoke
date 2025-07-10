@@ -8,6 +8,7 @@ import gleam/list
 import gleam/option.{None}
 import gleam/string
 import spoke/core.{Connect, Handle, Perform, TransportEstablished}
+import spoke/core/session_state
 import spoke/mqtt
 import spoke/packet
 import spoke/packet/client/incoming as client_in
@@ -182,6 +183,7 @@ fn format_output(output: core.Output) -> String {
         server_in.decode_packet(bytes_tree.to_bit_array(data))
       "Send: " <> string.inspect(packet)
     }
+
     core.Publish(action) ->
       "Publish to "
       <> format_effect(action.effect)
@@ -189,6 +191,20 @@ fn format_output(output: core.Output) -> String {
       <> case action.argument {
         mqtt.ConnectionStateChanged(change) -> string.inspect(change)
         update -> string.inspect(update)
+      }
+
+    core.UpdatePersistedSession(storage_update) ->
+      case storage_update {
+        session_state.ClearSession -> "Clear persisted session state"
+        session_state.ClearPacketState(id:) ->
+          "Clear persisted packet state: " <> int.to_string(id)
+        session_state.StoreNextPacketId(id:) ->
+          "Persist next packet id: " <> int.to_string(id)
+        session_state.UpdatePacketState(id:, state:) ->
+          "Persist packet state: "
+          <> int.to_string(id)
+          <> ", "
+          <> string.inspect(state)
       }
 
     core.CloseTransport -> "Close transport"

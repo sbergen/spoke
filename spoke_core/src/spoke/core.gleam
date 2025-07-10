@@ -9,6 +9,7 @@ import gleam/string
 import spoke/core/internal/connection.{type Connection}
 import spoke/core/internal/convert
 import spoke/core/internal/session.{type Session}
+import spoke/core/session_state.{type SessionState}
 import spoke/mqtt.{
   type OperationError, type PublishData, type SubscribeRequest,
   type Subscription, AtLeastOnce, AtMostOnce, ConnectionStateChanged,
@@ -68,6 +69,7 @@ pub type Output {
   SubscribeCompleted(Action(OperationResult(List(Subscription))))
   UnsubscribeCompleted(Action(OperationResult(Nil)))
   CompleteDisconnect(Action(Nil))
+  UpdatePersistedSession(session_state.StorageUpdate)
 }
 
 pub opaque type State {
@@ -91,17 +93,17 @@ pub type Step =
 pub type Context =
   drift.Context(Input, Output)
 
-//pub fn restore_state(
-//  options: mqtt.ConnectOptions(_),
-//  state: String,
-//) -> Result(State, String) {
-//  session.from_json(state)
-//  |> result.map(new(options, _))
-//  |> result.map_error(string.inspect)
-//}
+pub fn restore_state(
+  options: mqtt.ConnectOptions(_),
+  state: SessionState,
+) -> State {
+  session.from_state(state)
+  |> new(options)
+}
 
 pub fn new_state(options: mqtt.ConnectOptions(_)) -> State {
-  new(options, session.new(False))
+  session.new(False)
+  |> new(options)
 }
 
 pub fn handle_input(context: Context, state: State, input: Input) -> Step {
@@ -137,7 +139,7 @@ pub fn handle_input(context: Context, state: State, input: Input) -> Step {
 
 //===== Privates =====//
 
-fn new(options: mqtt.ConnectOptions(_), session: session.Session) -> State {
+fn new(session: session.Session, options: mqtt.ConnectOptions(_)) -> State {
   let options =
     Options(
       client_id: options.client_id,
@@ -167,7 +169,7 @@ fn subscribe(
 ) -> Step {
   case all_requests, state.connection {
     [request, ..requests], Connected(_) -> {
-      let #(session, id) = session.reserve_packet_id(state.session)
+      let #(session, id, id_updates) = session.reserve_packet_id(state.session)
 
       let #(context, timer) =
         drift.start_timer(
@@ -191,6 +193,7 @@ fn subscribe(
           list.map(requests, convert.to_packet_subscribe_request),
         )),
       )
+      |> output_storage_updates(id_updates)
       |> drift.continue(State(..state, session:, pending_subs:))
     }
     [], Connected(_) ->
@@ -213,7 +216,7 @@ fn unsubscribe(
 ) -> Step {
   case topics, state.connection {
     [topic, ..topics], Connected(_) -> {
-      let #(session, id) = session.reserve_packet_id(state.session)
+      let #(session, id, id_updates) = session.reserve_packet_id(state.session)
       let #(context, timer) =
         drift.start_timer(
           context,
@@ -226,6 +229,7 @@ fn unsubscribe(
 
       context
       |> drift.output(send(outgoing.Unsubscribe(id, topic, topics)))
+      |> output_storage_updates(id_updates)
       |> drift.continue(State(..state, session:, pending_unsubs:))
     }
     [], Connected(_) ->
@@ -399,15 +403,8 @@ fn connect(
 ) -> Step {
   case state.connection {
     NotConnected -> {
-      // [MQTT-3.1.2-6]
-      // If CleanSession is set to 1,
-      // the Client and Server MUST discard any previous Session and start a new one.
-      // This Session lasts as long as the Network Connection.
-      // State data associated with this Session MUST NOT be reused in any subsequent Session.
-      let session = case clean_session || session.is_ephemeral(state.session) {
-        True -> session.new(clean_session)
-        False -> state.session
-      }
+      let #(session, storage_updates) =
+        session.connect(state.session, clean_session)
 
       let options =
         packet.ConnectOptions(
@@ -426,6 +423,7 @@ fn connect(
         )
 
       context
+      |> output_storage_updates(storage_updates)
       |> drift.output(OpenTransport)
       |> drift.continue(
         State(
@@ -474,10 +472,11 @@ fn publish(context: Context, state: State, data: mqtt.PublishData) -> Step {
       retain: data.retain,
     )
 
-  let #(session, packet) = case data.qos {
+  let #(session, packet, storage_updates) = case data.qos {
     AtMostOnce -> #(
       state.session,
       outgoing.Publish(packet.PublishDataQoS0(message)),
+      [],
     )
     AtLeastOnce -> session.start_qos1_publish(state.session, message)
     ExactlyOnce -> session.start_qos2_publish(state.session, message)
@@ -488,6 +487,7 @@ fn publish(context: Context, state: State, data: mqtt.PublishData) -> Step {
     Connected(_) ->
       context
       |> drift.output(send(packet))
+      |> output_storage_updates(storage_updates)
       |> drift.continue(state)
 
     // QoS 0 packets are just dropped, QoS > 0 have been saved in the session
@@ -695,8 +695,8 @@ fn handle_publish(
   state: State,
   data: packet.PublishData,
 ) -> Step {
-  let #(msg, session, packet) = case data {
-    packet.PublishDataQoS0(msg) -> #(Some(msg), state.session, None)
+  let #(msg, session, packet, storage_updates) = case data {
+    packet.PublishDataQoS0(msg) -> #(Some(msg), state.session, None, [])
 
     // dup is essentially useless,
     // as we don't know if we have already received this or not.
@@ -704,16 +704,17 @@ fn handle_publish(
       Some(msg),
       state.session,
       Some(outgoing.PubAck(id)),
+      [],
     )
 
     packet.PublishDataQoS2(msg, _dup, id) -> {
-      let #(session, publish_result) =
+      let #(session, publish_result, storage_updates) =
         session.start_qos2_receive(state.session, id)
       let msg = case publish_result {
         True -> Some(msg)
         False -> None
       }
-      #(msg, session, Some(outgoing.PubRec(id)))
+      #(msg, session, Some(outgoing.PubRec(id)), storage_updates)
     }
   }
 
@@ -732,7 +733,9 @@ fn handle_publish(
     None -> context
   }
 
-  drift.continue(context, State(..state, session:))
+  context
+  |> output_storage_updates(storage_updates)
+  |> drift.continue(State(..state, session:))
 }
 
 fn handle_suback(
@@ -787,8 +790,10 @@ fn handle_unsuback(context: Context, state: State, id: Int) -> Step {
 
 fn handle_puback(context: Context, state: State, id: Int) -> Step {
   case session.handle_puback(state.session, id) {
-    session.PublishFinished(session) -> {
-      drift.continue(context, State(..state, session:))
+    session.PublishFinished(session, storage_updates) -> {
+      context
+      |> output_storage_updates(storage_updates)
+      |> drift.continue(State(..state, session:))
     }
     session.InvalidPubAckId ->
       kill_connection(context, state, "Received invalid PubAck id")
@@ -797,29 +802,29 @@ fn handle_puback(context: Context, state: State, id: Int) -> Step {
 }
 
 fn handle_pubrec(context: Context, state: State, id: Int) -> Step {
+  let #(session, storage_updates) = session.handle_pubrec(state.session, id)
   context
   |> drift.output(send(outgoing.PubRel(id)))
-  |> drift.continue(
-    State(..state, session: session.handle_pubrec(state.session, id)),
-  )
+  |> output_storage_updates(storage_updates)
+  |> drift.continue(State(..state, session:))
 }
 
 fn handle_pubcomp(context: Context, state: State, id: Int) -> Step {
-  drift.continue(
-    context,
-    State(..state, session: session.handle_pubcomp(state.session, id)),
-  )
+  let #(session, storage_updates) = session.handle_pubcomp(state.session, id)
+  context
+  |> output_storage_updates(storage_updates)
+  |> drift.continue(State(..state, session:))
   |> drift.chain(check_publish_completion)
 }
 
 fn handle_pubrel(context: Context, state: State, id: Int) -> Step {
+  let #(session, storage_updates) = session.handle_pubrel(state.session, id)
   context
   // Whether or not we already sent PubComp, we always do it when receiving PubRel.
   // This is in case we lose the connection after PubRec
   |> drift.output(send(outgoing.PubComp(id)))
-  |> drift.continue(
-    State(..state, session: session.handle_pubrel(state.session, id)),
-  )
+  |> output_storage_updates(storage_updates)
+  |> drift.continue(State(..state, session:))
 }
 
 fn start_send_ping_timer(context: Context, state: State) -> Step {
@@ -945,4 +950,11 @@ fn maybe_cancel_timer(context: Context, timer: Option(drift.Timer)) -> Context {
     Some(timer) -> drift.cancel_timer(context, timer).0
     None -> context
   }
+}
+
+fn output_storage_updates(
+  context: Context,
+  updates: List(session_state.StorageUpdate),
+) -> Context {
+  drift.output_many(context, list.map(updates, UpdatePersistedSession))
 }

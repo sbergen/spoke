@@ -6,6 +6,7 @@ title: QoS2 duplicate is filtered when received after reconnect
   --> Received: Publish(PublishDataQoS2(MessageData("topic", "payload", False), False, 42))
 <--   Send: PubRec(42)
       Publish to #1: ReceivedMessage("topic", "payload", False)
+      Persist packet state: 42, UnreleasedQoS2
   --> Transport closed
 <--   Publish to #1: DisconnectedUnexpectedly("Transport closed")
   --> Connect - clean session: False, will: None
@@ -18,6 +19,7 @@ title: QoS2 duplicate is filtered when received after reconnect
 <--   Send: PubRec(42)
   --> Received: PubRel(42)
 <--   Send: PubComp(42)
+      Clear persisted packet state: 42
   --> Disconnect #2
 <--   Send: Disconnect
       Close transport

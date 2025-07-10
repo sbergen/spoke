@@ -1,5 +1,5 @@
 ---
-version: 1.2.7
+version: 1.3.0
 title: Subscribe error from server
 ---
 <flushed connect and handshake>
@@ -7,6 +7,7 @@ title: Subscribe error from server
         * topic0 - AtMostOnce
         * topic1 - AtLeastOnce
 <--   Send: Subscribe(1, [SubscribeRequest("topic0", QoS0), SubscribeRequest("topic1", QoS1)])
+      Persist next packet id: 2
   --> Received: SubAck(1, [Ok(QoS0), Error(Nil)])
 <--   Subscribe #2 completed: 
         * topic0 - AtMostOnce

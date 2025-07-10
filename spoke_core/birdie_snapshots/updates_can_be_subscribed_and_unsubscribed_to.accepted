@@ -1,11 +1,12 @@
 ---
-version: 1.2.7
+version: 1.3.0
 title: Updates can be subscribed and unsubscribed to
 ---
   --> Subscribe to updates #1
   --> Subscribe to updates #2
   --> Connect - clean session: True, will: None
-<--   Open transport
+<--   Clear persisted session state
+      Open transport
   --> Transport established
 <--   Send: Connect(ConnectOptions(True, "my-client", 15, None, None))
   --> Received: ConnAck(Ok(SessionNotPresent))
