@@ -88,16 +88,31 @@ pub fn restore_session(
   from_state(options, Some(storage), state)
 }
 
+/// A handle for update subscriptions
+pub opaque type UpdateSubscription {
+  UpdateSubscription(effect: drift.Effect(mqtt.Update))
+}
+
 /// Will start publishing client updates to the given subject.
 pub fn subscribe_to_updates(
   client: Client,
   updates: Subject(mqtt.Update),
-) -> Nil {
+) -> UpdateSubscription {
   let publish = drift.new_effect(process.send(updates, _))
   process.send(client.self, Perform(SubscribeToUpdates(publish)))
+  UpdateSubscription(publish)
 }
 
-// TODO: Add a method for unsubscribing from updates
+/// Stops publishing client updates to the given subject
+pub fn unsubscribe_from_updates(
+  client: Client,
+  subscription: UpdateSubscription,
+) -> Nil {
+  process.send(
+    client.self,
+    Perform(core.UnsubscribeFromUpdates(subscription.effect)),
+  )
+}
 
 /// Starts connecting to the MQTT server.
 /// The connection state will be published as an update.
@@ -152,7 +167,6 @@ pub fn unsubscribe(
   Perform(Unsubscribe(topics, effect))
 }
 
-// TODO: test
 /// Returns the number of QoS > 0 publishes that haven't yet been completely published.
 /// Also see `wait_for_publishes_to_finish`.
 pub fn pending_publishes(client: Client) -> Int {
@@ -160,7 +174,6 @@ pub fn pending_publishes(client: Client) -> Int {
   Perform(GetPendingPublishes(effect))
 }
 
-// TODO: test
 /// Wait for all pending QoS > 0 publishes to complete.
 /// Returns an error if the operation times out,
 /// or panics if the client is killed while waiting.

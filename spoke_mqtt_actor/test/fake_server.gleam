@@ -3,25 +3,26 @@ import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option, None, Some}
 import spoke/core.{type TransportEvent}
 import spoke/mqtt_actor.{type TransportChannelConnector, TransportChannel}
+import spoke/packet
 import spoke/packet/server/incoming as server_in
 import spoke/packet/server/outgoing as server_out
 
-pub opaque type FakeTransportChannel {
-  FakeTransportChannel(
+pub opaque type FakeServer {
+  FakeServer(
     connections: Subject(Subject(TransportEvent)),
     incoming: Option(Subject(TransportEvent)),
     outgoing: Subject(BytesTree),
   )
 }
 
-pub fn new() -> #(TransportChannelConnector, FakeTransportChannel) {
+pub fn new() -> #(TransportChannelConnector, FakeServer) {
   let outgoing_data = process.new_subject()
-  let conncetions = process.new_subject()
+  let connections = process.new_subject()
 
   let connector = fn() {
     let incoming_data = process.new_subject()
     let selector = process.new_selector() |> process.select(incoming_data)
-    process.send(conncetions, incoming_data)
+    process.send(connections, incoming_data)
 
     Ok(
       TransportChannel(
@@ -35,29 +36,28 @@ pub fn new() -> #(TransportChannelConnector, FakeTransportChannel) {
     )
   }
 
-  let channel = FakeTransportChannel(conncetions, None, outgoing_data)
-  #(connector, channel)
+  let server = FakeServer(connections, None, outgoing_data)
+  #(connector, server)
 }
 
-pub fn connected(channel) -> FakeTransportChannel {
-  send_event(channel, core.TransportEstablished)
+pub fn establish_connection(
+  server: FakeServer,
+  result: packet.ConnAckResult,
+) -> FakeServer {
+  server
+  |> send_event(core.TransportEstablished)
+  |> send(server_out.ConnAck(result))
 }
 
-pub fn send(
-  channel: FakeTransportChannel,
-  packet: server_out.Packet,
-) -> FakeTransportChannel {
+pub fn send(server: FakeServer, packet: server_out.Packet) -> FakeServer {
   let data = bytes_tree.to_bit_array(server_out.encode_packet(packet))
-  send_event(channel, core.ReceivedData(data))
+  send_event(server, core.ReceivedData(data))
 }
 
-fn send_event(
-  channel: FakeTransportChannel,
-  event: TransportEvent,
-) -> FakeTransportChannel {
-  let incoming = case channel.incoming {
+fn send_event(server: FakeServer, event: TransportEvent) -> FakeServer {
+  let incoming = case server.incoming {
     None -> {
-      let assert Ok(incoming) = process.receive(channel.connections, 50)
+      let assert Ok(incoming) = process.receive(server.connections, 50)
       incoming
     }
     Some(i) -> i
@@ -65,25 +65,25 @@ fn send_event(
 
   process.send(incoming, event)
 
-  FakeTransportChannel(..channel, incoming: Some(incoming))
+  FakeServer(..server, incoming: Some(incoming))
 }
 
-pub fn receive(channel: FakeTransportChannel) -> List(server_in.Packet) {
-  let assert Ok(data) = process.receive(channel.outgoing, 10)
+pub fn receive(server: FakeServer) -> List(server_in.Packet) {
+  let assert Ok(data) = process.receive(server.outgoing, 10)
   let assert Ok(#(packets, <<>>)) =
     server_in.decode_packets(bytes_tree.to_bit_array(data))
   packets
 }
 
-pub fn flush(channel: FakeTransportChannel) -> FakeTransportChannel {
-  case process.receive(channel.outgoing, 0) {
-    Error(Nil) -> channel
-    Ok(_) -> flush(channel)
+pub fn flush(server: FakeServer) -> FakeServer {
+  case process.receive(server.outgoing, 0) {
+    Error(Nil) -> server
+    Ok(_) -> flush(server)
   }
 }
 
-pub fn close(channel: FakeTransportChannel) -> FakeTransportChannel {
-  let assert Some(incoming) = channel.incoming
+pub fn close(server: FakeServer) -> FakeServer {
+  let assert Some(incoming) = server.incoming
   process.send(incoming, core.TransportClosed)
-  FakeTransportChannel(..channel, incoming: None)
+  FakeServer(..server, incoming: None)
 }
