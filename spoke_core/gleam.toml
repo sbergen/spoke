@@ -22,3 +22,4 @@ drift = { path = "../../drift/drift/" }
 gleeunit = ">= 1.0.0 and < 2.0.0"
 birdie = ">= 1.2.7 and < 2.0.0"
 drift_record = { path = "../../drift/drift_record/" }
+temporary = ">= 1.0.0 and < 2.0.0"

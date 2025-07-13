@@ -1,6 +1,18 @@
 -module(spoke_ets_ffi).
 
--export([new/0, read/1, update_next_id/2]).
+-export([new/0, read/1, update_next_id/2, load_from_file/1, store_to_file/2]).
+
+load_from_file(Filename) ->
+    ets:file2tab(
+        unicode:characters_to_list(Filename)).
+
+store_to_file(Table, Filename) ->
+    case ets:tab2file(Table, unicode:characters_to_list(Filename)) of
+        ok ->
+            {ok, nil};
+        Error ->
+            Error
+    end.
 
 new() ->
     ets:new(spoke_mqtt_session, [public, set]).

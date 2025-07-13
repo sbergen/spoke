@@ -2,13 +2,25 @@
 
 import spoke/core/session_state.{type SessionState, type StorageUpdate}
 
+/// A handle to the ETS table storing the session state
 pub type EtsStorage
+
+/// Any error coming from ETS directly, type not specified
+pub type EtsError
 
 /// Create a new empty ETS storage
 @external(erlang, "spoke_ets_ffi", "new")
 pub fn new() -> EtsStorage
 
-// TODO: Add load function
+/// Loads a session previously stored to a file using `store_to_file`
+@external(erlang, "spoke_ets_ffi", "load_from_file")
+pub fn load_from_file(filename: String) -> Result(EtsStorage, EtsError)
+
+@external(erlang, "spoke_ets_ffi", "store_to_file")
+pub fn store_to_file(
+  storage: EtsStorage,
+  filename: String,
+) -> Result(Nil, EtsError)
 
 /// Reads the currently stored session state.
 @external(erlang, "spoke_ets_ffi", "read")
