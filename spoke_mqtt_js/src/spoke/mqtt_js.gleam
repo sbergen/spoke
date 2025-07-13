@@ -1,4 +1,5 @@
 import drift.{type EffectContext}
+import drift/js/channel.{type Channel}
 import drift/js/runtime.{type Runtime}
 import gleam/bytes_tree.{type BytesTree}
 import gleam/javascript/promise.{type Promise}
@@ -35,12 +36,37 @@ pub fn start_session(options: mqtt.ConnectOptions(TransportOptions)) -> Client {
   from_state(options, core.new_state(options))
 }
 
+/// A handle for update subscriptions
+pub opaque type UpdateSubscription {
+  UpdateSubscription(effect: drift.Effect(mqtt.Update))
+}
+
 pub fn subscribe_to_updates(
   client: Client,
+) -> #(Channel(mqtt.Update), UpdateSubscription) {
+  let channel = channel.new()
+  let subscription = register_update_callback(client, channel.send(channel, _))
+  #(channel, subscription)
+}
+
+pub fn register_update_callback(
+  client: Client,
   callback: fn(mqtt.Update) -> Nil,
-) -> Nil {
+) -> UpdateSubscription {
   let publish = drift.new_effect(callback)
   runtime.send(client.self, Perform(SubscribeToUpdates(publish)))
+  UpdateSubscription(publish)
+}
+
+/// Stops publishing client updates associated to the subscription.
+pub fn unsubscribe_from_updates(
+  client: Client,
+  subscription: UpdateSubscription,
+) -> Nil {
+  runtime.send(
+    client.self,
+    Perform(core.UnsubscribeFromUpdates(subscription.effect)),
+  )
 }
 
 pub fn connect(
@@ -101,8 +127,12 @@ fn handle_output(
     core.PublishesCompleted(action) -> drift.perform_effect(ctx, action)
     core.SubscribeCompleted(action) -> drift.perform_effect(ctx, action)
     core.UnsubscribeCompleted(action) -> drift.perform_effect(ctx, action)
-    core.ReportStateAtDisconnect(action) -> drift.perform_effect(ctx, action)
     core.ReturnPendingPublishes(action) -> drift.perform_effect(ctx, action)
+    core.CompleteDisconnect(action) -> drift.perform_effect(ctx, action)
+    core.UpdatePersistedSession(_) -> {
+      // We don't have session persistence yet.
+      ctx
+    }
   })
 }
 

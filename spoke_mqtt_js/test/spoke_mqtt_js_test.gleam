@@ -1,9 +1,10 @@
-import gleam/javascript/promise
+import drift/js/channel
+import gleam/javascript/promise.{type Promise}
 import gleam/option.{None}
-import spoke/mqtt
+import spoke/mqtt.{ConnectAccepted, ConnectionStateChanged}
 import spoke/mqtt_js
 
-pub fn main() -> promise.Promise(Nil) {
+pub fn main() -> Promise(Nil) {
   //gleeunit.main()
 
   let client =
@@ -11,14 +12,11 @@ pub fn main() -> promise.Promise(Nil) {
     |> mqtt.connect_with_id("spoke-test")
     |> mqtt_js.start_session()
 
-  mqtt_js.subscribe_to_updates(client, fn(update) {
-    echo update
-    Nil
-  })
-
-  // IDK how to wait for connected :/
+  let #(updates, _) = mqtt_js.subscribe_to_updates(client)
   mqtt_js.connect(client, True, None)
-  use _ <- promise.await(promise.wait(1000))
+
+  use update <- promise.await(channel.receive(updates))
+  let assert Ok(ConnectionStateChanged(ConnectAccepted(_))) = update
 
   use sub_result <- promise.await(
     mqtt_js.subscribe(client, [
@@ -27,9 +25,11 @@ pub fn main() -> promise.Promise(Nil) {
   )
 
   let assert Ok(_) = echo sub_result
+  loop(updates)
+}
 
-  use _ <- promise.map(promise.wait(100_000))
-  Nil
-  // let assert Ok(_) =
-  //   
+fn loop(channel: channel.Channel(mqtt.Update)) -> Promise(Nil) {
+  use update <- promise.await(channel.receive(channel))
+  echo update
+  loop(channel)
 }

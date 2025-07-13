@@ -103,7 +103,7 @@ pub fn subscribe_to_updates(
   UpdateSubscription(publish)
 }
 
-/// Stops publishing client updates to the given subject
+/// Stops publishing client updates associated to the subscription.
 pub fn unsubscribe_from_updates(
   client: Client,
   subscription: UpdateSubscription,

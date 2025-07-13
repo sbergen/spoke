@@ -1,23 +1,39 @@
 import {
-    BitArray,
+    BitArray, Error, Ok
 } from "../../gleam.mjs";
-import WebSocket from 'ws';
 
-export function connect(url, onOpen, onMessage) {
-    const socket = new WebSocket(url, ["mqtt"]);
+let WebSocketImpl;
+if (typeof WebSocket !== 'undefined') {
+    WebSocketImpl = WebSocket
+} else {
+    const ws = await import('ws')
+    WebSocketImpl = ws.WebSocket || ws.default;
+}
+
+const Nil = undefined
+
+export function connect(url, onOpen, onClose, onMessage, onError) {
+    const socket = new WebSocketImpl(url, ["mqtt"]);
+
     socket.binaryType = "arraybuffer";
-    socket.addEventListener("open", (event) => onOpen());
-    //socket.addEventListener("error", (event) => onError(event.toString()));
-
-    socket.addEventListener("message", (event) => {
-        // TODO: Error if text
+    socket.onopen = (_) => onOpen();
+    socket.onclose = (_) => onClose();
+    socket.onerror = (event) => onError(event.toString());
+    socket.onmessage = (event) =>
         onMessage(new BitArray(new Uint8Array(event.data)));
-    });
 
     return socket;
 }
 
+export function close(socket) {
+    socket.close();
+}
+
 export function send(socket, bitArray) {
-    // TODO: This is not safe
+    if (bitArray.bitSize / 8 !== bitArray.rawBuffer.length) {
+        return new Error("BitArray to send contained partial bytes");
+    }
+
     socket.send(bitArray.rawBuffer);
+    return new Ok(Nil);
 }
