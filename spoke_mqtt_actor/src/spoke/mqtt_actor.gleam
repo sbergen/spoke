@@ -10,6 +10,7 @@ import spoke/core.{
   Connect, Disconnect, GetPendingPublishes, Perform, PublishMessage, Subscribe,
   SubscribeToUpdates, TransportFailed, Unsubscribe, WaitForPublishesToFinish,
 }
+import spoke/core/ets_storage.{type EtsStorage}
 import spoke/mqtt
 
 pub opaque type Client {
@@ -17,6 +18,45 @@ pub opaque type Client {
     self: Subject(core.Input),
     options: mqtt.ConnectOptions(TransportChannelConnector),
   )
+}
+
+/// If a session needs to be persisted across actor restarts
+/// (either in supervision, or across node restarts),
+/// the session needs to be stored in some persistent storage.
+pub opaque type PersistentStorage {
+  PersistToEts(storage: EtsStorage, filename: String)
+}
+
+/// Creates a new empty session that will be persisted to ETS in memory,
+/// and can also be stored to a file.
+pub fn persist_to_ets(filename: String) -> PersistentStorage {
+  PersistToEts(ets_storage.new(), filename:)
+}
+
+/// Attempts to load a session that was previously stored in ETS and saved to a file.
+pub fn load_ets_session_from_file(
+  filename: String,
+) -> Result(PersistentStorage, String) {
+  case ets_storage.load_from_file(filename) {
+    Error(e) -> Error(string.inspect(e))
+    Ok(storage) -> Ok(PersistToEts(storage, filename))
+  }
+}
+
+/// Stores the persisted session to a file.
+/// Note that if the session is active and connected,
+/// the result might not be valid.
+/// However, this function is provided without checks in order to enable
+/// storing to a file even if the actor is dead.
+pub fn store_to_file(storage: PersistentStorage) -> Result(Nil, String) {
+  ets_storage.store_to_file(storage.storage, storage.filename)
+  |> result.map_error(string.inspect)
+}
+
+/// Frees the in-memory part of the persistent storage. 
+/// Possible stored files need to be deleted separately.
+pub fn delete_in_memory_storage(storage: PersistentStorage) {
+  ets_storage.delete(storage.storage)
 }
 
 /// Provides the abstraction over a transport channel,
@@ -32,24 +72,21 @@ pub type TransportChannel {
 pub type TransportChannelConnector =
   fn() -> Result(TransportChannel, String)
 
-// TODO: Better error types below:
-
 pub fn start_session(
   options: mqtt.ConnectOptions(TransportChannelConnector),
+  storage: Option(PersistentStorage),
 ) -> Result(Client, otp_actor.StartError) {
-  from_state(options, core.new_state(options))
+  from_state(options, storage, core.new_state(options))
 }
 
 pub fn restore_session(
   options: mqtt.ConnectOptions(TransportChannelConnector),
-  state: String,
+  storage: PersistentStorage,
 ) -> Result(Client, otp_actor.StartError) {
-  core.restore_state(options, state)
-  |> result.map_error(otp_actor.InitFailed)
-  |> result.try(from_state(options, _))
+  let session_state = ets_storage.read(storage.storage)
+  let state = core.restore_state(options, session_state)
+  from_state(options, Some(storage), state)
 }
-
-// END TODO
 
 /// Will start publishing client updates to the given subject.
 pub fn subscribe_to_updates(
@@ -81,7 +118,7 @@ pub fn connect(
 /// If a connection is not established or being established,
 /// this will be a no-op.
 /// Returns the serialized session state to be potentially restored later.
-pub fn disconnect(client: Client) -> String {
+pub fn disconnect(client: Client) -> Nil {
   use effect <- actor.call(client.self, 2 * client.options.server_timeout_ms)
   Perform(Disconnect(effect))
 }
@@ -139,13 +176,20 @@ pub fn wait_for_publishes_to_finish(
 
 fn from_state(
   options: mqtt.ConnectOptions(TransportChannelConnector),
+  storage: Option(PersistentStorage),
   state: core.State,
 ) -> Result(Client, otp_actor.StartError) {
   actor.using_io(
     fn() {
       let self = process.new_subject()
       let selector = process.new_selector() |> process.select(self)
-      IoState(self, selector, options.transport_options, None)
+      IoState(
+        self:,
+        selector:,
+        connector: options.transport_options,
+        channel: None,
+        storage:,
+      )
     },
     fn(io_state) { io_state.selector },
     handle_output,
@@ -160,6 +204,7 @@ type IoState {
     selector: Selector(core.Input),
     connector: TransportChannelConnector,
     channel: Option(TransportChannel),
+    storage: Option(PersistentStorage),
   )
 }
 
@@ -175,8 +220,17 @@ fn handle_output(
     core.PublishesCompleted(action) -> drift.perform_effect(ctx, action)
     core.SubscribeCompleted(action) -> drift.perform_effect(ctx, action)
     core.UnsubscribeCompleted(action) -> drift.perform_effect(ctx, action)
-    core.ReportStateAtDisconnect(action) -> drift.perform_effect(ctx, action)
     core.ReturnPendingPublishes(action) -> drift.perform_effect(ctx, action)
+    core.CompleteDisconnect(action) -> drift.perform_effect(ctx, action)
+    core.UpdatePersistedSession(update) -> {
+      use state <- drift.use_effect_context(ctx)
+      case state.storage {
+        None -> Nil
+        Some(PersistToEts(storage, _)) -> ets_storage.update(storage, update)
+      }
+
+      state
+    }
   })
 }
 

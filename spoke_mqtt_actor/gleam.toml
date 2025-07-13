@@ -23,3 +23,5 @@ spoke_mqtt = { path = "../spoke_mqtt" }
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
+temporary = ">= 1.0.0 and < 2.0.0"
+spoke_packet = { path = "../spoke_packet" }

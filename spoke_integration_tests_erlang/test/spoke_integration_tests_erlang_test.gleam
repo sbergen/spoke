@@ -14,7 +14,7 @@ pub fn subscribe_and_publish_qos0_test() -> Nil {
   let assert Ok(client) =
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("subscribe_and_publish")
-    |> mqtt_actor.start_session
+    |> mqtt_actor.start_session(None)
 
   connect_and_wait(client, True, None)
   let updates = process.new_subject()
@@ -64,7 +64,7 @@ fn receive_after_reconnect(qos: mqtt.QoS) -> Nil {
   let assert Ok(receiver_client) =
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("qos_receiver")
-    |> mqtt_actor.start_session
+    |> mqtt_actor.start_session(None)
 
   // Connect and subscribe
   flush_server_state(receiver_client)
@@ -80,7 +80,7 @@ fn receive_after_reconnect(qos: mqtt.QoS) -> Nil {
   let assert Ok(sender_client) =
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("qos_sender")
-    |> mqtt_actor.start_session
+    |> mqtt_actor.start_session(None)
   connect_and_wait(sender_client, True, None)
 
   mqtt_actor.publish(
@@ -111,7 +111,7 @@ pub fn will_disconnect_test() -> Nil {
   let assert Ok(client) =
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("will_receiver")
-    |> mqtt_actor.start_session
+    |> mqtt_actor.start_session(None)
   connect_and_wait(client, True, None)
   let assert Ok(_) =
     mqtt_actor.subscribe(client, [mqtt.SubscribeRequest(topic, mqtt.AtMostOnce)])
@@ -124,7 +124,7 @@ pub fn will_disconnect_test() -> Nil {
     let assert Ok(client) =
       tcp.connector_with_defaults("localhost")
       |> mqtt.connect_with_id("will_sender")
-      |> mqtt_actor.start_session
+      |> mqtt_actor.start_session(None)
     let will =
       mqtt.PublishData(topic, <<"will message">>, mqtt.AtLeastOnce, False)
     connect_and_wait(client, True, Some(will))
@@ -148,7 +148,7 @@ pub fn unsubscribe_test() -> Nil {
   let assert Ok(client) =
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("unsubscribe")
-    |> mqtt_actor.start_session
+    |> mqtt_actor.start_session(None)
 
   connect_and_wait(client, True, None)
   let updates = process.new_subject()

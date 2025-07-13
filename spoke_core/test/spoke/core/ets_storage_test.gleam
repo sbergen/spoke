@@ -80,6 +80,12 @@ pub fn file_storage_test() {
     == set.from_list([#(4, UnackedQoS1(message)), #(2, ReceivedQoS2)])
 }
 
+pub fn store_to_same_file_test() {
+  use filename <- temporary.create(temporary.file())
+  let assert Ok(_) = ets_storage.store_to_file(ets_storage.new(), filename)
+  let assert Ok(_) = ets_storage.store_to_file(ets_storage.new(), filename)
+}
+
 pub fn load_from_file_error_test() {
   let assert Error(_) = ets_storage.load_from_file("filename")
 }

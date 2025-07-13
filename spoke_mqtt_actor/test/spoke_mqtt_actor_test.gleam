@@ -1,31 +1,70 @@
-import gleam/erlang/process.{type Subject}
-import gleam/option.{None}
+import fake_server
+import gleam/option.{None, Some}
+import gleeunit
 import spoke/mqtt
 import spoke/mqtt_actor
+import spoke/packet
+import spoke/packet/server/incoming as server_in
+import spoke/packet/server/outgoing as server_out
+import temporary
 
 pub fn main() -> Nil {
-  //gleeunit.main()
-
-  let updates = process.new_subject()
-  let assert Ok(client) =
-    mqtt_actor.using_tcp("mqtt.beatwaves.net", 1883, 1000)
-    |> mqtt.connect_with_id("spoke-test")
-    |> mqtt_actor.start_session()
-
-  mqtt_actor.subscribe_to_updates(client, updates)
-
-  mqtt_actor.connect(client, True, None)
-  echo process.receive_forever(updates)
-
-  let assert Ok(_) =
-    mqtt_actor.subscribe(client, [
-      mqtt.SubscribeRequest("zigbee2mqtt/#", mqtt.AtMostOnce),
-    ])
-
-  loop(updates)
+  gleeunit.main()
 }
 
-fn loop(updates: Subject(mqtt.Update)) {
-  echo process.receive_forever(updates)
-  loop(updates)
+pub fn restore_session_from_file_test() -> Nil {
+  let assert Ok(_) = {
+    use filename <- temporary.create(temporary.file())
+    let storage = mqtt_actor.persist_to_ets(filename)
+    let #(connector, channel) = fake_server.new()
+
+    let assert Ok(client) =
+      connector
+      |> mqtt.connect_with_id("my-id")
+      |> mqtt_actor.start_session(Some(storage))
+
+    // Connect
+    mqtt_actor.connect(client, False, None)
+
+    let channel =
+      channel
+      |> fake_server.connected
+      |> fake_server.send(server_out.ConnAck(Ok(packet.SessionNotPresent)))
+
+    // Start publish
+    mqtt_actor.publish(
+      client,
+      mqtt.PublishData("topic", <<"payload">>, mqtt.AtLeastOnce, False),
+    )
+
+    // Disconnect before ack and save to file
+    mqtt_actor.disconnect(client)
+    let channel = fake_server.close(channel)
+    let assert Ok(Nil) = mqtt_actor.store_to_file(storage)
+    mqtt_actor.delete_in_memory_storage(storage)
+
+    // Restore session from file
+    let assert Ok(storage) = mqtt_actor.load_ets_session_from_file(filename)
+    let assert Ok(client) =
+      connector
+      |> mqtt.connect_with_id("my-id")
+      |> mqtt_actor.restore_session(storage)
+
+    // Connect
+    mqtt_actor.connect(client, False, None)
+    let channel =
+      channel
+      |> fake_server.flush
+      |> fake_server.connected
+      |> fake_server.send(server_out.ConnAck(Ok(packet.SessionPresent)))
+
+    let assert [server_in.Connect(_)] = fake_server.receive(channel)
+
+    // Check that the packet is resent
+    let expected_message = packet.MessageData("topic", <<"payload">>, False)
+    assert fake_server.receive(channel)
+      == [server_in.Publish(packet.PublishDataQoS1(expected_message, True, 1))]
+  }
+
+  Nil
 }
