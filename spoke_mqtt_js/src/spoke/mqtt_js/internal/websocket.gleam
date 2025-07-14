@@ -11,16 +11,14 @@ pub fn connect(
   port: Int,
   _timeout: Int,
   send: fn(core.Input) -> Nil,
-) -> Result(WebSocket, String) {
+) -> WebSocket {
   let url = "ws://" <> host <> ":" <> string.inspect(port)
-  Ok(
-    connect_js(
-      url,
-      fn() { send(core.Handle(TransportEstablished)) },
-      fn() { send(core.Handle(TransportClosed)) },
-      fn(data) { send(core.Handle(ReceivedData(data))) },
-      fn(error) { send(core.Handle(TransportFailed(error))) },
-    ),
+  connect_js(
+    url,
+    fn() { send(core.Handle(TransportEstablished)) },
+    fn() { send(core.Handle(TransportClosed)) },
+    fn(data) { send(core.Handle(ReceivedData(data))) },
+    fn(error) { send(core.Handle(TransportFailed(error))) },
   )
 }
 

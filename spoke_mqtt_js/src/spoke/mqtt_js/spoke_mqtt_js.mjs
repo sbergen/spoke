@@ -15,10 +15,25 @@ const Nil = undefined
 export function connect(url, onOpen, onClose, onMessage, onError) {
     const socket = new WebSocketImpl(url, ["mqtt"]);
 
+    let isOpen = false;
     socket.binaryType = "arraybuffer";
-    socket.onopen = (_) => onOpen();
-    socket.onclose = (_) => onClose();
-    socket.onerror = (event) => onError(event.toString());
+
+    socket.onopen = (_) => {
+        isOpen = true;
+        onOpen();
+    }
+
+    socket.onclose = (_) => {
+        isOpen = false;
+        onClose();
+    }
+
+    socket.onerror = (event) => {
+        // Cross-platform errors seem to be complicated.
+        // Maybe I'll look into it one day...
+        onError(isOpen ? "Connection failed" : "Failed to connect");
+    }
+
     socket.onmessage = (event) =>
         onMessage(new BitArray(new Uint8Array(event.data)));
 

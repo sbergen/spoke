@@ -142,15 +142,8 @@ fn open_transport(
 ) -> EffectContext(IoState) {
   use state <- drift.use_effect_context(ctx)
   let WebsocketOptions(host, port, timeout) = state.options
-  case websocket.connect(host, port, timeout, send) {
-    Ok(socket) -> {
-      IoState(..state, socket: Some(socket))
-    }
-    Error(e) -> {
-      send(core.Handle(TransportFailed(string.inspect(e))))
-      state
-    }
-  }
+  let socket = websocket.connect(host, port, timeout, send)
+  IoState(..state, socket: Some(socket))
 }
 
 fn close_transport(
