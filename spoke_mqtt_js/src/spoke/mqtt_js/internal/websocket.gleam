@@ -5,10 +5,7 @@ import spoke/core.{
 
 pub type WebSocket
 
-pub fn connect(
-  url: String,
-  send: fn(core.Input) -> Nil,
-) -> WebSocket {
+pub fn connect(url: String, send: fn(core.Input) -> Nil) -> WebSocket {
   connect_js(
     url,
     fn() { send(core.Handle(TransportEstablished)) },

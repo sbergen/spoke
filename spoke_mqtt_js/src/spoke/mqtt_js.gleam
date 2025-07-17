@@ -8,7 +8,7 @@ import gleam/result
 import gleam/string
 import spoke/core.{
   Connect, Disconnect, Perform, PublishMessage, Subscribe, SubscribeToUpdates,
-  TransportClosed, TransportFailed,
+  TransportFailed,
 }
 import spoke/mqtt
 import spoke/mqtt_js/internal/websocket
@@ -142,7 +142,7 @@ fn handle_output(
 ) -> Result(EffectContext(IoState), a) {
   Ok(case output {
     core.OpenTransport -> open_transport(ctx, send)
-    core.CloseTransport -> close_transport(ctx, send)
+    core.CloseTransport -> close_transport(ctx)
     core.SendData(data) -> send_data(ctx, data, send)
     core.Publish(action) -> drift.perform_effect(ctx, action)
     core.PublishesCompleted(action) -> drift.perform_effect(ctx, action)
@@ -167,16 +167,12 @@ fn open_transport(
   IoState(..state, socket: Some(socket))
 }
 
-fn close_transport(
-  ctx: EffectContext(IoState),
-  send: fn(core.Input) -> Nil,
-) -> EffectContext(IoState) {
+fn close_transport(ctx: EffectContext(IoState)) -> EffectContext(IoState) {
   use state <- drift.use_effect_context(ctx)
   case state.socket {
     None -> state
     Some(socket) -> {
       websocket.close(socket)
-      send(core.Handle(TransportClosed))
       IoState(..state, socket: None)
     }
   }

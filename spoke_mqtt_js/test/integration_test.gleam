@@ -1,8 +1,9 @@
 //// Tests that require a local MQTT broker running.
 
-import drift/js/channel
+import drift/js/channel.{type Channel}
 import gleam/javascript/promise.{type Promise}
 import gleam/option.{type Option, None}
+import gleam/string
 import spoke/mqtt.{ConnectAccepted, ConnectionStateChanged}
 import spoke/mqtt_js
 
@@ -43,11 +44,79 @@ pub fn subscribe_and_publish_qos0_test() -> Promise(Nil) {
   promise.resolve(Nil)
 }
 
+pub fn receive_after_reconnect_qos0_test() -> Promise(Nil) {
+  receive_after_reconnect(mqtt.AtMostOnce)
+}
+
+pub fn receive_after_reconnect_qos1_test() -> Promise(Nil) {
+  receive_after_reconnect(mqtt.AtLeastOnce)
+}
+
+pub fn receive_after_reconnect_qos2_test() -> Promise(Nil) {
+  receive_after_reconnect(mqtt.ExactlyOnce)
+}
+
+fn receive_after_reconnect(qos: mqtt.QoS) -> Promise(Nil) {
+  use <- timeout(500)
+  let topic = string.inspect(qos)
+
+  let receiver_client =
+    mqtt_js.using_websocket("ws://localhost:8083/mqtt")
+    |> mqtt.connect_with_id("qos_receiver_" <> topic)
+    |> mqtt_js.start_session()
+
+  // Connect and subscribe
+  use _ <- promise.await(flush_server_state(receiver_client))
+  use receiver_updates <- promise.await(connect_and_wait(
+    receiver_client,
+    False,
+    None,
+  ))
+  use sub_result <- promise.await(
+    mqtt_js.subscribe(receiver_client, [mqtt.SubscribeRequest(topic, qos)]),
+  )
+  let assert Ok(_) = sub_result as "Subscribe should succeed"
+
+  use _ <- promise.await(disconnect_and_wait(receiver_client, receiver_updates))
+
+  // Send the message
+
+  let sender_client =
+    mqtt_js.using_websocket("ws://localhost:8083/mqtt")
+    |> mqtt.connect_with_id("qos_sender_" <> topic)
+    |> mqtt_js.start_session()
+  use sender_updates <- promise.await(connect_and_wait(
+    sender_client,
+    True,
+    None,
+  ))
+
+  mqtt_js.publish(
+    sender_client,
+    mqtt.PublishData(topic, <<"persisted msg">>, qos, False),
+  )
+  use _ <- promise.await(disconnect_and_wait(sender_client, sender_updates))
+
+  // Now reconnect without cleaning session: the message should be received
+  mqtt_js.connect(receiver_client, False, None)
+  use update <- promise.await(channel.receive_forever(receiver_updates))
+  assert update
+    == Ok(
+      mqtt.ConnectionStateChanged(mqtt.ConnectAccepted(mqtt.SessionPresent)),
+    )
+
+  use update <- promise.await(channel.receive_forever(receiver_updates))
+  assert update == Ok(mqtt.ReceivedMessage(topic, <<"persisted msg">>, False))
+
+  use _ <- promise.await(disconnect_and_wait(receiver_client, receiver_updates))
+  promise.resolve(Nil)
+}
+
 fn connect_and_wait(
   client: mqtt_js.Client,
   clean_session: Bool,
   will: Option(mqtt.PublishData),
-) -> Promise(channel.Channel(mqtt.Update)) {
+) -> Promise(Channel(mqtt.Update)) {
   let #(updates, _) = mqtt_js.subscribe_to_updates(client)
   mqtt_js.connect(client, clean_session, will)
 
@@ -58,12 +127,19 @@ fn connect_and_wait(
 
 fn disconnect_and_wait(
   client: mqtt_js.Client,
-  updates: channel.Channel(mqtt.Update),
+  updates: Channel(mqtt.Update),
 ) -> Promise(Nil) {
   mqtt_js.disconnect(client)
   use result <- promise.map(channel.receive_forever(updates))
   assert result == Ok(mqtt.ConnectionStateChanged(mqtt.Disconnected))
   Nil
+}
+
+fn flush_server_state(client: mqtt_js.Client) -> Promise(Channel(mqtt.Update)) {
+  // Connect with clean session set to true, then disconnect
+  use updates <- promise.await(connect_and_wait(client, True, None))
+  use _ <- promise.map(disconnect_and_wait(client, updates))
+  updates
 }
 
 fn timeout(after: Int, body: fn() -> Promise(a)) -> Promise(a) {
