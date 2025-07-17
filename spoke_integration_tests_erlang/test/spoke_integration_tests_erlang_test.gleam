@@ -1,7 +1,6 @@
-import gleam/erlang/process
+import gleam/erlang/process.{type Subject}
 import gleam/option.{type Option, None, Some}
 import gleeunit
-import gleeunit/should
 import spoke/mqtt
 import spoke/mqtt_actor
 import spoke/tcp
@@ -16,9 +15,7 @@ pub fn subscribe_and_publish_qos0_test() -> Nil {
     |> mqtt.connect_with_id("subscribe_and_publish")
     |> mqtt_actor.start_session(None)
 
-  connect_and_wait(client, True, None)
-  let updates = process.new_subject()
-  mqtt_actor.subscribe_to_updates(client, updates)
+  let updates = connect_and_wait(client, True, None)
 
   let topic = "subscribe_and_publish"
   let assert Ok(_) =
@@ -39,11 +36,11 @@ pub fn subscribe_and_publish_qos0_test() -> Nil {
   let assert Ok(mqtt.ReceivedMessage(received_topic, payload, retained)) =
     process.receive(updates, 1000)
 
-  disconnect_and_wait(client)
+  disconnect_and_wait(client, updates)
 
-  received_topic |> should.equal(topic)
-  payload |> should.equal(<<"Hello from spoke!">>)
-  retained |> should.equal(False)
+  assert received_topic == topic
+  assert payload == <<"Hello from spoke!">>
+  assert retained == False
 }
 
 pub fn receive_after_reconnect_qos0_test() -> Nil {
@@ -68,12 +65,12 @@ fn receive_after_reconnect(qos: mqtt.QoS) -> Nil {
 
   // Connect and subscribe
   flush_server_state(receiver_client)
-  connect_and_wait(receiver_client, False, None)
+  let receiver_updates = connect_and_wait(receiver_client, False, None)
   let assert Ok(_) =
     mqtt_actor.subscribe(receiver_client, [mqtt.SubscribeRequest(topic, qos)])
     as "Subscribe should succeed"
 
-  disconnect_and_wait(receiver_client)
+  disconnect_and_wait(receiver_client, receiver_updates)
 
   // Send the message
 
@@ -81,28 +78,26 @@ fn receive_after_reconnect(qos: mqtt.QoS) -> Nil {
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("qos_sender")
     |> mqtt_actor.start_session(None)
-  connect_and_wait(sender_client, True, None)
+  let sender_updates = connect_and_wait(sender_client, True, None)
 
   mqtt_actor.publish(
     sender_client,
     mqtt.PublishData(topic, <<"persisted msg">>, qos, False),
   )
-  disconnect_and_wait(sender_client)
+  disconnect_and_wait(sender_client, sender_updates)
 
   // Now reconnect without cleaning session: the message should be received
-  let updates = process.new_subject()
-  mqtt_actor.subscribe_to_updates(receiver_client, updates)
   mqtt_actor.connect(receiver_client, False, None)
-  assert process.receive(updates, 1000)
+  assert process.receive(receiver_updates, 1000)
     == Ok(
       mqtt.ConnectionStateChanged(mqtt.ConnectAccepted(mqtt.SessionPresent)),
     )
 
   let assert Ok(mqtt.ReceivedMessage("qos_topic", <<"persisted msg">>, False)) =
-    process.receive(updates, 1000)
+    process.receive(receiver_updates, 1000)
     as "QoS > 0 message should be received when reconnecting without cleaning session"
 
-  disconnect_and_wait(receiver_client)
+  disconnect_and_wait(receiver_client, receiver_updates)
 }
 
 pub fn will_disconnect_test() -> Nil {
@@ -112,13 +107,9 @@ pub fn will_disconnect_test() -> Nil {
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("will_receiver")
     |> mqtt_actor.start_session(None)
-  connect_and_wait(client, True, None)
+  let updates = connect_and_wait(client, True, None)
   let assert Ok(_) =
     mqtt_actor.subscribe(client, [mqtt.SubscribeRequest(topic, mqtt.AtMostOnce)])
-
-  // Subscribe to updates before triggering the will message
-  let updates = process.new_subject()
-  mqtt_actor.subscribe_to_updates(client, updates)
 
   process.spawn_unlinked(fn() {
     let assert Ok(client) =
@@ -150,9 +141,7 @@ pub fn unsubscribe_test() -> Nil {
     |> mqtt.connect_with_id("unsubscribe")
     |> mqtt_actor.start_session(None)
 
-  connect_and_wait(client, True, None)
-  let updates = process.new_subject()
-  mqtt_actor.subscribe_to_updates(client, updates)
+  let updates = connect_and_wait(client, True, None)
 
   let topic = "unsubscribe"
   let assert Ok(_) =
@@ -174,32 +163,34 @@ pub fn unsubscribe_test() -> Nil {
   mqtt_actor.publish(client, message)
 
   assert process.receive(updates, 100) == Error(Nil)
-  disconnect_and_wait(client)
+  disconnect_and_wait(client, updates)
 }
 
-fn flush_server_state(client: mqtt_actor.Client) -> Nil {
+fn flush_server_state(client: mqtt_actor.Client) -> Subject(mqtt.Update) {
   // Connect with clean session set to true, then disconnect
-  connect_and_wait(client, True, None)
-  disconnect_and_wait(client)
+  let updates = connect_and_wait(client, True, None)
+  disconnect_and_wait(client, updates)
+  updates
 }
 
 fn connect_and_wait(
   client: mqtt_actor.Client,
   clean_session: Bool,
   will: Option(mqtt.PublishData),
-) -> Nil {
+) -> Subject(mqtt.Update) {
   let updates = process.new_subject()
   mqtt_actor.subscribe_to_updates(client, updates)
   mqtt_actor.connect(client, clean_session, will)
   let assert Ok(mqtt.ConnectionStateChanged(mqtt.ConnectAccepted(_))) =
     process.receive(updates, 1000)
     as "Should connect successfully"
-  Nil
+  updates
 }
 
-fn disconnect_and_wait(client: mqtt_actor.Client) -> Nil {
-  let updates = process.new_subject()
-  mqtt_actor.subscribe_to_updates(client, updates)
+fn disconnect_and_wait(
+  client: mqtt_actor.Client,
+  updates: Subject(mqtt.Update),
+) -> Nil {
   mqtt_actor.disconnect(client)
   let assert Ok(mqtt.ConnectionStateChanged(mqtt.Disconnected)) =
     process.receive(updates, 1000)
