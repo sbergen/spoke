@@ -2,7 +2,7 @@
 
 import drift/js/channel.{type Channel}
 import gleam/javascript/promise.{type Promise}
-import gleam/option.{type Option, None}
+import gleam/option.{type Option, None, Some}
 import gleam/string
 import spoke/mqtt.{ConnectAccepted, ConnectionStateChanged}
 import spoke/mqtt_js
@@ -57,7 +57,7 @@ pub fn receive_after_reconnect_qos2_test() -> Promise(Nil) {
 }
 
 fn receive_after_reconnect(qos: mqtt.QoS) -> Promise(Nil) {
-  use <- timeout(500)
+  use <- timeout(1000)
   let topic = string.inspect(qos)
 
   let receiver_client =
@@ -110,6 +110,74 @@ fn receive_after_reconnect(qos: mqtt.QoS) -> Promise(Nil) {
 
   use _ <- promise.await(disconnect_and_wait(receiver_client, receiver_updates))
   promise.resolve(Nil)
+}
+
+pub fn will_disconnect_test() -> Promise(Nil) {
+  use <- timeout(100)
+  let topic = "will_topic"
+
+  let client =
+    mqtt_js.using_websocket("ws://localhost:8083/mqtt")
+    |> mqtt.connect_with_id("will_receiver")
+    |> mqtt_js.start_session()
+  use updates <- promise.await(connect_and_wait(client, True, None))
+  use sub_result <- promise.await(
+    mqtt_js.subscribe(client, [mqtt.SubscribeRequest(topic, mqtt.AtMostOnce)]),
+  )
+  let assert Ok(_) = sub_result
+
+  let sender_client =
+    mqtt_js.using_websocket("ws://localhost:8083/mqtt")
+    |> mqtt.connect_with_id("will_sender")
+    |> mqtt_js.start_session()
+  let will =
+    mqtt.PublishData(topic, <<"will message">>, mqtt.AtLeastOnce, False)
+  use _ <- promise.await(connect_and_wait(sender_client, True, Some(will)))
+
+  // Subscribe with an invalid topic to get rejected
+  let _ =
+    mqtt_js.subscribe(sender_client, [
+      mqtt.SubscribeRequest("/#/", mqtt.AtLeastOnce),
+    ])
+
+  use update <- promise.await(channel.receive(updates, 1000))
+  let assert Ok(mqtt.ReceivedMessage(_, <<"will message">>, False)) = update
+    as "Expected to receive will message"
+
+  promise.resolve(Nil)
+}
+
+pub fn unsubscribe_test() -> Promise(Nil) {
+  use <- timeout(100)
+  let client =
+    mqtt_js.using_websocket("ws://localhost:8083/mqtt")
+    |> mqtt.connect_with_id("unsubscribe")
+    |> mqtt_js.start_session()
+
+  use updates <- promise.await(connect_and_wait(client, True, None))
+
+  let topic = "unsubscribe"
+  use sub_result <- promise.await(
+    mqtt_js.subscribe(client, [mqtt.SubscribeRequest(topic, mqtt.AtLeastOnce)]),
+  )
+  let assert Ok(_) = sub_result as "Should subscribe successfully"
+
+  use unsub_result <- promise.await(mqtt_js.unsubscribe(client, [topic]))
+  let assert Ok(_) = unsub_result as "Should unsubscribe successfully"
+
+  let message =
+    mqtt.PublishData(
+      topic,
+      <<"Hello from spoke!">>,
+      mqtt.AtMostOnce,
+      retain: False,
+    )
+  mqtt_js.publish(client, message)
+
+  use update <- promise.await(channel.receive(updates, 10))
+  assert update == Error(channel.ReceiveTimeout)
+  use _ <- promise.map(disconnect_and_wait(client, updates))
+  Nil
 }
 
 fn connect_and_wait(

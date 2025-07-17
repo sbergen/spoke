@@ -8,7 +8,7 @@ import gleam/result
 import gleam/string
 import spoke/core.{
   Connect, Disconnect, Perform, PublishMessage, Subscribe, SubscribeToUpdates,
-  TransportFailed,
+  TransportFailed, Unsubscribe,
 }
 import spoke/mqtt
 import spoke/mqtt_js/internal/websocket
@@ -24,10 +24,12 @@ pub opaque type TransportOptions {
   WebsocketOptions(url: String)
 }
 
+/// TODO docs
 pub fn using_websocket(url: String) -> TransportOptions {
   WebsocketOptions(url)
 }
 
+/// TODO docs
 pub fn start_session(options: mqtt.ConnectOptions(TransportOptions)) -> Client {
   from_state(options, core.new_state(options))
 }
@@ -37,6 +39,7 @@ pub opaque type UpdateSubscription {
   UpdateSubscription(effect: drift.Effect(mqtt.Update))
 }
 
+/// TODO docs
 pub fn subscribe_to_updates(
   client: Client,
 ) -> #(Channel(mqtt.Update), UpdateSubscription) {
@@ -45,6 +48,7 @@ pub fn subscribe_to_updates(
   #(channel, subscription)
 }
 
+/// TODO docs
 pub fn register_update_callback(
   client: Client,
   callback: fn(mqtt.Update) -> Nil,
@@ -65,6 +69,7 @@ pub fn unsubscribe_from_updates(
   )
 }
 
+/// TODO docs
 pub fn connect(
   client: Client,
   clean_session: Bool,
@@ -91,6 +96,7 @@ pub fn disconnect(client: Client) -> Promise(Result(Nil, mqtt.OperationError)) {
   |> result.map_error(fn(e) { mqtt.ClientRuntimeError(string.inspect(e)) })
 }
 
+/// TODO docs
 pub fn subscribe(
   client: Client,
   requests: List(mqtt.SubscribeRequest),
@@ -101,6 +107,26 @@ pub fn subscribe(
       2 * client.options.server_timeout_ms,
     )
     Perform(Subscribe(requests, effect))
+  })
+
+  result
+  |> result.map_error(fn(e) { mqtt.ClientRuntimeError(string.inspect(e)) })
+  |> result.flatten
+}
+
+/// Unsubscribes from the given topics.
+/// The returned promise will resolve when we get a response from the server,
+/// returning the result of the operation.
+pub fn unsubscribe(
+  client: Client,
+  topics: List(String),
+) -> Promise(Result(Nil, mqtt.OperationError)) {
+  use result <- promise.map({
+    use effect <- runtime.call(
+      client.self,
+      2 * client.options.server_timeout_ms,
+    )
+    Perform(Unsubscribe(topics, effect))
   })
 
   result
