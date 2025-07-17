@@ -10,8 +10,7 @@ pub fn websocket_happy_path_test() -> Promise(Nil) {
   let inputs = channel.new()
 
   // Connect
-  let socket =
-    websocket.connect("localhost", 1337, 100, channel.send(inputs, _))
+  let socket = websocket.connect("ws://localhost:1337", channel.send(inputs, _))
 
   // Assert connection is received
   use send_result <- promise.await(channel.receive(server.connections, 10))
@@ -48,7 +47,7 @@ pub fn websocket_happy_path_test() -> Promise(Nil) {
 
 pub fn connect_failure_test() -> Promise(Nil) {
   let inputs = channel.new()
-  websocket.connect("localhost", 1337, 100, channel.send(inputs, _))
+  websocket.connect("ws://localhost:1337", channel.send(inputs, _))
 
   use input_result <- promise.await(channel.receive(inputs, 10))
   assert input_result
@@ -62,7 +61,7 @@ pub fn unexpected_close_test() -> Promise(Nil) {
   let inputs = channel.new()
 
   // Connect
-  websocket.connect("localhost", 1337, 100, channel.send(inputs, _))
+  websocket.connect("ws://localhost:1337", channel.send(inputs, _))
 
   // Consume the connected update
   use _ <- promise.await(channel.receive(inputs, 10))

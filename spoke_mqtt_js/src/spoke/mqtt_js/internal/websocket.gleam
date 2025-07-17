@@ -1,5 +1,4 @@
 import gleam/bytes_tree.{type BytesTree}
-import gleam/string
 import spoke/core.{
   ReceivedData, TransportClosed, TransportEstablished, TransportFailed,
 }
@@ -7,12 +6,9 @@ import spoke/core.{
 pub type WebSocket
 
 pub fn connect(
-  host: String,
-  port: Int,
-  _timeout: Int,
+  url: String,
   send: fn(core.Input) -> Nil,
 ) -> WebSocket {
-  let url = "ws://" <> host <> ":" <> string.inspect(port)
   connect_js(
     url,
     fn() { send(core.Handle(TransportEstablished)) },

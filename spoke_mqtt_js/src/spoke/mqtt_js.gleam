@@ -7,8 +7,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import spoke/core.{
-  Connect, Perform, Subscribe, SubscribeToUpdates, TransportClosed,
-  TransportFailed,
+  Connect, Disconnect, Perform, PublishMessage, Subscribe, SubscribeToUpdates,
+  TransportClosed, TransportFailed,
 }
 import spoke/mqtt
 import spoke/mqtt_js/internal/websocket
@@ -21,15 +21,11 @@ pub opaque type Client {
 }
 
 pub opaque type TransportOptions {
-  WebsocketOptions(host: String, port: Int, connect_timeout: Int)
+  WebsocketOptions(url: String)
 }
 
-pub fn using_websocket(
-  host: String,
-  port: Int,
-  connect_timeout: Int,
-) -> TransportOptions {
-  WebsocketOptions(host, port, connect_timeout)
+pub fn using_websocket(url: String) -> TransportOptions {
+  WebsocketOptions(url)
 }
 
 pub fn start_session(options: mqtt.ConnectOptions(TransportOptions)) -> Client {
@@ -77,6 +73,24 @@ pub fn connect(
   runtime.send(client.self, Perform(Connect(clean_session, will)))
 }
 
+/// Disconnects from the MQTT server.
+/// The connection state change will also be published as an update.
+/// If a connection is not established or being established,
+/// this will be a no-op.
+/// Returns the serialized session state to be potentially restored later.
+pub fn disconnect(client: Client) -> Promise(Result(Nil, mqtt.OperationError)) {
+  use result <- promise.map({
+    use effect <- runtime.call(
+      client.self,
+      2 * client.options.server_timeout_ms,
+    )
+    Perform(Disconnect(effect))
+  })
+
+  result
+  |> result.map_error(fn(e) { mqtt.ClientRuntimeError(string.inspect(e)) })
+}
+
 pub fn subscribe(
   client: Client,
   requests: List(mqtt.SubscribeRequest),
@@ -92,6 +106,13 @@ pub fn subscribe(
   result
   |> result.map_error(fn(e) { mqtt.ClientRuntimeError(string.inspect(e)) })
   |> result.flatten
+}
+
+/// Publishes a new message, which will be sent to the sever.
+/// If not connected, Qos 0 messages will be dropped,
+/// and higher QoS level messages will be sent once connected.
+pub fn publish(client: Client, data: mqtt.PublishData) -> Nil {
+  runtime.send(client.self, Perform(PublishMessage(data)))
 }
 
 //===== Privates =====/
@@ -141,8 +162,8 @@ fn open_transport(
   send: fn(core.Input) -> Nil,
 ) -> EffectContext(IoState) {
   use state <- drift.use_effect_context(ctx)
-  let WebsocketOptions(host, port, timeout) = state.options
-  let socket = websocket.connect(host, port, timeout, send)
+  let WebsocketOptions(url) = state.options
+  let socket = websocket.connect(url, send)
   IoState(..state, socket: Some(socket))
 }
 
