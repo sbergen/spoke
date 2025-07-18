@@ -95,6 +95,10 @@ fn receive_after_reconnect(qos: mqtt.QoS) -> Promise(Nil) {
     sender_client,
     mqtt.PublishData(topic, <<"persisted msg">>, qos, False),
   )
+  use _ <- promise.await(mqtt_js.wait_for_publishes_to_finish(
+    sender_client,
+    100,
+  ))
   use _ <- promise.await(disconnect_and_wait(sender_client, sender_updates))
 
   // Now reconnect without cleaning session: the message should be received

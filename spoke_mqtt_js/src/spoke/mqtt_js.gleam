@@ -7,8 +7,8 @@ import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import spoke/core.{
-  Connect, Disconnect, Perform, PublishMessage, Subscribe, SubscribeToUpdates,
-  TransportFailed, Unsubscribe,
+  Connect, Disconnect, GetPendingPublishes, Perform, PublishMessage, Subscribe,
+  SubscribeToUpdates, TransportFailed, Unsubscribe, WaitForPublishesToFinish,
 }
 import spoke/mqtt
 import spoke/mqtt_js/internal/websocket
@@ -84,16 +84,8 @@ pub fn connect(
 /// this will be a no-op.
 /// Returns the serialized session state to be potentially restored later.
 pub fn disconnect(client: Client) -> Promise(Result(Nil, mqtt.OperationError)) {
-  use result <- promise.map({
-    use effect <- runtime.call(
-      client.self,
-      2 * client.options.server_timeout_ms,
-    )
-    Perform(Disconnect(effect))
-  })
-
-  result
-  |> result.map_error(fn(e) { mqtt.ClientRuntimeError(string.inspect(e)) })
+  use effect <- call(client)
+  Perform(Disconnect(effect))
 }
 
 /// TODO docs
@@ -101,17 +93,11 @@ pub fn subscribe(
   client: Client,
   requests: List(mqtt.SubscribeRequest),
 ) -> Promise(Result(List(mqtt.Subscription), mqtt.OperationError)) {
-  use result <- promise.map({
-    use effect <- runtime.call(
-      client.self,
-      2 * client.options.server_timeout_ms,
-    )
+  {
+    use effect <- call(client)
     Perform(Subscribe(requests, effect))
-  })
-
-  result
-  |> result.map_error(fn(e) { mqtt.ClientRuntimeError(string.inspect(e)) })
-  |> result.flatten
+  }
+  |> promise.map(result.flatten)
 }
 
 /// Unsubscribes from the given topics.
@@ -121,17 +107,11 @@ pub fn unsubscribe(
   client: Client,
   topics: List(String),
 ) -> Promise(Result(Nil, mqtt.OperationError)) {
-  use result <- promise.map({
-    use effect <- runtime.call(
-      client.self,
-      2 * client.options.server_timeout_ms,
-    )
+  {
+    use effect <- call(client)
     Perform(Unsubscribe(topics, effect))
-  })
-
-  result
-  |> result.map_error(fn(e) { mqtt.ClientRuntimeError(string.inspect(e)) })
-  |> result.flatten
+  }
+  |> promise.map(result.flatten)
 }
 
 /// Publishes a new message, which will be sent to the sever.
@@ -141,7 +121,43 @@ pub fn publish(client: Client, data: mqtt.PublishData) -> Nil {
   runtime.send(client.self, Perform(PublishMessage(data)))
 }
 
+/// Returns the number of QoS > 0 publishes that haven't yet been completely published.
+/// Also see `wait_for_publishes_to_finish`.
+pub fn pending_publishes(
+  client: Client,
+) -> Promise(Result(Int, mqtt.OperationError)) {
+  use effect <- call(client)
+  Perform(GetPendingPublishes(effect))
+}
+
+/// Wait for all pending QoS > 0 publishes to complete.
+/// Returns an error if the operation times out,
+/// or panics if the client is killed while waiting.
+pub fn wait_for_publishes_to_finish(
+  client: Client,
+  timeout: Int,
+) -> Promise(Result(Nil, mqtt.OperationError)) {
+  {
+    use effect <- call(client)
+    Perform(WaitForPublishesToFinish(effect, timeout))
+  }
+  |> promise.map(result.flatten)
+}
+
 //===== Privates =====/
+
+fn call(
+  client: Client,
+  with: fn(drift.Effect(a)) -> core.Input,
+) -> Promise(Result(a, mqtt.OperationError)) {
+  use result <- promise.map({
+    use effect <- runtime.call_forever(client.self)
+    with(effect)
+  })
+
+  result
+  |> result.map_error(fn(e) { mqtt.ClientRuntimeError(string.inspect(e)) })
+}
 
 fn from_state(
   options: mqtt.ConnectOptions(TransportOptions),
