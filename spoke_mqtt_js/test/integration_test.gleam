@@ -184,6 +184,43 @@ pub fn unsubscribe_test() -> Promise(Nil) {
   Nil
 }
 
+pub fn pending_publishes_test() -> Promise(Nil) {
+  use <- timeout(100)
+  let client =
+    mqtt_js.using_websocket("ws://localhost:8083/mqtt")
+    |> mqtt.connect_with_id("pending_publishes")
+    |> mqtt_js.start_session()
+
+  let message1 =
+    mqtt.PublishData(
+      "topic1",
+      <<"Hello from spoke!">>,
+      mqtt.AtLeastOnce,
+      retain: False,
+    )
+  let message2 =
+    mqtt.PublishData(
+      "topic2",
+      <<"Hello from spoke!">>,
+      mqtt.ExactlyOnce,
+      retain: False,
+    )
+
+  mqtt_js.publish(client, message1)
+  use pending_publishes <- promise.await(mqtt_js.pending_publishes(client))
+  assert pending_publishes == Ok(1)
+
+  mqtt_js.publish(client, message2)
+  use pending_publishes <- promise.await(mqtt_js.pending_publishes(client))
+  assert pending_publishes == Ok(2)
+
+  mqtt_js.connect(client, True, None)
+
+  use result <- promise.map(mqtt_js.wait_for_publishes_to_finish(client, 100))
+  assert result == Ok(Nil)
+  Nil
+}
+
 fn connect_and_wait(
   client: mqtt_js.Client,
   clean_session: Bool,
