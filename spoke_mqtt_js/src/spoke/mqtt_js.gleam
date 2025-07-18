@@ -24,12 +24,13 @@ pub opaque type TransportOptions {
   WebsocketOptions(url: String)
 }
 
-/// TODO docs
+/// Creates transport options for communicating with a MQTT server over a WebSocket.
 pub fn using_websocket(url: String) -> TransportOptions {
   WebsocketOptions(url)
 }
 
-/// TODO docs
+/// Starts a new MQTT session with the given options.
+/// Does not automatically connect to the server.
 pub fn start_session(options: mqtt.ConnectOptions(TransportOptions)) -> Client {
   from_state(options, core.new_state(options))
 }
@@ -39,7 +40,7 @@ pub opaque type UpdateSubscription {
   UpdateSubscription(effect: drift.Effect(mqtt.Update))
 }
 
-/// TODO docs
+/// Returns a channel that publishes client updates.
 pub fn subscribe_to_updates(
   client: Client,
 ) -> #(Channel(mqtt.Update), UpdateSubscription) {
@@ -48,7 +49,7 @@ pub fn subscribe_to_updates(
   #(channel, subscription)
 }
 
-/// TODO docs
+/// Registers a callback to be executed on every client update. 
 pub fn register_update_callback(
   client: Client,
   callback: fn(mqtt.Update) -> Nil,
@@ -69,7 +70,12 @@ pub fn unsubscribe_from_updates(
   )
 }
 
-/// TODO docs
+/// Starts connecting to the MQTT server.
+/// The connection state will be published as an update.
+/// If a connection is already established or being established,
+/// this will be a no-op.
+/// Note that switching between `clean_session` values
+/// while already connecting is currently not well handled.
 pub fn connect(
   client: Client,
   clean_session: Bool,
@@ -88,7 +94,9 @@ pub fn disconnect(client: Client) -> Promise(Result(Nil, mqtt.OperationError)) {
   Perform(Disconnect(effect))
 }
 
-/// TODO docs
+/// Subscribes to the given topics.
+/// The returned promise will resolve when we get a response from the server,
+/// returning the result of the operation.
 pub fn subscribe(
   client: Client,
   requests: List(mqtt.SubscribeRequest),
@@ -132,7 +140,7 @@ pub fn pending_publishes(
 
 /// Wait for all pending QoS > 0 publishes to complete.
 /// Returns an error if the operation times out,
-/// or panics if the client is killed while waiting.
+/// or if the client is killed while waiting.
 pub fn wait_for_publishes_to_finish(
   client: Client,
   timeout: Int,

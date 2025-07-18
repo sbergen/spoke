@@ -72,6 +72,8 @@ pub type TransportChannel {
 pub type TransportChannelConnector =
   fn() -> Result(TransportChannel, String)
 
+/// Starts a new MQTT session, optionally using the given persistent storage.
+/// Will not automatically connect to the server.
 pub fn start_session(
   options: mqtt.ConnectOptions(TransportChannelConnector),
   storage: Option(PersistentStorage),
@@ -79,6 +81,8 @@ pub fn start_session(
   from_state(options, storage, core.new_state(options))
 }
 
+/// Restores a MQTT session from the given persistent storage.
+/// Will not automatically connect to the server.
 pub fn restore_session(
   options: mqtt.ConnectOptions(TransportChannelConnector),
   storage: PersistentStorage,
