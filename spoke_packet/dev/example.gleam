@@ -1,17 +1,3 @@
-# spoke_packet
-
-[![Package Version](https://img.shields.io/hexpm/v/spoke_packet)](https://hex.pm/packages/spoke_packet)
-[![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/spoke_packet/)
-
-`spoke_packet` contains Gleam data structures to represent MQTT packets
-and encode/decode them to/from their binary representation.
-The data structures strive to make representing invalid states impossible,
-which is why they sometimes might feel a bit far from their binary representations.
-
-```sh
-gleam add spoke_packet@1
-```
-```gleam
 import gleam/bytes_tree
 import spoke/packet
 import spoke/packet/client/incoming
@@ -42,4 +28,3 @@ pub fn main() {
   // As the third packet was incomplete, prints <<208>>
   echo rest
 }
-```
