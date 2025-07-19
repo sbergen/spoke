@@ -24,6 +24,7 @@ jobs:
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam test
+      - run: gleam test --target javascript
       - run: gleam format --check src test
 
   erlang_integration-tests:
@@ -66,6 +67,7 @@ jobs:
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam test
+      - run: gleam test --target javascript
       - run: gleam format --check src test
 
   test-mqtt-actor:
@@ -126,6 +128,7 @@ jobs:
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam test
+      - run: gleam test --target javascript
       - run: gleam format --check src test
 
   test-tcp:
