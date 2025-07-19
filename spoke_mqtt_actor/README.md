@@ -3,8 +3,8 @@
 [![Package Version](https://img.shields.io/hexpm/v/spoke_mqtt_actor)](https://hex.pm/packages/spoke_mqtt_actor)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3)](https://hexdocs.pm/spoke_mqtt_actor/)
 
-Spoke is a MQTT 3.1.1 client written in Gleam for the Erlang runtime.
-For similar functionality on JavaScript, see 
+spoke_mqtt_actor is a MQTT 3.1.1 client written in Gleam for the Erlang runtime.
+For similar functionality on the JavaScript target, see 
 [spoke_mqtt_js](https://hexdocs.pm/spoke_mqtt_js).
 
 Example usage:
@@ -60,7 +60,7 @@ pub fn main() {
 }
 ```
 
-This should print the following, assuming `test.mosquitto.org` is up:
+This should print the following, assuming `broker.emqx.io` is up:
 ```
 Ok(ReceivedMessage("spoke-test", "Hello from spoke!", False))
 ```
