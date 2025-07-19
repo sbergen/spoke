@@ -1,6 +1,7 @@
 //// These tests test the parts that can't be (reliably) tested with the
 //// integration tests, which run against a real server.
 
+import exemplify
 import fake_server
 import gleam/erlang/process.{type Subject}
 import gleam/option.{None, Some}
@@ -14,6 +15,10 @@ import temporary
 
 pub fn main() -> Nil {
   gleeunit.main()
+}
+
+pub fn check_or_update_readme_test() {
+  exemplify.update_or_check("../spoke_tcp/dev/example.gleam")
 }
 
 pub fn restore_session_from_file_test() -> Nil {
@@ -90,8 +95,8 @@ pub fn pending_publishes_test() -> Nil {
     mqtt.PublishData("topic", <<"payload2">>, mqtt.AtLeastOnce, False),
   )
 
-  // Assert the initial state and start waiting in another process
-  assert mqtt_actor.pending_publishes(client) == 2
+  assert // Assert the initial state and start waiting in another process
+    mqtt_actor.pending_publishes(client) == 2
   let wait =
     run_task(fn() { mqtt_actor.wait_for_publishes_to_finish(client, 1000) })
 

@@ -5,10 +5,10 @@ import gleam/regexp
 import gleam/string
 import simplifile
 
-pub fn update_or_check() {
+pub fn update_or_check(source: String) {
   let readme_filename = "./README.md"
   let assert Ok(readme) = simplifile.read(readme_filename)
-  let assert Ok(example) = simplifile.read("./dev/example.gleam")
+  let assert Ok(example) = simplifile.read(source)
   let assert Ok(regex) =
     regexp.compile(
       "^```gleam\\n([\\s\\S]*)^```\\n?",

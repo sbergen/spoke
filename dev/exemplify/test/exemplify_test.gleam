@@ -6,5 +6,5 @@ pub fn main() -> Nil {
 }
 
 pub fn run_test() {
-  exemplify.update_or_check()
+  exemplify.update_or_check("./dev/example.gleam")
 }
