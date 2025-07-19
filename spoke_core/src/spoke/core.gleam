@@ -25,18 +25,29 @@ type OperationResult(a) =
 type PublishCompletionEffect =
   Effect(OperationResult(Nil))
 
+/// A command to be performed, as requested by the user of the client.
 pub type Command {
+  /// Registers an effect to be invoked when updates are available.
   SubscribeToUpdates(Effect(mqtt.Update))
+  /// Unregisters an effect from being invoked on updates.
   UnsubscribeFromUpdates(Effect(mqtt.Update))
+  /// Starts connecting to the borker.
   Connect(clean_session: Bool, will: Option(PublishData))
+  /// Disconnects from the broker
   Disconnect(Effect(Nil))
+  /// Starts a subscribing to topics.
   Subscribe(List(SubscribeRequest), Effect(OperationResult(List(Subscription))))
+  /// Starts unsubscribing from topics.
   Unsubscribe(List(String), Effect(OperationResult(Nil)))
+  /// Starts publishing a message.
   PublishMessage(PublishData)
+  /// Requests for the number of in-progress publishes.
   GetPendingPublishes(Effect(Int))
+  /// Starts waiting for publishes to finish.
   WaitForPublishesToFinish(Effect(OperationResult(Nil)), Int)
 }
 
+/// An action that happens as a result of timer expiring
 pub opaque type TimedAction {
   SendPing
   PingRespTimedOut
@@ -46,32 +57,50 @@ pub opaque type TimedAction {
   WaitForPublishesTimeout(PublishCompletionEffect)
 }
 
+/// An event coming from the transport channel
 pub type TransportEvent {
+  /// The transport channel is open, and ready to receive data.
   TransportEstablished
+  /// The transport channel failed for some reason.
   TransportFailed(String)
+  /// The transport channel was closed after requesting it.
   TransportClosed
+  /// Data was received on the transport channel.
   ReceivedData(BitArray)
 }
 
+/// The union of all the possible inputs
 pub type Input {
   Perform(Command)
   Handle(TransportEvent)
   Timeout(TimedAction)
 }
 
+/// All the outputs (side effects)
 pub type Output {
+  /// Publish an update the user of the client.
   Publish(Action(mqtt.Update))
+  /// Open the transport channel.
   OpenTransport
+  /// Close the transport channel.
   CloseTransport
+  /// Send data to the transport channel.
   SendData(BytesTree)
+  /// Publish the result for the count of pending publishes.
   ReturnPendingPublishes(Action(Int))
+  /// Waiting for publishes completed.
   PublishesCompleted(Action(OperationResult(Nil)))
+  /// Subscribing to topics completed.
   SubscribeCompleted(Action(OperationResult(List(Subscription))))
+  /// Unsubscribing from topics completed.
   UnsubscribeCompleted(Action(OperationResult(Nil)))
+  /// A disconnect request completed.
   CompleteDisconnect(Action(Nil))
+  /// Apply an update to a persisted session.
   UpdatePersistedSession(session_state.StorageUpdate)
 }
 
+/// The state of the MQTT client.
 pub opaque type State {
   State(
     options: Options,
@@ -87,12 +116,15 @@ pub opaque type State {
   )
 }
 
+/// Type alias for the drift step.
 pub type Step =
   drift.Step(State, Input, Output, String)
 
+/// Type alias for the drift context.
 pub type Context =
   drift.Context(Input, Output)
 
+/// Creates a new state from an existing session.
 pub fn restore_state(
   options: mqtt.ConnectOptions(_),
   state: SessionState,
@@ -101,11 +133,13 @@ pub fn restore_state(
   |> new(options)
 }
 
+/// Creates new, clean state.
 pub fn new_state(options: mqtt.ConnectOptions(_)) -> State {
   session.new(False)
   |> new(options)
 }
 
+/// Runs one step, handing the given input.
 pub fn handle_input(context: Context, state: State, input: Input) -> Step {
   case input {
     Handle(event) ->

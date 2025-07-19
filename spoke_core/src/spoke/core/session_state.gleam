@@ -25,17 +25,17 @@ pub type PacketState {
 
 /// Represents an action to update the persistent session state.
 pub type StorageUpdate {
-  /// Clear the whole session (all packet ids)
+  /// Clear the whole session (all packet ids).
   ClearSession
 
-  // Store the next packet id to use
+  /// Store the next packet id to use.
   StoreNextPacketId(id: Int)
 
   /// Clear the state of a single packet.
   /// There might be redundant messages of this kind.
   ClearPacketState(id: Int)
 
-  /// Update the state of a single packet (replaces previous state)
+  /// Update the state of a single packet (replaces previous state).
   UpdatePacketState(id: Int, state: PacketState)
 }
 
