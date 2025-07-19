@@ -15,8 +15,8 @@ target = "javascript"
 
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
-drift = { path = "../../drift/drift" }
-drift_js = { path = "../../drift/drift_js" }
+drift = ">= 1.0.0 and < 2.0.0"
+drift_js = ">= 1.0.0 and < 2.0.0"
 spoke_core = { path = "../spoke_core" }
 spoke_mqtt = { path = "../spoke_mqtt" }
 gleam_javascript = ">= 1.0.0 and < 2.0.0"

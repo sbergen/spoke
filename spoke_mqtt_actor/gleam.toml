@@ -16,8 +16,8 @@ version = "1.0.0"
 gleam_stdlib = ">= 0.60.0 and < 2.0.0"
 gleam_otp = ">= 1.0.0 and < 2.0.0"
 gleam_erlang = ">= 1.0.0 and < 2.0.0"
-drift = { path = "../../drift/drift" }
-drift_actor = { path = "../../drift/drift_actor" }
+drift = ">= 1.0.0 and < 2.0.0"
+drift_actor = ">= 1.0.0 and < 2.0.0"
 spoke_core = { path = "../spoke_core" }
 spoke_mqtt = { path = "../spoke_mqtt" }
 

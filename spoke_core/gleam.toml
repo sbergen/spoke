@@ -16,10 +16,10 @@ version = "1.0.0"
 gleam_stdlib = ">= 0.60.0 and < 2.0.0"
 spoke_packet = { path = "../spoke_packet" }
 spoke_mqtt = { path = "../spoke_mqtt" }
-drift = { path = "../../drift/drift/" }
+drift = ">= 1.0.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
 birdie = ">= 1.2.7 and < 2.0.0"
-drift_record = { path = "../../drift/drift_record/" }
+drift_record = ">= 1.0.0 and < 2.0.0"
 temporary = ">= 1.0.0 and < 2.0.0"

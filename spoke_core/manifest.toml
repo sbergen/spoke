@@ -4,8 +4,8 @@
 packages = [
   { name = "argv", version = "1.0.2", build_tools = ["gleam"], requirements = [], otp_app = "argv", source = "hex", outer_checksum = "BA1FF0929525DEBA1CE67256E5ADF77A7CDDFE729E3E3F57A5BDCAA031DED09D" },
   { name = "birdie", version = "1.3.0", build_tools = ["gleam"], requirements = ["argv", "edit_distance", "filepath", "glance", "gleam_community_ansi", "gleam_stdlib", "justin", "rank", "simplifile", "term_size", "trie_again"], otp_app = "birdie", source = "hex", outer_checksum = "425916385B6CD82A58F54CC39605262A524B169746FC9AD9C799BC76E88F7AF3" },
-  { name = "drift", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], source = "local", path = "../../drift/drift" },
-  { name = "drift_record", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "gleam_stdlib"], source = "local", path = "../../drift/drift_record" },
+  { name = "drift", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "drift", source = "hex", outer_checksum = "5820441E6AC2FE454D63ACD233358D05BEF99BB7304A7E44D604C7E8574A9DAE" },
+  { name = "drift_record", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "gleam_stdlib"], otp_app = "drift_record", source = "hex", outer_checksum = "18EE5612AD962A1100DE80723BA56B1F178B0EE1C9D417EFD9DA397C86D855D5" },
   { name = "edit_distance", version = "2.0.1", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "edit_distance", source = "hex", outer_checksum = "A1E485C69A70210223E46E63985FA1008B8B2DDA9848B7897469171B29020C05" },
   { name = "envoy", version = "1.0.2", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "envoy", source = "hex", outer_checksum = "95FD059345AA982E89A0B6E2A3BF1CF43E17A7048DCD85B5B65D3B9E4E39D359" },
   { name = "exception", version = "2.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "exception", source = "hex", outer_checksum = "329D269D5C2A314F7364BD2711372B6F2C58FA6F39981572E5CA68624D291F8C" },
@@ -31,8 +31,8 @@ packages = [
 
 [requirements]
 birdie = { version = ">= 1.2.7 and < 2.0.0" }
-drift = { path = "../../drift/drift/" }
-drift_record = { path = "../../drift/drift_record/" }
+drift = { version = ">= 1.0.0 and < 2.0.0" }
+drift_record = { version = ">= 1.0.0 and < 2.0.0" }
 gleam_stdlib = { version = ">= 0.60.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 spoke_mqtt = { path = "../spoke_mqtt" }
