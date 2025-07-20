@@ -2,18 +2,10 @@ import {
     BitArray, Error, Ok
 } from "../../gleam.mjs";
 
-let WebSocketImpl;
-if (typeof WebSocket !== 'undefined') {
-    WebSocketImpl = WebSocket
-} else {
-    const ws = await import('ws')
-    WebSocketImpl = ws.WebSocket || ws.default;
-}
-
 const Nil = undefined
 
 export function connect(url, onOpen, onClose, onMessage, onError) {
-    const socket = new WebSocketImpl(url, ["mqtt"]);
+    const socket = new WebSocket(url, ["mqtt"]);
 
     let isOpen = false;
     socket.binaryType = "arraybuffer";
