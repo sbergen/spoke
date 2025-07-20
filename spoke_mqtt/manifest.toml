@@ -4,10 +4,10 @@
 packages = [
   { name = "gleam_stdlib", version = "0.62.0", build_tools = ["gleam"], requirements = [], otp_app = "gleam_stdlib", source = "hex", outer_checksum = "DC8872BC0B8550F6E22F0F698CFE7F1E4BDA7312FDEB40D6C3F44C5B706C8310" },
   { name = "gleeunit", version = "1.6.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "gleeunit", source = "hex", outer_checksum = "63022D81C12C17B7F1A60E029964E830A4CBD846BBC6740004FC1F1031AE0326" },
-  { name = "spoke_packet", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], source = "local", path = "../spoke_packet" },
+  { name = "spoke_packet", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "spoke_packet", source = "hex", outer_checksum = "59031B9EC4EBBDFDE31DD02513CC7725C15DA61184E66FFEEF4812E949CCCC14" },
 ]
 
 [requirements]
 gleam_stdlib = { version = ">= 0.60.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
-spoke_packet = { path = "../spoke_packet" }
+spoke_packet = { version = ">= 1.0.0 and < 2.0.0" }

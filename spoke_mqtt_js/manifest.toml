@@ -15,7 +15,7 @@ packages = [
   { name = "simplifile", version = "2.3.0", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "0A868DAC6063D9E983477981839810DC2E553285AB4588B87E3E9C96A7FB4CB4" },
   { name = "spoke_core", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "gleam_stdlib", "spoke_mqtt", "spoke_packet"], source = "local", path = "../spoke_core" },
   { name = "spoke_mqtt", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "spoke_packet"], source = "local", path = "../spoke_mqtt" },
-  { name = "spoke_packet", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], source = "local", path = "../spoke_packet" },
+  { name = "spoke_packet", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "spoke_packet", source = "hex", outer_checksum = "59031B9EC4EBBDFDE31DD02513CC7725C15DA61184E66FFEEF4812E949CCCC14" },
 ]
 
 [requirements]
