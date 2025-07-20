@@ -3,7 +3,7 @@
 
 packages = [
   { name = "drift", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "drift", source = "hex", outer_checksum = "5820441E6AC2FE454D63ACD233358D05BEF99BB7304A7E44D604C7E8574A9DAE" },
-  { name = "drift_actor", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "gleam_erlang", "gleam_otp", "gleam_stdlib"], otp_app = "drift_actor", source = "hex", outer_checksum = "43996F7120B1F9A2CD7924957B034896C79ABDB58AC25B937276FEBA0EC264F4" },
+  { name = "drift_actor", version = "2.0.0", build_tools = ["gleam"], requirements = ["drift", "gleam_erlang", "gleam_otp", "gleam_stdlib"], source = "local", path = "../../drift/drift_actor" },
   { name = "envoy", version = "1.0.2", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "envoy", source = "hex", outer_checksum = "95FD059345AA982E89A0B6E2A3BF1CF43E17A7048DCD85B5B65D3B9E4E39D359" },
   { name = "exception", version = "2.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "exception", source = "hex", outer_checksum = "329D269D5C2A314F7364BD2711372B6F2C58FA6F39981572E5CA68624D291F8C" },
   { name = "exemplify", version = "1.0.0", build_tools = ["gleam"], requirements = ["envoy", "gleam_regexp", "gleam_stdlib", "simplifile"], source = "local", path = "../dev/exemplify" },
@@ -23,7 +23,7 @@ packages = [
 
 [requirements]
 drift = { version = ">= 1.0.0 and < 2.0.0" }
-drift_actor = { version = ">= 1.0.0 and < 2.0.0" }
+drift_actor = { path = "../../drift/drift_actor" }
 exemplify = { path = "../dev/exemplify" }
 gleam_erlang = { version = ">= 1.0.0 and < 2.0.0" }
 gleam_otp = { version = ">= 1.0.0 and < 2.0.0" }

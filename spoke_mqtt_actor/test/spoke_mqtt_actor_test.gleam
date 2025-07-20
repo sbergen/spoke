@@ -27,10 +27,12 @@ pub fn restore_session_from_file_test() -> Nil {
     let storage = mqtt_actor.persist_to_ets(filename)
     let #(connector, server) = fake_server.new()
 
-    let assert Ok(client) =
+    let assert Ok(started) =
       connector
       |> mqtt.connect_with_id("my-id")
-      |> mqtt_actor.start_session(Some(storage))
+      |> mqtt_actor.new_session(Some(storage))
+      |> mqtt_actor.start(100)
+    let client = started.data
 
     // Connect
     mqtt_actor.connect(client, False, None)
@@ -51,10 +53,12 @@ pub fn restore_session_from_file_test() -> Nil {
 
     // Restore session from file
     let assert Ok(storage) = mqtt_actor.load_ets_session_from_file(filename)
-    let assert Ok(client) =
+    let assert Ok(started) =
       connector
       |> mqtt.connect_with_id("my-id")
       |> mqtt_actor.restore_session(storage)
+      |> mqtt_actor.start(100)
+    let client = started.data
 
     // Connect
     mqtt_actor.connect(client, False, None)
@@ -75,10 +79,12 @@ pub fn restore_session_from_file_test() -> Nil {
 
 pub fn pending_publishes_test() -> Nil {
   let #(connector, server) = fake_server.new()
-  let assert Ok(client) =
+  let assert Ok(started) =
     connector
     |> mqtt.connect_with_id("my-id")
-    |> mqtt_actor.start_session(None)
+    |> mqtt_actor.new_session(None)
+    |> mqtt_actor.start(100)
+  let client = started.data
 
   // Connect
   mqtt_actor.connect(client, False, None)
@@ -115,10 +121,12 @@ pub fn pending_publishes_test() -> Nil {
 
 pub fn update_subscription_test() {
   let #(connector, server) = fake_server.new()
-  let assert Ok(client) =
+  let assert Ok(started) =
     connector
     |> mqtt.connect_with_id("my-id")
-    |> mqtt_actor.start_session(None)
+    |> mqtt_actor.new_session(None)
+    |> mqtt_actor.start(100)
+  let client = started.data
 
   // Subscribe to updates & Connect
   let updates1 = process.new_subject()

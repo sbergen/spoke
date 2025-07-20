@@ -72,24 +72,77 @@ pub type TransportChannel {
 pub type TransportChannelConnector =
   fn() -> Result(TransportChannel, String)
 
-/// Starts a new MQTT session, optionally using the given persistent storage.
-/// Will not automatically connect to the server.
-pub fn start_session(
-  options: mqtt.ConnectOptions(TransportChannelConnector),
-  storage: Option(PersistentStorage),
-) -> Result(Client, otp_actor.StartError) {
-  from_state(options, storage, core.new_state(options))
+pub opaque type Builder {
+  Builder(
+    options: mqtt.ConnectOptions(TransportChannelConnector),
+    state: core.State,
+    storage: Option(PersistentStorage),
+    init: Option(fn(Client) -> Nil),
+    name: Option(process.Name(core.Input)),
+  )
 }
 
-/// Restores a MQTT session from the given persistent storage.
-/// Will not automatically connect to the server.
+/// Starts building a new MQTT session, optionally using the given persistent storage.
+pub fn new_session(
+  options: mqtt.ConnectOptions(TransportChannelConnector),
+  storage: Option(PersistentStorage),
+) -> Builder {
+  Builder(
+    options:,
+    state: core.new_state(options),
+    storage:,
+    init: None,
+    name: None,
+  )
+}
+
+/// Starts building an MQTT session restoring the state from the given persistent storage.
 pub fn restore_session(
   options: mqtt.ConnectOptions(TransportChannelConnector),
   storage: PersistentStorage,
-) -> Result(Client, otp_actor.StartError) {
+) -> Builder {
   let session_state = ets_storage.read(storage.storage)
   let state = core.restore_state(options, session_state)
-  from_state(options, Some(storage), state)
+  Builder(
+    options: options,
+    state:,
+    storage: Some(storage),
+    init: None,
+    name: None,
+  )
+}
+
+/// Use a named process and subject with the actor.
+/// This allows using supervision, without invalidating previous instances of 
+/// `Client`.
+pub fn named(builder: Builder, name: process.Name(core.Input)) -> Builder {
+  Builder(..builder, name: Some(name))
+}
+
+/// Run extra initialization after creating the actor.
+/// Note that this runs in the actor process and contributes to the start timeout.
+/// Sending a message to another process can be used to run the initialization
+/// asynchronously.
+pub fn with_extra_init(builder: Builder, init: fn(Client) -> Nil) -> Builder {
+  Builder(..builder, init: Some(init))
+}
+
+/// Starts the actor with the given timeout (including the optional extra init).
+/// Will not automatically connect to the server (see `connect`).
+pub fn start(
+  builder: Builder,
+  timeout: Int,
+) -> Result(otp_actor.Started(Client), otp_actor.StartError) {
+  new_io_driver(builder.options, builder.storage)
+  |> actor.with_stepper(builder.state, core.handle_input)
+  |> actor.start(timeout, fn(subject) {
+    let client = Client(subject, builder.options)
+    case builder.init {
+      Some(init) -> init(client)
+      None -> Nil
+    }
+    client
+  })
 }
 
 /// A handle for update subscriptions
@@ -191,11 +244,10 @@ pub fn wait_for_publishes_to_finish(
 
 //===== Privates =====/
 
-fn from_state(
+fn new_io_driver(
   options: mqtt.ConnectOptions(TransportChannelConnector),
   storage: Option(PersistentStorage),
-  state: core.State,
-) -> Result(Client, otp_actor.StartError) {
+) {
   actor.using_io(
     fn() {
       let self = process.new_subject()
@@ -211,8 +263,6 @@ fn from_state(
     fn(io_state) { io_state.selector },
     handle_output,
   )
-  |> actor.start(1000, state, core.handle_input)
-  |> result.map(Client(_, options))
 }
 
 type IoState {

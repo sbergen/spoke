@@ -11,7 +11,7 @@ pub fn update_or_check(source: String) {
   let assert Ok(example) = simplifile.read(source)
   let assert Ok(regex) =
     regexp.compile(
-      "^```gleam\\n([\\s\\S]*)^```\\n?",
+      "^```gleam\\n([\\s\\S]*?)^```\\n?",
       regexp.Options(case_insensitive: False, multi_line: True),
     )
   let assert [match] = regexp.scan(regex, readme)
