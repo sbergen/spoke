@@ -2,6 +2,7 @@ import drift.{type EffectContext}
 import drift/actor
 import gleam/bytes_tree.{type BytesTree}
 import gleam/erlang/process.{type Selector, type Subject}
+import gleam/function
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor as otp_actor
 import gleam/result
@@ -75,41 +76,22 @@ pub type TransportChannelConnector =
 pub opaque type Builder {
   Builder(
     options: mqtt.ConnectOptions(TransportChannelConnector),
-    state: core.State,
     storage: Option(PersistentStorage),
     init: Option(fn(Client) -> Nil),
     name: Option(process.Name(core.Input)),
   )
 }
 
-/// Starts building a new MQTT session, optionally using the given persistent storage.
-pub fn new_session(
-  options: mqtt.ConnectOptions(TransportChannelConnector),
-  storage: Option(PersistentStorage),
-) -> Builder {
-  Builder(
-    options:,
-    state: core.new_state(options),
-    storage:,
-    init: None,
-    name: None,
-  )
+/// Starts building a new MQTT client
+pub fn build(options: mqtt.ConnectOptions(TransportChannelConnector)) -> Builder {
+  Builder(options:, storage: None, init: None, name: None)
 }
 
-/// Starts building an MQTT session restoring the state from the given persistent storage.
-pub fn restore_session(
-  options: mqtt.ConnectOptions(TransportChannelConnector),
-  storage: PersistentStorage,
-) -> Builder {
-  let session_state = ets_storage.read(storage.storage)
-  let state = core.restore_state(options, session_state)
-  Builder(
-    options: options,
-    state:,
-    storage: Some(storage),
-    init: None,
-    name: None,
-  )
+/// Configures the client to use persistent storage.
+/// When starting the session, the state will be loaded from the storage.
+/// Note that if clean session is specified, the storage will be also cleared.
+pub fn using_storage(builder: Builder, storage: PersistentStorage) -> Builder {
+  Builder(..builder, storage: Some(storage))
 }
 
 /// Use a named process and subject with the actor.
@@ -133,8 +115,20 @@ pub fn start(
   builder: Builder,
   timeout: Int,
 ) -> Result(otp_actor.Started(Client), otp_actor.StartError) {
+  let state = case builder.storage {
+    None -> core.new_state(builder.options)
+    Some(storage) -> {
+      let session_state = ets_storage.read(storage.storage)
+      core.restore_state(builder.options, session_state)
+    }
+  }
+
   new_io_driver(builder.options, builder.storage)
-  |> actor.with_stepper(builder.state, core.handle_input)
+  |> actor.with_stepper(state, core.handle_input)
+  |> case builder.name {
+    None -> function.identity
+    Some(name) -> actor.named(_, name)
+  }
   |> actor.start(timeout, fn(subject) {
     let client = Client(subject, builder.options)
     case builder.init {

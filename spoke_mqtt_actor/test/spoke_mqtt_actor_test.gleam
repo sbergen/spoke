@@ -4,7 +4,7 @@
 import exemplify
 import fake_server
 import gleam/erlang/process.{type Subject}
-import gleam/option.{None, Some}
+import gleam/option.{None}
 import gleeunit
 import spoke/mqtt
 import spoke/mqtt_actor
@@ -30,7 +30,8 @@ pub fn restore_session_from_file_test() -> Nil {
     let assert Ok(started) =
       connector
       |> mqtt.connect_with_id("my-id")
-      |> mqtt_actor.new_session(Some(storage))
+      |> mqtt_actor.build()
+      |> mqtt_actor.using_storage(storage)
       |> mqtt_actor.start(100)
     let client = started.data
 
@@ -56,7 +57,8 @@ pub fn restore_session_from_file_test() -> Nil {
     let assert Ok(started) =
       connector
       |> mqtt.connect_with_id("my-id")
-      |> mqtt_actor.restore_session(storage)
+      |> mqtt_actor.build()
+      |> mqtt_actor.using_storage(storage)
       |> mqtt_actor.start(100)
     let client = started.data
 
@@ -82,7 +84,7 @@ pub fn pending_publishes_test() -> Nil {
   let assert Ok(started) =
     connector
     |> mqtt.connect_with_id("my-id")
-    |> mqtt_actor.new_session(None)
+    |> mqtt_actor.build()
     |> mqtt_actor.start(100)
   let client = started.data
 
@@ -124,7 +126,7 @@ pub fn update_subscription_test() {
   let assert Ok(started) =
     connector
     |> mqtt.connect_with_id("my-id")
-    |> mqtt_actor.new_session(None)
+    |> mqtt_actor.build()
     |> mqtt_actor.start(100)
   let client = started.data
 

@@ -13,7 +13,7 @@ pub fn subscribe_and_publish_qos0_test() -> Nil {
   let assert Ok(started) =
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("subscribe_and_publish")
-    |> mqtt_actor.new_session(None)
+    |> mqtt_actor.build()
     |> mqtt_actor.start(100)
   let client = started.data
 
@@ -63,7 +63,7 @@ fn receive_after_reconnect(qos: mqtt.QoS) -> Nil {
   let assert Ok(started) =
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("qos_receiver")
-    |> mqtt_actor.new_session(None)
+    |> mqtt_actor.build()
     |> mqtt_actor.start(100)
   let receiver_client = started.data
 
@@ -81,7 +81,7 @@ fn receive_after_reconnect(qos: mqtt.QoS) -> Nil {
   let assert Ok(started) =
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("qos_sender")
-    |> mqtt_actor.new_session(None)
+    |> mqtt_actor.build()
     |> mqtt_actor.start(100)
   let sender_client = started.data
   let sender_updates = connect_and_wait(sender_client, True, None)
@@ -113,7 +113,7 @@ pub fn will_disconnect_test() -> Nil {
   let assert Ok(started) =
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("will_receiver")
-    |> mqtt_actor.new_session(None)
+    |> mqtt_actor.build()
     |> mqtt_actor.start(100)
   let client = started.data
   let updates = connect_and_wait(client, True, None)
@@ -124,7 +124,7 @@ pub fn will_disconnect_test() -> Nil {
     let assert Ok(started) =
       tcp.connector_with_defaults("localhost")
       |> mqtt.connect_with_id("will_sender")
-      |> mqtt_actor.new_session(None)
+      |> mqtt_actor.build()
       |> mqtt_actor.start(100)
     let client = started.data
     let will =
@@ -150,7 +150,7 @@ pub fn unsubscribe_test() -> Nil {
   let assert Ok(started) =
     tcp.connector_with_defaults("localhost")
     |> mqtt.connect_with_id("unsubscribe")
-    |> mqtt_actor.new_session(None)
+    |> mqtt_actor.build()
     |> mqtt_actor.start(100)
   let client = started.data
 
