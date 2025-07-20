@@ -1,0 +1,6 @@
+---
+version: 1.3.0
+title: Unknown PUBACK is ignored
+---
+<flushed connect and handshake>
+  --> Received: PubAck(42)

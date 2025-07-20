@@ -830,7 +830,8 @@ fn handle_puback(context: Context, state: State, id: Int) -> Step {
       |> drift.continue(State(..state, session:))
     }
     session.InvalidPubAckId ->
-      kill_connection(context, state, "Received invalid PubAck id")
+      // We don't need to be strict here, and can just ignore the unknown id
+      drift.continue(context, state)
   }
   |> drift.chain(check_publish_completion)
 }

@@ -160,6 +160,12 @@ pub fn wait_for_publishes_to_finish_continued_session_test() {
   |> recorder.snap("Wait for publishes to finish continued session")
 }
 
+pub fn invalid_puback_test() {
+  recorder.default_connected()
+  |> recorder.received(server_out.PubAck(42))
+  |> recorder.snap("Unknown PUBACK is ignored")
+}
+
 fn reconnect(recorder: recorder.Recorder) -> recorder.Recorder {
   recorder
   |> record.input(Perform(Connect(False, None)))
