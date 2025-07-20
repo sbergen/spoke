@@ -5,6 +5,7 @@ import gleam/erlang/process.{type Selector, type Subject}
 import gleam/function
 import gleam/option.{type Option, None, Some}
 import gleam/otp/actor as otp_actor
+import gleam/otp/supervision
 import gleam/result
 import gleam/string
 import spoke/core.{
@@ -116,6 +117,14 @@ pub fn named(
   let builder = Builder(..builder, name: Some(name))
   let client = Client(process.named_subject(name), builder.options)
   #(builder, client)
+}
+
+/// Builds a worker child specification from a builder.
+pub fn supervised(
+  builder: Builder,
+  timeout: Int,
+) -> supervision.ChildSpecification(Client) {
+  supervision.worker(fn() { start(builder, timeout) })
 }
 
 /// Starts the actor with the given timeout (including the optional extra init).

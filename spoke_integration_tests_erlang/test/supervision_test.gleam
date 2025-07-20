@@ -49,9 +49,7 @@ pub fn supervision_test() {
         start_connector(connector_name, [consumer_subject])
       }),
     )
-    |> static_supervisor.add(
-      supervision.worker(fn() { mqtt_actor.start(builder, 100) }),
-    )
+    |> static_supervisor.add(mqtt_actor.supervised(builder, 100))
     |> static_supervisor.add(
       supervision.worker(fn() { start_consumer(consumer_name, client) }),
     )
