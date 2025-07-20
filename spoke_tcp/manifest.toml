@@ -12,7 +12,7 @@ packages = [
   { name = "glisten", version = "8.0.1", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_otp", "gleam_stdlib", "logging", "telemetry"], otp_app = "glisten", source = "hex", outer_checksum = "534BB27C71FB9E506345A767C0D76B17A9E9199934340C975DC003C710E3692D" },
   { name = "logging", version = "1.3.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "logging", source = "hex", outer_checksum = "1098FBF10B54B44C2C7FDF0B01C1253CAFACDACABEFB4B0D027803246753E06D" },
   { name = "mug", version = "3.0.0", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_stdlib"], otp_app = "mug", source = "hex", outer_checksum = "49AD2B71690C6A615453D272300951C4BDE19FBF55B167D9C951F5CD89FEC820" },
-  { name = "spoke_core", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "gleam_stdlib", "spoke_mqtt", "spoke_packet"], source = "local", path = "../spoke_core" },
+  { name = "spoke_core", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "gleam_stdlib", "spoke_mqtt", "spoke_packet"], otp_app = "spoke_core", source = "hex", outer_checksum = "4F967D10F7B0BC2BDFC8C6BFF4BBD362E303F0817B7FF0FCDF15A10C312583D2" },
   { name = "spoke_mqtt", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "spoke_packet"], otp_app = "spoke_mqtt", source = "hex", outer_checksum = "44480FEE8F416839CE6F9C43938A84604F802B0FA318E1C0A9434AD02DB0D5F4" },
   { name = "spoke_mqtt_actor", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "drift_actor", "gleam_erlang", "gleam_otp", "gleam_stdlib", "spoke_core", "spoke_mqtt"], source = "local", path = "../spoke_mqtt_actor" },
   { name = "spoke_packet", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "spoke_packet", source = "hex", outer_checksum = "59031B9EC4EBBDFDE31DD02513CC7725C15DA61184E66FFEEF4812E949CCCC14" },
@@ -27,6 +27,6 @@ gleam_stdlib = { version = ">= 0.60.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
 glisten = { version = ">= 8.0.0 and < 9.0.0" }
 mug = { version = ">= 3.0.0 and < 4.0.0" }
-spoke_core = { path = "../spoke_core" }
+spoke_core = { version = ">= 1.0.0 and < 2.0.0" }
 spoke_mqtt = { version = ">= 1.0.0 and < 2.0.0" }
 spoke_mqtt_actor = { path = "../spoke_mqtt_actor" }
