@@ -1,16 +1,20 @@
 name = "spoke_tcp"
-version = "1.0.0"
+version = "2.0.0"
 
 description = "A TCP transport channel for the spoke MQTT client."
 licences = ["Apache-2.0"]
-repository = { type = "github", user = "sbergen", repo = "spoke" }
+repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_tcp", tag-prefix = "spoke_tcp-" }
 
 [dependencies]
-gleam_stdlib = ">= 0.44.0 and < 2.0.0"
-gleam_erlang = ">= 0.33.0 and < 1.0.0"
-mug = ">= 1.2.0 and < 2.0.0"
+gleam_stdlib = ">= 0.60.0 and < 2.0.0"
+gleam_erlang = ">= 1.0.0 and < 2.0.0"
+mug = ">= 3.0.0 and < 4.0.0"
+spoke_mqtt_actor = { path = "../spoke_mqtt_actor" }
+spoke_core = { path = "../spoke_core" }
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
-glisten = ">= 7.0.0 and < 8.0.0"
-gleam_otp = ">= 0.16.0 and < 1.0.0"
+glisten = ">= 8.0.0 and < 9.0.0"
+gleam_otp = ">= 1.0.0 and < 2.0.0"
+argv = ">= 1.0.2 and < 2.0.0"
+spoke_mqtt = { path = "../spoke_mqtt" }

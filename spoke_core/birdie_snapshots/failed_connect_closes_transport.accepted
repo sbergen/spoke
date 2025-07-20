@@ -1,0 +1,12 @@
+---
+version: 1.2.7
+title: Failed connect closes transport
+---
+  --> Subscribe to updates #1
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
+  --> Received: ConnAck(Error(BadUsernameOrPassword))
+<--   Publish to #1: ConnectRejected(BadUsernameOrPassword)
+      Close transport

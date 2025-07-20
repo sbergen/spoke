@@ -1,0 +1,8 @@
+---
+version: 1.2.7
+title: Receive QoS1 message
+---
+<flushed connect and handshake>
+  --> Received: Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 42))
+<--   Send: PubAck(42)
+      Publish to #1: ReceivedMessage("topic", "payload", False)

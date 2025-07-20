@@ -1,0 +1,14 @@
+---
+version: 1.3.0
+title: Unsubscribe ack with invalid packet id is protocol violation
+---
+<flushed connect and handshake>
+  --> Unsubscribe #2
+        * topic0
+        * topic1
+<--   Send: Unsubscribe(1, ["topic0", "topic1"])
+      Persist next packet id: 2
+  --> Received: UnsubAck(2)
+<--   Unsubscribe #2 completed: Error(ProtocolViolation)
+      Close transport
+      Publish to #1: DisconnectedUnexpectedly("Received invalid packet id in unsubscribe ack")

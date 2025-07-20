@@ -1,0 +1,7 @@
+---
+version: 1.2.7
+title: QoS0 publish
+---
+<flushed connect and handshake>
+  --> Publish to "topic": "payload" @ AtMostOnce, retain: False
+<--   Send: Publish(PublishDataQoS0(MessageData("topic", "payload", False)))

@@ -1,0 +1,7 @@
+---
+version: 1.2.7
+title: Wait for publishes to finish when nothing pending
+---
+<flushed connect and handshake>
+  --> Wait for publishes #2 (timeout 0)
+<--   Wait for publishes #2 completed: Ok(Nil)

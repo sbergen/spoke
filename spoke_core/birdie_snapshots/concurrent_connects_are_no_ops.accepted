@@ -1,0 +1,14 @@
+---
+version: 1.2.7
+title: Concurrent connects are no-ops
+---
+  --> Subscribe to updates #1
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Connect - clean session: False, will: None
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
+  --> Connect - clean session: False, will: None
+  --> Received: ConnAck(Ok(SessionNotPresent))
+<--   Publish to #1: ConnectAccepted(SessionNotPresent)
+  --> Connect - clean session: False, will: None

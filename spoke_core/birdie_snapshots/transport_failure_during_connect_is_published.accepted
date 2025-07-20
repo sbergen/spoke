@@ -1,0 +1,17 @@
+---
+version: 1.2.7
+title: Transport failure during connect is published
+---
+  --> Subscribe to updates #1
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport failed: Fake failure
+<--   Close transport
+      Publish to #1: ConnectFailed("Fake failure")
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
+  --> Transport failed: Fake failure
+<--   Close transport
+      Publish to #1: ConnectFailed("Fake failure")

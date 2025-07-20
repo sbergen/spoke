@@ -1,0 +1,14 @@
+---
+version: 1.2.7
+title: Double ConnAck is a protocol violation
+---
+  --> Subscribe to updates #1
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
+  --> Received: ConnAck(Ok(SessionNotPresent))
+<--   Publish to #1: ConnectAccepted(SessionNotPresent)
+  --> Received: ConnAck(Ok(SessionNotPresent))
+<--   Close transport
+      Publish to #1: DisconnectedUnexpectedly("Got CONNACK while already connected")

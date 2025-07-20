@@ -1,0 +1,16 @@
+---
+version: 1.2.7
+title: Pings are sent when no other activity
+---
+<flushed connect and handshake>
+  ... 9999 ms:
+  ... 10000 ms:
+  --> Tick
+<--   Send: PingReq
+  ... 10100 ms:
+  --> Received: PingResp
+  ... 20099 ms:
+  ... 20100 ms:
+  --> Tick
+<--   Send: PingReq
+  ... 20200 ms:

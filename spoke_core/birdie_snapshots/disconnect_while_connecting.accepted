@@ -1,0 +1,12 @@
+---
+version: 1.3.0
+title: Disconnect while connecting
+---
+  --> Subscribe to updates #1
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
+  --> Disconnect #2
+<--   Close transport
+      Disconnect #2 completed: Nil

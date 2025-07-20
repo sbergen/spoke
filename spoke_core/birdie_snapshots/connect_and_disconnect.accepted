@@ -1,0 +1,17 @@
+---
+version: 1.3.0
+title: Connect and Disconnect
+---
+  --> Subscribe to updates #1
+  --> Connect - clean session: False, will: Some(PublishData("will/topic", "will-data", AtLeastOnce, False))
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "ping-client", 15, Some(AuthOptions("username", Some("password"))), Some(#(MessageData("will/topic", "will-data", False), QoS1))))
+  --> Received: ConnAck(Ok(SessionNotPresent))
+<--   Publish to #1: ConnectAccepted(SessionNotPresent)
+  --> Disconnect #2
+<--   Send: Disconnect
+      Close transport
+      Disconnect #2 completed: Nil
+  --> Transport closed
+<--   Publish to #1: Disconnected

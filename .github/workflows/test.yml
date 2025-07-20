@@ -13,24 +13,121 @@ jobs:
     
     defaults:
       run:
-        working-directory: spoke
-
-    services:
-      mqtt-broker:
-        image: emqx
-        ports:
-          - 1883:1883
+        working-directory: spoke_core
 
     steps:
       - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1
         with:
           otp-version: "27"
-          gleam-version: "1.8.1"
+          gleam-version: "1.11.1"
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam test
-      - run: gleam run -m integration_tests
+      - run: gleam format --check src test
+
+  erlang_integration-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      mqtt-broker:
+        image: emqx
+        ports:
+          - 1883:1883
+    
+    defaults:
+      run:
+        working-directory: spoke_integration_tests_erlang
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          gleam-version: "1.11.1"
+          rebar3-version: "3"
+      - run: gleam deps download
+      - run: gleam test
+      - run: gleam format --check src test
+
+  test-mqtt:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: spoke_mqtt
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          gleam-version: "1.11.1"
+          rebar3-version: "3"
+      - run: gleam deps download
+      - run: gleam test
+      - run: gleam test --target javascript
+      - run: gleam format --check src test
+
+  test-mqtt-actor:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: spoke_mqtt_actor
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          gleam-version: "1.11.1"
+          rebar3-version: "3"
+      - run: gleam deps download
+      - run: gleam test
+      - run: gleam format --check src test
+
+  test-mqtt-js:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: spoke_mqtt_actor
+
+    services:
+      mqtt-broker:
+        image: emqx
+        ports:
+          - 8083:8083
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          gleam-version: "1.11.1"
+          rebar3-version: "3"
+      - run: gleam deps download
+      - run: gleam test
+      - run: gleam format --check src test
+
+  test-packet:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: spoke_packet
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27"
+          gleam-version: "1.11.1"
+          rebar3-version: "3"
+      - run: gleam deps download
+      - run: gleam test
+      - run: gleam test --target javascript
       - run: gleam format --check src test
 
   test-tcp:
@@ -45,7 +142,7 @@ jobs:
       - uses: erlef/setup-beam@v1
         with:
           otp-version: "27"
-          gleam-version: "1.8.1"
+          gleam-version: "1.11.1"
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam test

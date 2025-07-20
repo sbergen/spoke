@@ -1,0 +1,11 @@
+---
+version: 1.2.7
+title: Reconnect after connect failure
+---
+<flushed failed auth>
+  --> Connect - clean session: False, will: None
+<--   Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(False, "my-client", 15, None, None))
+  --> Received: ConnAck(Ok(SessionNotPresent))
+<--   Publish to #1: ConnectAccepted(SessionNotPresent)

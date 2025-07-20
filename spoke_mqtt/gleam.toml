@@ -1,0 +1,13 @@
+name = "spoke_mqtt"
+version = "1.0.0"
+
+description = "Types and functions for MQTT 3.1.1 clients."
+licences = ["Apache-2.0"]
+repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_mqtt", tag-prefix = "spoke_mqtt-" }
+
+[dependencies]
+gleam_stdlib = ">= 0.60.0 and < 2.0.0"
+spoke_packet = { path = "../spoke_packet" }
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"

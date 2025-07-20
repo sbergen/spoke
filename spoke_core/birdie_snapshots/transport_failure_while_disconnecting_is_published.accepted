@@ -1,0 +1,12 @@
+---
+version: 1.3.0
+title: Transport failure while disconnecting is published
+---
+<flushed connect>
+  --> Disconnect #2
+<--   Send: Disconnect
+      Close transport
+      Disconnect #2 completed: Nil
+  --> Transport failed: Fake failure
+<--   Close transport
+      Publish to #1: DisconnectedUnexpectedly("Fake failure")

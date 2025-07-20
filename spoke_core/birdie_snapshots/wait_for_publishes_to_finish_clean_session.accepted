@@ -1,0 +1,20 @@
+---
+version: 1.3.0
+title: Wait for publishes to finish clean session
+---
+<flushed connect and handshake>
+  --> Publish to "topic": "payload" @ AtLeastOnce, retain: False
+<--   Send: Publish(PublishDataQoS1(MessageData("topic", "payload", False), False, 1))
+      Persist packet state: 1, UnackedQoS1(MessageData("topic", "payload", False))
+      Persist next packet id: 2
+  --> Wait for publishes #2 (timeout 10)
+  --> Transport closed
+<--   Publish to #1: DisconnectedUnexpectedly("Transport closed")
+  --> Connect - clean session: True, will: None
+<--   Clear persisted session state
+      Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(True, "my-client", 15, None, None))
+  --> Received: ConnAck(Ok(SessionNotPresent))
+<--   Publish to #1: ConnectAccepted(SessionNotPresent)
+      Wait for publishes #2 completed: Error(SessionReset)

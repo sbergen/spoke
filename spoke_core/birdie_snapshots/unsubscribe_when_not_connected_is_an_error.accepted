@@ -1,0 +1,13 @@
+---
+version: 1.3.0
+title: Unsubscribe when not connected is an error
+---
+  --> Subscribe to updates #1
+  --> Connect - clean session: True, will: None
+<--   Clear persisted session state
+      Open transport
+  --> Transport established
+<--   Send: Connect(ConnectOptions(True, "my-client", 15, None, None))
+  --> Unsubscribe #2
+        * topic1
+<--   Unsubscribe #2 completed: Error(NotConnected)

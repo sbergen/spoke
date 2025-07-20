@@ -1,0 +1,8 @@
+---
+version: 1.3.0
+title: Receiving invalid data while connected closes connection
+---
+<flushed connect and handshake>
+  --> Received: "\u{0001}", error: InvalidPacketIdentifier(0)
+<--   Close transport
+      Publish to #1: DisconnectedUnexpectedly("Received invalid data while connected: InvalidPacketIdentifier(0)")
