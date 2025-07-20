@@ -9,7 +9,7 @@ repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
 drift = ">= 1.0.0 and < 2.0.0"
-drift_js = ">= 1.0.0 and < 2.0.0"
+drift_js = ">= 1.0.1 and < 2.0.0"
 spoke_core = { path = "../spoke_core" }
 spoke_mqtt = { path = "../spoke_mqtt" }
 gleam_javascript = ">= 1.0.0 and < 2.0.0"

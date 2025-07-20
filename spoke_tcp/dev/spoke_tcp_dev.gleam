@@ -19,11 +19,13 @@ pub fn main() {
           io.println(usage)
         }
         Ok(port) -> {
-          let assert Ok(client) =
+          let assert Ok(started) =
             tcp.connector(host, port, 1000)
             |> mqtt.connect_with_id("spoke_tcp_cli")
             |> mqtt.keep_alive_seconds(1)
-            |> mqtt_actor.start_session(None)
+            |> mqtt_actor.build()
+            |> mqtt_actor.start(100)
+          let client = started.data
 
           let updates = process.new_subject()
           mqtt_actor.subscribe_to_updates(client, updates)

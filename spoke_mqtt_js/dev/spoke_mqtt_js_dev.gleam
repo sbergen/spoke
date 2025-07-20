@@ -19,7 +19,7 @@ pub fn main() {
       let #(updates, _) = mqtt_js.subscribe_to_updates(client)
       mqtt_js.connect(client, True, None)
 
-      use update <- promise.await(channel.receive(updates, 1000))
+      use update <- promise.await(channel.receive(updates, 5000))
       let assert Ok(mqtt.ConnectionStateChanged(mqtt.ConnectAccepted(_))) =
         update
 

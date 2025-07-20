@@ -11,10 +11,12 @@ pub fn main() {
   let client_id = "spoke" <> string.inspect(int.random(999_999_999))
   let topic = "spoke-test"
 
-  let assert Ok(client) =
+  let assert Ok(started) =
     tcp.connector_with_defaults("broker.emqx.io")
     |> mqtt.connect_with_id(client_id)
-    |> mqtt_actor.start_session(None)
+    |> mqtt_actor.build()
+    |> mqtt_actor.start(100)
+  let client = started.data
 
   let updates = process.new_subject()
   mqtt_actor.subscribe_to_updates(client, updates)
