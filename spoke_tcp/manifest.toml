@@ -14,7 +14,7 @@ packages = [
   { name = "mug", version = "3.0.0", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_stdlib"], otp_app = "mug", source = "hex", outer_checksum = "49AD2B71690C6A615453D272300951C4BDE19FBF55B167D9C951F5CD89FEC820" },
   { name = "spoke_core", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "gleam_stdlib", "spoke_mqtt", "spoke_packet"], otp_app = "spoke_core", source = "hex", outer_checksum = "4F967D10F7B0BC2BDFC8C6BFF4BBD362E303F0817B7FF0FCDF15A10C312583D2" },
   { name = "spoke_mqtt", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "spoke_packet"], otp_app = "spoke_mqtt", source = "hex", outer_checksum = "44480FEE8F416839CE6F9C43938A84604F802B0FA318E1C0A9434AD02DB0D5F4" },
-  { name = "spoke_mqtt_actor", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "drift_actor", "gleam_erlang", "gleam_otp", "gleam_stdlib", "spoke_core", "spoke_mqtt"], source = "local", path = "../spoke_mqtt_actor" },
+  { name = "spoke_mqtt_actor", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "drift_actor", "gleam_erlang", "gleam_otp", "gleam_stdlib", "spoke_core", "spoke_mqtt"], otp_app = "spoke_mqtt_actor", source = "hex", outer_checksum = "BE58E384B79A8B7A89F288D0A56BFD1E8CE2F44627142131F11FB74A1B34FDEE" },
   { name = "spoke_packet", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "spoke_packet", source = "hex", outer_checksum = "59031B9EC4EBBDFDE31DD02513CC7725C15DA61184E66FFEEF4812E949CCCC14" },
   { name = "telemetry", version = "1.3.0", build_tools = ["rebar3"], requirements = [], otp_app = "telemetry", source = "hex", outer_checksum = "7015FC8919DBE63764F4B4B87A95B7C0996BD539E0D499BE6EC9D7F3875B79E6" },
 ]
@@ -29,4 +29,4 @@ glisten = { version = ">= 8.0.0 and < 9.0.0" }
 mug = { version = ">= 3.0.0 and < 4.0.0" }
 spoke_core = { version = ">= 1.0.0 and < 2.0.0" }
 spoke_mqtt = { version = ">= 1.0.0 and < 2.0.0" }
-spoke_mqtt_actor = { path = "../spoke_mqtt_actor" }
+spoke_mqtt_actor = { version = ">= 1.0.0 and < 2.0.0" }
