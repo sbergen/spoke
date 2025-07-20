@@ -94,19 +94,28 @@ pub fn using_storage(builder: Builder, storage: PersistentStorage) -> Builder {
   Builder(..builder, storage: Some(storage))
 }
 
-/// Use a named process and subject with the actor.
-/// This allows using supervision, without invalidating previous instances of 
-/// `Client`.
-pub fn named(builder: Builder, name: process.Name(core.Input)) -> Builder {
-  Builder(..builder, name: Some(name))
-}
-
 /// Run extra initialization after creating the actor.
 /// Note that this runs in the actor process and contributes to the start timeout.
 /// Sending a message to another process can be used to run the initialization
 /// asynchronously.
 pub fn with_extra_init(builder: Builder, init: fn(Client) -> Nil) -> Builder {
   Builder(..builder, init: Some(init))
+}
+
+/// Use a named process and subject with the actor.
+/// This allows using supervision, without invalidating previous instances of 
+/// `Client`.
+/// Returns a named instance of the client and the builder which can be used to
+/// restart the actor multiple times.
+/// Note that the named instance is NOT started, and you must use start
+/// with the returned builder!
+pub fn named(
+  builder: Builder,
+  name: process.Name(core.Input),
+) -> #(Builder, Client) {
+  let builder = Builder(..builder, name: Some(name))
+  let client = Client(process.named_subject(name), builder.options)
+  #(builder, client)
 }
 
 /// Starts the actor with the given timeout (including the optional extra init).

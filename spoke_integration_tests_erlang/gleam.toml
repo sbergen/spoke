@@ -19,3 +19,5 @@ spoke_mqtt = { path = "../spoke_mqtt" }
 spoke_mqtt_actor = { path = "../spoke_mqtt_actor" }
 spoke_tcp = { path = "../spoke_tcp" }
 gleeunit = ">= 1.0.0 and < 2.0.0"
+temporary = ">= 1.0.0 and < 2.0.0"
+gleam_otp = ">= 1.0.0 and < 2.0.0"
