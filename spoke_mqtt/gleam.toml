@@ -7,7 +7,7 @@ repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_
 
 [dependencies]
 gleam_stdlib = ">= 0.60.0 and < 2.0.0"
-spoke_packet = { path = "../spoke_packet" }
+spoke_packet = ">= 1.0.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"

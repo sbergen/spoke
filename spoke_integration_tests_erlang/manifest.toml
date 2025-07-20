@@ -17,7 +17,7 @@ packages = [
   { name = "spoke_core", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "gleam_stdlib", "spoke_mqtt", "spoke_packet"], source = "local", path = "../spoke_core" },
   { name = "spoke_mqtt", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib", "spoke_packet"], source = "local", path = "../spoke_mqtt" },
   { name = "spoke_mqtt_actor", version = "1.0.0", build_tools = ["gleam"], requirements = ["drift", "drift_actor", "gleam_erlang", "gleam_otp", "gleam_stdlib", "spoke_core", "spoke_mqtt"], source = "local", path = "../spoke_mqtt_actor" },
-  { name = "spoke_packet", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], source = "local", path = "../spoke_packet" },
+  { name = "spoke_packet", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "spoke_packet", source = "hex", outer_checksum = "59031B9EC4EBBDFDE31DD02513CC7725C15DA61184E66FFEEF4812E949CCCC14" },
   { name = "spoke_tcp", version = "2.0.0", build_tools = ["gleam"], requirements = ["gleam_erlang", "gleam_stdlib", "mug", "spoke_core", "spoke_mqtt_actor"], source = "local", path = "../spoke_tcp" },
   { name = "temporary", version = "1.0.0", build_tools = ["gleam"], requirements = ["envoy", "exception", "filepath", "gleam_crypto", "gleam_stdlib", "simplifile"], otp_app = "temporary", source = "hex", outer_checksum = "51C0FEF4D72CE7CA507BD188B21C1F00695B3D5B09D7DFE38240BFD3A8E1E9B3" },
 ]
