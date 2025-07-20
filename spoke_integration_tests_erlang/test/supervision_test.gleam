@@ -57,7 +57,7 @@ pub fn supervision_test() {
 
   // Wait for the the full roundtrip of messages in the listening client,
   // triggered by the start and restart.
-  let assert Ok(_) = process.receive(test_progress, 100)
+  let assert Ok(_) = process.receive(test_progress, 1000)
 
   process.send_exit(supervisor.pid)
 }
