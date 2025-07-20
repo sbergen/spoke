@@ -3,7 +3,7 @@ version = "2.0.0"
 
 description = "A TCP transport channel for the spoke MQTT client."
 licences = ["Apache-2.0"]
-repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_tcp" }
+repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_tcp", tag-prefix = "spoke_tcp-" }
 
 [dependencies]
 gleam_stdlib = ">= 0.60.0 and < 2.0.0"

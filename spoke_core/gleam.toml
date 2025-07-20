@@ -3,7 +3,7 @@ version = "1.0.0"
 
 description = "Purely functional core logic for an MQTT 3.1.1 client, using drift."
 licences = ["Apache-2.0"]
-repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_core" }
+repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_core", tag-prefix = "spoke_core-" }
 internal_modules = ["spoke/core/internal/*"]
 
 [dependencies]

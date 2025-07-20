@@ -3,7 +3,7 @@ version = "1.0.0"
 
 description = "Encode and decode MQTT 3.1.1 packets to/from binary data."
 licences = ["Apache-2.0"]
-repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_packet" }
+repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_packet", tag-prefix = "spoke_packet-" }
 internal_modules = ["spoke/packet/internal/*"]
 
 [dependencies]

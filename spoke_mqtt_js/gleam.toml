@@ -4,7 +4,7 @@ target = "javascript"
 
 description = "A Gleam MQTT 3.1.1 client for the JavaScript runtime."
 licences = ["Apache-2.0"]
-repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_mqtt_js" }
+repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_mqtt_js", tag-prefix = "spoke_mqtt_js-" }
 
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"

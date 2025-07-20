@@ -3,7 +3,7 @@ version = "1.0.0"
 
 description = "A Gleam MQTT 3.1.1 client for the Erlang runtime."
 licences = ["Apache-2.0"]
-repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_mqtt_actor" }
+repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_mqtt_actor", tag-prefix = "spoke_mqtt_actor-" }
 
 [dependencies]
 gleam_stdlib = ">= 0.60.0 and < 2.0.0"
