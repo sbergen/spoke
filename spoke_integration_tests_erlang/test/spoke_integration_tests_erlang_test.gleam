@@ -9,6 +9,39 @@ pub fn main() -> Nil {
   gleeunit.main()
 }
 
+pub fn selective_updates_test() -> Nil {
+  let assert Ok(started) =
+    tcp.connector_with_defaults("localhost")
+    |> mqtt.connect_with_id("selective_updates")
+    |> mqtt_actor.build()
+    |> mqtt_actor.start(100)
+  let client = started.data
+
+  // Select only connection accepting updates
+  let updates = process.new_subject()
+  {
+    use update <- mqtt_actor.subscribe_to_updates_selecting(client, updates)
+    case update {
+      mqtt.ConnectionStateChanged(state) ->
+        case state {
+          mqtt.ConnectAccepted(session_present) -> Some(session_present)
+          _ -> None
+        }
+      _ -> None
+    }
+  }
+
+  mqtt_actor.connect(client, True, None)
+  let assert Ok(mqtt.SessionNotPresent) = process.receive(updates, 1000)
+    as "Connection should be published"
+
+  mqtt_actor.disconnect(client)
+  let assert Error(Nil) = process.receive(updates, 100)
+    as "Disconnect should not be received"
+
+  Nil
+}
+
 pub fn subscribe_and_publish_qos0_test() -> Nil {
   let assert Ok(started) =
     tcp.connector_with_defaults("localhost")

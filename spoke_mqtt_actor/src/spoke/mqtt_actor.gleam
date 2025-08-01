@@ -167,7 +167,24 @@ pub fn subscribe_to_updates(
   client: Client,
   updates: Subject(mqtt.Update),
 ) -> UpdateSubscription {
-  let publish = drift.new_effect(process.send(updates, _))
+  subscribe_to_updates_selecting(client, updates, Some)
+}
+
+/// Will start publishing client updates to the given subject,
+/// after first applying the given selector function to the update.
+/// If the function returns `None`, the update will not be published.
+pub fn subscribe_to_updates_selecting(
+  client: Client,
+  updates: Subject(a),
+  selecting: fn(mqtt.Update) -> Option(a),
+) -> UpdateSubscription {
+  let publish = {
+    use update <- drift.new_effect()
+    case selecting(update) {
+      Some(update) -> process.send(updates, update)
+      None -> Nil
+    }
+  }
   process.send(client.self, Perform(SubscribeToUpdates(publish)))
   UpdateSubscription(publish)
 }
