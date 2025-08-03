@@ -1,9 +1,14 @@
 name = "spoke_mqtt_actor"
-version = "1.1.0"
+version = "1.1.1"
 
 description = "A Gleam MQTT 3.1.1 client for the Erlang runtime."
 licences = ["Apache-2.0"]
 repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_mqtt_actor", tag-prefix = "spoke_mqtt_actor-" }
+
+[documentation]
+pages = [
+  { title = "Changelog", path = "changelog.html", source = "./CHANGELOG.md" },
+]
 
 [dependencies]
 gleam_stdlib = ">= 0.60.0 and < 2.0.0"
@@ -18,4 +23,6 @@ spoke_mqtt = ">= 1.0.0 and < 2.0.0"
 gleeunit = ">= 1.0.0 and < 2.0.0"
 temporary = ">= 1.0.0 and < 2.0.0"
 spoke_packet = ">= 1.0.0 and < 2.0.0"
-exemplify = { path = "../dev/exemplify" }
+checkmark = ">= 2.0.0 and < 3.0.0"
+simplifile = ">= 2.3.0 and < 3.0.0"
+envoy = ">= 1.0.2 and < 2.0.0"

@@ -1,11 +1,13 @@
 //// These tests test the parts that can't be (reliably) tested with the
 //// integration tests, which run against a real server.
 
-import exemplify
+import checkmark
+import envoy
 import fake_server
 import gleam/erlang/process.{type Subject}
 import gleam/option.{None}
 import gleeunit
+import simplifile
 import spoke/mqtt
 import spoke/mqtt_actor
 import spoke/packet
@@ -18,7 +20,10 @@ pub fn main() -> Nil {
 }
 
 pub fn check_or_update_readme_test() {
-  exemplify.update_or_check("../spoke_tcp/dev/example.gleam")
+  checkmark.new(simplifile.read, simplifile.write)
+  |> checkmark.file("README.md")
+  |> checkmark.should_contain_contents_of("test/example.gleam", tagged: "gleam")
+  |> checkmark.check_or_update(envoy.get("GITHUB_WORKFLOW") == Error(Nil))
 }
 
 pub fn restore_session_from_file_test() -> Nil {
