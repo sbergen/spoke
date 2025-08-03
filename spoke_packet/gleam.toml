@@ -1,10 +1,15 @@
 name = "spoke_packet"
-version = "1.0.0"
+version = "1.0.1"
 
 description = "Encode and decode MQTT 3.1.1 packets to/from binary data."
 licences = ["Apache-2.0"]
 repository = { type = "github", user = "sbergen", repo = "spoke", path = "spoke_packet", tag-prefix = "spoke_packet-" }
 internal_modules = ["spoke/packet/internal/*"]
+
+[documentation]
+pages = [
+  { title = "Changelog", path = "changelog.html", source = "./CHANGELOG.md" },
+]
 
 [dependencies]
 gleam_stdlib = ">= 0.44.0 and < 2.0.0"
