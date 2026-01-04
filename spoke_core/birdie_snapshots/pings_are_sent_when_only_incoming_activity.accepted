@@ -1,0 +1,19 @@
+---
+version: 1.3.1
+title: Pings are sent when only incoming activity
+---
+<flushed connect and handshake>
+  ... 9999 ms:
+  --> Received: Publish(PublishDataQoS0(MessageData("topic", "", False)))
+<--   Publish to #1: ReceivedMessage("topic", "", False)
+  ... 10000 ms:
+  --> Tick
+<--   Send: PingReq
+  ... 10100 ms:
+  --> Received: PingResp
+  ... 19999 ms:
+  --> Received: Publish(PublishDataQoS0(MessageData("topic", "", False)))
+<--   Publish to #1: ReceivedMessage("topic", "", False)
+  ... 20000 ms:
+  --> Tick
+<--   Send: PingReq

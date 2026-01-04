@@ -1,0 +1,2 @@
+# This directory needs to exist for gleam to work,
+# but an empty module is an error, so we just have an empty .gitignore.

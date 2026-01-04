@@ -229,6 +229,7 @@ fn subscribe(
       )
       |> output_storage_updates(id_updates)
       |> drift.continue(State(..state, session:, pending_subs:))
+      |> drift.chain(start_send_ping_timer)
     }
     [], Connected(_) ->
       // Empty list is a no-op
@@ -265,6 +266,7 @@ fn unsubscribe(
       |> drift.output(send(outgoing.Unsubscribe(id, topic, topics)))
       |> output_storage_updates(id_updates)
       |> drift.continue(State(..state, session:, pending_unsubs:))
+      |> drift.chain(start_send_ping_timer)
     }
     [], Connected(_) ->
       // Empty list is a no-op
@@ -340,7 +342,10 @@ fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
         Connected(_) -> {
           context
           |> drift.output(send(outgoing.PingReq))
+          // Start the ping response timeout
+          // AND the timeout for the next ping to be sent.
           |> start_ping_timeout_timer(state)
+          |> drift.chain(start_send_ping_timer)
         }
         _ -> drift.continue(context, state)
       }
@@ -523,6 +528,7 @@ fn publish(context: Context, state: State, data: mqtt.PublishData) -> Step {
       |> drift.output(send(packet))
       |> output_storage_updates(storage_updates)
       |> drift.continue(state)
+      |> drift.chain(start_send_ping_timer)
 
     // QoS 0 packets are just dropped, QoS > 0 have been saved in the session
     _ -> drift.continue(context, state)
@@ -639,10 +645,8 @@ fn receive(context: Context, state: State, data: BitArray) -> Step {
             "Received invalid data while connected: " <> string.inspect(e),
           )
         Ok(#(connection, packets)) -> {
-          start_send_ping_timer(
-            context,
-            State(..state, connection: Connected(connection)),
-          )
+          context
+          |> drift.continue(State(..state, connection: Connected(connection)))
           |> handle_packets_while_connected(packets)
         }
       }
@@ -667,7 +671,7 @@ fn handle_packets_while_connected(
   case packet {
     incoming.ConnAck(_) ->
       kill_connection(context, state, "Got CONNACK while already connected")
-    incoming.PingResp -> drift.continue(context, state)
+    incoming.PingResp -> handle_ping_resp(context, state)
     incoming.PubAck(id) -> handle_puback(context, state, id)
     incoming.PubRec(id) -> handle_pubrec(context, state, id)
     incoming.PubComp(id) -> handle_pubcomp(context, state, id)
@@ -677,6 +681,12 @@ fn handle_packets_while_connected(
       handle_suback(context, state, id, return_codes)
     incoming.UnsubAck(id) -> handle_unsuback(context, state, id)
   }
+}
+
+fn handle_ping_resp(context: Context, state: State) -> Step {
+  context
+  |> maybe_cancel_timer(state.ping_resp_timer)
+  |> drift.continue(State(..state, ping_resp_timer: None))
 }
 
 fn handle_first_packet(
@@ -698,6 +708,7 @@ fn handle_first_packet(
             |> session.packets_to_send_after_connect()
             |> list.map(send),
           )
+          |> maybe_cancel_timer(state.connect_timer)
           |> start_send_ping_timer(
             State(..state, connection: Connected(connection)),
           )
@@ -752,24 +763,29 @@ fn handle_publish(
     }
   }
 
-  let context = case packet, state.connection {
-    Some(packet), Connected(_) -> drift.output(context, send(packet))
-    _, _ -> context
-  }
+  case packet, state.connection {
+    Some(packet), Connected(_) ->
+      context
+      |> drift.output(send(packet))
+      |> start_send_ping_timer(state)
 
-  let context = case msg {
-    Some(msg) ->
-      publish_update(
-        context,
-        state,
-        mqtt.ReceivedMessage(msg.topic, msg.payload, msg.retain),
-      )
-    None -> context
+    _, _ -> drift.continue(context, state)
   }
+  |> drift.chain(fn(context, state) {
+    let context = case msg {
+      Some(msg) ->
+        publish_update(
+          context,
+          state,
+          mqtt.ReceivedMessage(msg.topic, msg.payload, msg.retain),
+        )
+      None -> context
+    }
 
-  context
-  |> output_storage_updates(storage_updates)
-  |> drift.continue(State(..state, session:))
+    context
+    |> output_storage_updates(storage_updates)
+    |> drift.continue(State(..state, session:))
+  })
 }
 
 fn handle_suback(
@@ -842,6 +858,7 @@ fn handle_pubrec(context: Context, state: State, id: Int) -> Step {
   |> drift.output(send(outgoing.PubRel(id)))
   |> output_storage_updates(storage_updates)
   |> drift.continue(State(..state, session:))
+  |> drift.chain(start_send_ping_timer)
 }
 
 fn handle_pubcomp(context: Context, state: State, id: Int) -> Step {
@@ -860,27 +877,16 @@ fn handle_pubrel(context: Context, state: State, id: Int) -> Step {
   |> drift.output(send(outgoing.PubComp(id)))
   |> output_storage_updates(storage_updates)
   |> drift.continue(State(..state, session:))
+  |> drift.chain(start_send_ping_timer)
 }
 
 fn start_send_ping_timer(context: Context, state: State) -> Step {
-  let context =
-    context
-    |> maybe_cancel_timer(state.send_ping_timer)
-    |> maybe_cancel_timer(state.ping_resp_timer)
-    |> maybe_cancel_timer(state.connect_timer)
+  let context = maybe_cancel_timer(context, state.send_ping_timer)
 
   let #(context, timer) =
     drift.start_timer(context, state.options.keep_alive, Timeout(SendPing))
 
-  drift.continue(
-    context,
-    State(
-      ..state,
-      send_ping_timer: Some(timer),
-      ping_resp_timer: None,
-      connect_timer: None,
-    ),
-  )
+  drift.continue(context, State(..state, send_ping_timer: Some(timer)))
 }
 
 fn start_ping_timeout_timer(context: Context, state: State) -> Step {
