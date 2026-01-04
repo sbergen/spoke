@@ -231,6 +231,7 @@ fn subscribe(
       )
       |> output_storage_updates(id_updates)
       |> drift.continue(State(..state, session:, pending_subs:))
+      |> drift.chain(start_send_ping_timer)
     }
     [], Connected(_) ->
       // Empty list is a no-op
@@ -267,6 +268,7 @@ fn unsubscribe(
       |> drift.output(send(outgoing.Unsubscribe(id, topic, topics)))
       |> output_storage_updates(id_updates)
       |> drift.continue(State(..state, session:, pending_unsubs:))
+      |> drift.chain(start_send_ping_timer)
     }
     [], Connected(_) ->
       // Empty list is a no-op
@@ -528,6 +530,7 @@ fn publish(context: Context, state: State, data: mqtt.PublishData) -> Step {
       |> drift.output(send(packet))
       |> output_storage_updates(storage_updates)
       |> drift.continue(state)
+      |> drift.chain(start_send_ping_timer)
 
     // QoS 0 packets are just dropped, QoS > 0 have been saved in the session
     _ -> drift.continue(context, state)
@@ -762,24 +765,29 @@ fn handle_publish(
     }
   }
 
-  let context = case packet, state.connection {
-    Some(packet), Connected(_) -> drift.output(context, send(packet))
-    _, _ -> context
-  }
+  case packet, state.connection {
+    Some(packet), Connected(_) ->
+      context
+      |> drift.output(send(packet))
+      |> start_send_ping_timer(state)
 
-  let context = case msg {
-    Some(msg) ->
-      publish_update(
-        context,
-        state,
-        mqtt.ReceivedMessage(msg.topic, msg.payload, msg.retain),
-      )
-    None -> context
+    _, _ -> drift.continue(context, state)
   }
+  |> drift.chain(fn(context, state) {
+    let context = case msg {
+      Some(msg) ->
+        publish_update(
+          context,
+          state,
+          mqtt.ReceivedMessage(msg.topic, msg.payload, msg.retain),
+        )
+      None -> context
+    }
 
-  context
-  |> output_storage_updates(storage_updates)
-  |> drift.continue(State(..state, session:))
+    context
+    |> output_storage_updates(storage_updates)
+    |> drift.continue(State(..state, session:))
+  })
 }
 
 fn handle_suback(
@@ -852,6 +860,7 @@ fn handle_pubrec(context: Context, state: State, id: Int) -> Step {
   |> drift.output(send(outgoing.PubRel(id)))
   |> output_storage_updates(storage_updates)
   |> drift.continue(State(..state, session:))
+  |> drift.chain(start_send_ping_timer)
 }
 
 fn handle_pubcomp(context: Context, state: State, id: Int) -> Step {
@@ -870,6 +879,7 @@ fn handle_pubrel(context: Context, state: State, id: Int) -> Step {
   |> drift.output(send(outgoing.PubComp(id)))
   |> output_storage_updates(storage_updates)
   |> drift.continue(State(..state, session:))
+  |> drift.chain(start_send_ping_timer)
 }
 
 fn start_send_ping_timer(context: Context, state: State) -> Step {
