@@ -113,7 +113,6 @@ pub opaque type State {
     connect_timer: Option(Timer),
     update_listeners: Set(Effect(mqtt.Update)),
     publish_completion_listeners: Dict(PublishCompletionEffect, Timer),
-    restart_ping_timer: Bool,
   )
 }
 
@@ -193,7 +192,6 @@ fn new(session: session.Session, options: mqtt.ConnectOptions(_)) -> State {
     None,
     set.new(),
     dict.new(),
-    restart_ping_timer: False,
   )
 }
 
@@ -344,8 +342,8 @@ fn handle_timer(context: Context, state: State, action: TimedAction) -> Step {
         Connected(_) -> {
           context
           |> drift.output(send(outgoing.PingReq))
-          // Start the ping response timeout AND
-          // the timeout for the next ping to be sent.
+          // Start the ping response timeout
+          // AND the timeout for the next ping to be sent.
           |> start_ping_timeout_timer(state)
           |> drift.chain(start_send_ping_timer)
         }
