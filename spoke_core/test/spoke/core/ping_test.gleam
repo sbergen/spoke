@@ -3,7 +3,7 @@ import gleam/option.{None}
 import spoke/core.{Connect, Handle, Perform, TransportEstablished}
 import spoke/core/recorder.{type Recorder}
 import spoke/mqtt
-import spoke/packet
+import spoke/packet.{MessageData, PublishDataQoS0}
 import spoke/packet/server/outgoing as server_out
 
 pub fn pings_when_no_activity_test() {
@@ -12,10 +12,26 @@ pub fn pings_when_no_activity_test() {
   |> record.time_advance(1)
   |> record.time_advance(100)
   |> recorder.received(server_out.PingResp)
+  |> record.time_advance(9899)
+  |> record.time_advance(1)
+  |> recorder.snap("Pings are sent when no other activity")
+}
+
+pub fn pings_when_only_incoming_activity_test() {
+  set_up_connected(10)
   |> record.time_advance(9999)
+  |> recorder.received(
+    server_out.Publish(PublishDataQoS0(MessageData("topic", <<>>, False))),
+  )
   |> record.time_advance(1)
   |> record.time_advance(100)
-  |> recorder.snap("Pings are sent when no other activity")
+  |> recorder.received(server_out.PingResp)
+  |> record.time_advance(9899)
+  |> recorder.received(
+    server_out.Publish(PublishDataQoS0(MessageData("topic", <<>>, False))),
+  )
+  |> record.time_advance(1)
+  |> recorder.snap("Pings are sent when only incoming activity")
 }
 
 pub fn close_after_timeout_test() {
