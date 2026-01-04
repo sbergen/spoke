@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1]
+
 ### Fixed
 - Fixes a bug, where ping requests were not sent in time when there was only incoming data,
   e.g. QoS 0 messages being received, which could cause the broker to disconnect the client.
@@ -16,5 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release with basic functionality.
 
-[Unreleased]: https://github.com/sbergen/spoke/compare/spoke_core-v1.0.0...HEAD
+[Unreleased]: https://github.com/sbergen/spoke/compare/spoke_core-v1.0.1...HEAD
+[1.0.1]: https://github.com/sbergen/spoke/releases/tag/spoke_core-v1.0.1
 [1.0.0]: https://github.com/sbergen/spoke/releases/tag/spoke_core-v1.0.0

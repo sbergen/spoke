@@ -1,5 +1,5 @@
 name = "spoke_core"
-version = "1.0.0"
+version = "1.0.1"
 
 description = "Purely functional core logic for an MQTT 3.1.1 client, using drift."
 licences = ["Apache-2.0"]
