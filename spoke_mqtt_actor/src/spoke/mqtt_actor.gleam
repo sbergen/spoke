@@ -1,3 +1,29 @@
+//// The `mqtt_actor` module runs an 
+//// [MQTT 3.1.1](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html)
+//// client as an OTP actor.
+////
+//// Spoke is a high-level MQTT client,
+//// so anything that is specified as MUST in the specification
+//// should be automatically done for you.
+//// All that is left to the user of the client is
+//// * connecting and disconnecting to the broker,
+//// * subscribing and unsubscribing to/from topics,
+//// * publishing messages,
+//// * specifying QoS levels to request,
+//// * and optionally carrying over persistent client-side state across reconnects.
+////
+//// In order to use a client, follow these steps:
+//// * build the 
+////   [`ConnectOptions`](https://spoke-mqtt.hexdocs.pm/1.0.0/spoke/mqtt.html#ConnectOptions)
+////   using e.g. a connector from the 
+////   [`spoke_tcp`](https://spoke-tcp.hexdocs.pm/)
+////   package,
+//// * [`build`](#build) and [`start`](#start) the actor,
+////   or use [`named`](#named) and [`supervised`](#supervised) for a supervised actor,
+//// * call [`subscribe_to_updates`](#subscribe_to_updates) if you want to receive messages
+////   or observe the connection state, and
+//// * call [`publish`](#publish) and [`subscribe`](#subscribe) to exchange messages.
+
 import drift.{type EffectContext}
 import drift/actor
 import gleam/bytes_tree.{type BytesTree}
@@ -15,6 +41,7 @@ import spoke/core.{
 import spoke/core/ets_storage.{type EtsStorage}
 import spoke/mqtt
 
+/// A handle to the MQTT client actor.
 pub opaque type Client {
   Client(
     self: Subject(core.Input),
@@ -71,9 +98,12 @@ pub type TransportChannel {
   )
 }
 
+/// Defines the shape of the function used to connect to a transport channel.
+/// See e.g. `spoke_tcp` for a TCP implementation.
 pub type TransportChannelConnector =
   fn() -> Result(TransportChannel, String)
 
+/// Builds options for starting an MQTT client.
 pub opaque type Builder {
   Builder(
     options: mqtt.ConnectOptions(TransportChannelConnector),
@@ -84,7 +114,9 @@ pub opaque type Builder {
 }
 
 /// Starts building a new MQTT client
-pub fn build(options: mqtt.ConnectOptions(TransportChannelConnector)) -> Builder {
+pub fn build(
+  options: mqtt.ConnectOptions(TransportChannelConnector),
+) -> Builder {
   Builder(options:, storage: None, init: None, name: None)
 }
 
