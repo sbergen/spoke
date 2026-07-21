@@ -21,8 +21,9 @@
 //// * [`build`](#build) and [`start`](#start) the actor,
 ////   or use [`named`](#named) and [`supervised`](#supervised) for a supervised actor,
 //// * call [`subscribe_to_updates`](#subscribe_to_updates) if you want to receive messages
-////   or observe the connection state, and
-//// * call [`publish`](#publish) and [`subscribe`](#subscribe) to exchange messages.
+////   or observe the connection state,
+//// * call [`connect`](#connect) to connect to the broker, and
+//// * [`publish`](#publish) and [`subscribe`](#subscribe) to exchange messages.
 
 import drift.{type EffectContext}
 import drift/actor
