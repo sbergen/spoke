@@ -113,7 +113,12 @@ pub opaque type Builder {
   )
 }
 
-/// Starts building a new MQTT client
+/// Starts building a new MQTT client.
+/// The actor requires standard MQTT connect options
+/// with a [`TransportChannelConnector`](#TransportChannelConnector)
+/// as the transport options.
+/// See e.g. the [`spoke_tcp`](https://spoke-tcp.hexdocs.pm/) 
+/// package for a concrete implementation.
 pub fn build(
   options: mqtt.ConnectOptions(TransportChannelConnector),
 ) -> Builder {
@@ -152,6 +157,22 @@ pub fn named(
 }
 
 /// Builds a worker child specification from a builder.
+/// Example:
+/// ```gleam supervision
+/// let client_name = process.new_name("mqtt_client")
+/// let client_started: Subject(mqtt_actor.Client) = process.new_subject()
+/// 
+/// let #(builder, _client) =
+///   transport_connector
+///   |> mqtt.connect_with_id("my_client_id")
+///   |> mqtt_actor.build()
+///   |> mqtt_actor.with_extra_init(fn(client) {
+///     process.send(client_started, client)
+///   })
+///   |> mqtt_actor.named(client_name)
+/// 
+/// let _child_spec = mqtt_actor.supervised(builder, 100)
+/// ```
 pub fn supervised(
   builder: Builder,
   timeout: Int,
