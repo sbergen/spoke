@@ -19,11 +19,31 @@ pub fn main() -> Nil {
   gleeunit.main()
 }
 
-pub fn check_or_update_readme_test() {
-  checkmark.new(simplifile.read, simplifile.write)
-  |> checkmark.file("README.md")
-  |> checkmark.should_contain_contents_of("test/example.gleam", tagged: "gleam")
-  |> checkmark.check_or_update(envoy.get("GITHUB_WORKFLOW") == Error(Nil))
+pub fn check_or_update_docs_test() {
+  let checker = checkmark.new(simplifile.read, simplifile.write)
+  let update = envoy.get("GITHUB_WORKFLOW") == Error(Nil)
+
+  assert checker
+    |> checkmark.document("README.md")
+    |> checkmark.should_contain_contents_of(
+      "../spoke_integration_tests_erlang/dev/example.gleam",
+      tagged: "gleam",
+    )
+    |> checkmark.check_or_update(update)
+    == Ok(Nil)
+
+  let assert Ok(examples) =
+    checkmark.load_snippet_source(checker, "dev/examples.gleam")
+
+  assert checker
+    |> checkmark.comments_in("src/spoke/mqtt_actor.gleam")
+    |> checkmark.should_contain_snippet_from(
+      examples,
+      checkmark.FunctionBody("supervision_example"),
+      tagged: "supervision",
+    )
+    |> checkmark.check_or_update(update)
+    == Ok(Nil)
 }
 
 pub fn restore_session_from_file_test() -> Nil {
