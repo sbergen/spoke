@@ -113,6 +113,7 @@ jobs:
           rebar3-version: "3"
       - run: gleam deps download
       - run: gleam build --warnings-as-errors
+      - run: npm install
       - run: gleam test
       - run: gleam format --check src test
 
