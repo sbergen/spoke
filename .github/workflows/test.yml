@@ -96,7 +96,7 @@ jobs:
     
     defaults:
       run:
-        working-directory: spoke_mqtt_actor
+        working-directory: spoke_mqtt_js
 
     services:
       mqtt-broker:
